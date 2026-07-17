@@ -115,6 +115,7 @@ func (mach *OlmMachine) ImportRoomKeyFromBundleWithoutSaving(
 		MaxMessages:   maxMessages,
 		SharedHistory: ptr.Ptr(true),
 		KeySource:     id.KeySourceForward,
+		SourceUser:    evt.Sender,
 	}, nil
 }
 

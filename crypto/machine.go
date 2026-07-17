@@ -604,7 +604,7 @@ func (mach *OlmMachine) SendEncryptedToDevice(ctx context.Context, device *id.De
 }
 
 func (mach *OlmMachine) createGroupSession(
-	ctx context.Context, senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionID id.SessionID,
+	ctx context.Context, sender id.UserID, senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionID id.SessionID,
 	sessionKey string, maxAge time.Duration, maxMessages int, sharedHistory *bool, isScheduled bool,
 ) error {
 	log := zerolog.Ctx(ctx)
@@ -618,6 +618,7 @@ func (mach *OlmMachine) createGroupSession(
 			Msg("Mismatched session ID while creating inbound group session")
 		return fmt.Errorf("mismatched session ID while creating inbound group session")
 	}
+	igs.SourceUser = sender
 	err = mach.StoreGroupSession(ctx, igs, true)
 	if err != nil {
 		log.Err(err).Stringer("session_id", sessionID).Msg("Failed to store new inbound group session")
@@ -646,12 +647,14 @@ func (mach *OlmMachine) StoreGroupSession(ctx context.Context, igs *InboundGroup
 			// so save the new key source to flag the session as more trusted.
 			existing.KeySource = igs.KeySource
 			existing.ForwardingChains = igs.ForwardingChains
+			existing.SourceUser = igs.SourceUser
 			igs = existing
 		} else if existing.KeySource == id.KeySourceDirect {
 			// The new session has an earlier index than the existing one, but the existing one was received directly,
 			// so keep the existing key source to keep the session flagged as trusted.
 			igs.KeySource = existing.KeySource
 			igs.ForwardingChains = existing.ForwardingChains
+			igs.SourceUser = existing.SourceUser
 		}
 
 		// Use oldest received at time
@@ -758,7 +761,7 @@ func (mach *OlmMachine) receiveRoomKey(ctx context.Context, evt *DecryptedOlmEve
 		}
 	}
 	err = mach.createGroupSession(
-		ctx, evt.SenderKey, evt.Keys.Ed25519, content.RoomID, content.SessionID, content.SessionKey,
+		ctx, evt.Sender, evt.SenderKey, evt.Keys.Ed25519, content.RoomID, content.SessionID, content.SessionKey,
 		maxAge, maxMessages, content.SharedHistory, content.IsScheduled,
 	)
 	if err != nil {

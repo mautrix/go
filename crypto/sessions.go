@@ -120,6 +120,7 @@ type InboundGroupSession struct {
 	IsScheduled      bool
 	KeyBackupVersion id.KeyBackupVersion
 	KeySource        id.KeySource
+	SourceUser       id.UserID
 
 	id id.SessionID
 }

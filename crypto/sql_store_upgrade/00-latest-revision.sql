@@ -72,6 +72,7 @@ CREATE TABLE crypto_megolm_inbound_session (
 	is_scheduled       BOOLEAN NOT NULL DEFAULT false,
 	key_backup_version TEXT NOT NULL DEFAULT '',
 	key_source         TEXT NOT NULL DEFAULT '',
+	source_user        TEXT NOT NULL DEFAULT '',
 	PRIMARY KEY (account_id, session_id)
 );
 -- Useful index to find keys that need backing up

@@ -358,22 +358,24 @@ func (store *SQLCryptoStore) PutGroupSession(ctx context.Context, session *Inbou
 		Uint32("first_message_index", session.Internal.FirstKnownIndex()).
 		Stringer("key_backup_version", session.KeyBackupVersion).
 		Stringer("key_source", session.KeySource).
+		Stringer("source_user", session.SourceUser).
 		Msg("Upserting megolm inbound group session")
 	_, err = store.DB.Exec(ctx, `
 		INSERT INTO crypto_megolm_inbound_session (
 			session_id, sender_key, signing_key, room_id, session, forwarding_chains, shared_history,
-			ratchet_safety, received_at, max_age, max_messages, is_scheduled, key_backup_version, key_source, account_id
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+			ratchet_safety, received_at, max_age, max_messages, is_scheduled, key_backup_version, key_source,
+			source_user, account_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 		ON CONFLICT (session_id, account_id) DO UPDATE
 		    SET withheld_code=NULL, withheld_reason=NULL, sender_key=excluded.sender_key, signing_key=excluded.signing_key,
 		        room_id=excluded.room_id, session=excluded.session, forwarding_chains=excluded.forwarding_chains,
 		        shared_history=excluded.shared_history, ratchet_safety=excluded.ratchet_safety, received_at=excluded.received_at,
 		        max_age=excluded.max_age, max_messages=excluded.max_messages, is_scheduled=excluded.is_scheduled,
-		        key_backup_version=excluded.key_backup_version, key_source=excluded.key_source
+		        key_backup_version=excluded.key_backup_version, key_source=excluded.key_source, source_user=excluded.source_user
 	`,
 		session.ID(), session.SenderKey, session.SigningKey, session.RoomID, sessionBytes, forwardingChains, session.SharedHistory,
 		ratchetSafety, datePtr(session.ReceivedAt), dbutil.NumPtr(session.MaxAge), dbutil.NumPtr(session.MaxMessages),
-		session.IsScheduled, session.KeyBackupVersion, session.KeySource, store.AccountID,
+		session.IsScheduled, session.KeyBackupVersion, session.KeySource, session.SourceUser, store.AccountID,
 	)
 	return err
 }
@@ -388,13 +390,17 @@ func (store *SQLCryptoStore) GetGroupSession(ctx context.Context, roomID id.Room
 	var sharedHistory *bool
 	var version id.KeyBackupVersion
 	var keySource id.KeySource
+	var sourceUser id.UserID
 	err := store.DB.QueryRow(ctx, `
 		SELECT sender_key, signing_key, session, forwarding_chains, withheld_code, withheld_reason, shared_history,
-		       ratchet_safety, received_at, max_age, max_messages, is_scheduled, key_backup_version, key_source
+		       ratchet_safety, received_at, max_age, max_messages, is_scheduled, key_backup_version, key_source, source_user
 		FROM crypto_megolm_inbound_session
 		WHERE room_id=$1 AND session_id=$2 AND account_id=$3`,
 		roomID, sessionID, store.AccountID,
-	).Scan(&senderKey, &signingKey, &sessionBytes, &forwardingChains, &withheldCode, &withheldReason, &sharedHistory, &ratchetSafetyBytes, &receivedAt, &maxAge, &maxMessages, &isScheduled, &version, &keySource)
+	).Scan(
+		&senderKey, &signingKey, &sessionBytes, &forwardingChains, &withheldCode, &withheldReason, &sharedHistory,
+		&ratchetSafetyBytes, &receivedAt, &maxAge, &maxMessages, &isScheduled, &version, &keySource, &sourceUser,
+	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	} else if err != nil {
@@ -427,6 +433,7 @@ func (store *SQLCryptoStore) GetGroupSession(ctx context.Context, roomID id.Room
 		IsScheduled:      isScheduled,
 		KeyBackupVersion: version,
 		KeySource:        keySource,
+		SourceUser:       sourceUser,
 	}, nil
 }
 
@@ -553,7 +560,11 @@ func (store *SQLCryptoStore) scanInboundGroupSession(rows dbutil.Scannable) (*In
 	var sharedHistory *bool
 	var version id.KeyBackupVersion
 	var keySource id.KeySource
-	err := rows.Scan(&roomID, &senderKey, &signingKey, &sessionBytes, &forwardingChains, &sharedHistory, &ratchetSafetyBytes, &receivedAt, &maxAge, &maxMessages, &isScheduled, &version, &keySource)
+	var sourceUser id.UserID
+	err := rows.Scan(
+		&roomID, &senderKey, &signingKey, &sessionBytes, &forwardingChains, &sharedHistory, &ratchetSafetyBytes,
+		&receivedAt, &maxAge, &maxMessages, &isScheduled, &version, &keySource, &sourceUser,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -575,13 +586,14 @@ func (store *SQLCryptoStore) scanInboundGroupSession(rows dbutil.Scannable) (*In
 		IsScheduled:      isScheduled,
 		KeyBackupVersion: version,
 		KeySource:        keySource,
+		SourceUser:       sourceUser,
 	}, nil
 }
 
 func (store *SQLCryptoStore) GetGroupSessionsForRoom(ctx context.Context, roomID id.RoomID) dbutil.RowIter[*InboundGroupSession] {
 	rows, err := store.DB.Query(ctx, `
 		SELECT room_id, sender_key, signing_key, session, forwarding_chains, shared_history,
-		       ratchet_safety, received_at, max_age, max_messages, is_scheduled, key_backup_version, key_source
+		       ratchet_safety, received_at, max_age, max_messages, is_scheduled, key_backup_version, key_source, source_user
 		FROM crypto_megolm_inbound_session WHERE room_id=$1 AND account_id=$2 AND session IS NOT NULL`,
 		roomID, store.AccountID,
 	)
@@ -591,7 +603,7 @@ func (store *SQLCryptoStore) GetGroupSessionsForRoom(ctx context.Context, roomID
 func (store *SQLCryptoStore) GetAllGroupSessions(ctx context.Context) dbutil.RowIter[*InboundGroupSession] {
 	rows, err := store.DB.Query(ctx, `
 		SELECT room_id, sender_key, signing_key, session, forwarding_chains, shared_history,
-		       ratchet_safety, received_at, max_age, max_messages, is_scheduled, key_backup_version, key_source
+		       ratchet_safety, received_at, max_age, max_messages, is_scheduled, key_backup_version, key_source, source_user
 		FROM crypto_megolm_inbound_session WHERE account_id=$1 AND session IS NOT NULL`,
 		store.AccountID,
 	)
@@ -601,7 +613,7 @@ func (store *SQLCryptoStore) GetAllGroupSessions(ctx context.Context) dbutil.Row
 func (store *SQLCryptoStore) GetGroupSessionsWithoutKeyBackupVersion(ctx context.Context, version id.KeyBackupVersion) dbutil.RowIter[*InboundGroupSession] {
 	rows, err := store.DB.Query(ctx, `
 		SELECT room_id, sender_key, signing_key, session, forwarding_chains, shared_history,
-		       ratchet_safety, received_at, max_age, max_messages, is_scheduled, key_backup_version, key_source
+		       ratchet_safety, received_at, max_age, max_messages, is_scheduled, key_backup_version, key_source, source_user
 		FROM crypto_megolm_inbound_session WHERE account_id=$1 AND session IS NOT NULL AND key_backup_version != $2`,
 		store.AccountID, version,
 	)

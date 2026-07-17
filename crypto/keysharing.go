@@ -187,6 +187,7 @@ func (mach *OlmMachine) importForwardedRoomKey(ctx context.Context, evt *Decrypt
 		MaxMessages: maxMessages,
 		IsScheduled: content.IsScheduled,
 		KeySource:   id.KeySourceForward,
+		SourceUser:  evt.Sender,
 	}
 	err = mach.StoreGroupSession(ctx, igs, true)
 	if err != nil {
