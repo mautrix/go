@@ -321,6 +321,15 @@ func datePtr(t time.Time) *time.Time {
 	return &t
 }
 
+func (store *SQLCryptoStore) SetGroupSessionKeyBackupVersion(ctx context.Context, sessionID id.SessionID, version id.KeyBackupVersion) error {
+	_, err := store.DB.Exec(
+		ctx,
+		`UPDATE crypto_megolm_inbound_session SET key_backup_version=$1 WHERE session_id=$2 AND account_id=$3`,
+		version, sessionID, store.AccountID,
+	)
+	return err
+}
+
 // PutGroupSession stores an inbound Megolm group session for a room, sender and session.
 func (store *SQLCryptoStore) PutGroupSession(ctx context.Context, session *InboundGroupSession) error {
 	sessionBytes, err := session.Internal.Pickle(store.PickleKey)
