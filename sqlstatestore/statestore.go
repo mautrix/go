@@ -28,11 +28,11 @@ import (
 //go:embed *.sql
 var rawUpgrades embed.FS
 
-var UpgradeTable dbutil.UpgradeTable
-
-func init() {
-	UpgradeTable.RegisterFS(rawUpgrades)
-}
+var UpgradeTable = dbutil.BuildUpgradeTable().
+	WithFS(rawUpgrades).
+	With(upgradeV5).
+	With(upgradeV6).
+	Finish()
 
 const VersionTableName = "mx_version"
 
