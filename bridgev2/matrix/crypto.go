@@ -371,6 +371,7 @@ func (helper *CryptoHelper) Start() {
 		helper.log.Debug().Msg("End-to-bridge encryption is in appservice mode, registering event listeners and not starting syncer")
 		helper.bridge.AS.Registration.EphemeralEvents = true
 		helper.mach.AddAppserviceListener(helper.bridge.EventProcessor)
+		helper.bridge.EventProcessor.On(event.StateHistoryVisibility, helper.mach.HandleHistoryVisibility)
 		if helper.streams != nil {
 			err := helper.streams.InitAppservice(helper.bridge.EventProcessor)
 			if err != nil {

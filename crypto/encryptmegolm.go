@@ -197,8 +197,14 @@ func (mach *OlmMachine) newOutboundGroupSession(ctx context.Context, roomID id.R
 			Msg("Failed to get encryption event in room")
 		return nil, fmt.Errorf("failed to get encryption event in room %s: %w", roomID, err)
 	}
-	// TODO(history sharing): fetch history visibility
-	session, err := NewOutboundGroupSession(roomID, encryptionEvent, nil)
+	historyVisibility, err := mach.StateStore.GetHistoryVisibility(ctx, roomID)
+	if err != nil {
+		mach.machOrContextLog(ctx).Err(err).
+			Stringer("room_id", roomID).
+			Msg("Failed to get history visibility in room")
+		return nil, fmt.Errorf("failed to get history visibility in room %s: %w", roomID, err)
+	}
+	session, err := NewOutboundGroupSession(roomID, encryptionEvent, historyVisibility)
 	if err != nil {
 		return nil, err
 	}

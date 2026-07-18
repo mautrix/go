@@ -238,8 +238,7 @@ func NewOutboundGroupSession(
 		RoomID:      roomID,
 	}
 	if historyVisibilityContent != nil {
-		vis := historyVisibilityContent.HistoryVisibility
-		ogs.SharedHistory = ptr.Ptr(vis == event.HistoryVisibilityShared || vis == event.HistoryVisibilityWorldReadable)
+		ogs.SharedHistory = ptr.Ptr(historyVisibilityContent.SharedHistory())
 	}
 	if encryptionContent != nil {
 		// Clamp rotation period to prevent unreasonable values

@@ -212,6 +212,7 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 	if syncer != nil {
 		syncer.OnSync(helper.mach.ProcessSyncResponse)
 		syncer.OnEventType(event.StateMember, helper.mach.HandleMemberEvent)
+		syncer.OnEventType(event.StateHistoryVisibility, helper.mach.HandleHistoryVisibility)
 		if _, ok = helper.client.Syncer.(mautrix.DispatchableSyncer); ok {
 			syncer.OnEventType(event.EventEncrypted, helper.HandleEncrypted)
 		} else {
@@ -222,6 +223,8 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 		}
 	} else if helper.ASEventProcessor != nil {
 		helper.mach.AddAppserviceListener(helper.ASEventProcessor)
+		helper.ASEventProcessor.On(event.StateMember, helper.mach.HandleMemberEvent)
+		helper.ASEventProcessor.On(event.StateHistoryVisibility, helper.mach.HandleHistoryVisibility)
 		helper.ASEventProcessor.On(event.EventEncrypted, helper.HandleEncrypted)
 	}
 

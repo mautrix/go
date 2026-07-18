@@ -30,6 +30,12 @@ func (mockStateStore) GetEncryptionEvent(context.Context, id.RoomID) (*event.Enc
 	}, nil
 }
 
+func (mockStateStore) GetHistoryVisibility(context.Context, id.RoomID) (*event.HistoryVisibilityEventContent, error) {
+	return &event.HistoryVisibilityEventContent{
+		HistoryVisibility: event.HistoryVisibilityShared,
+	}, nil
+}
+
 func (mockStateStore) FindSharedRooms(context.Context, id.UserID) ([]id.RoomID, error) {
 	return []id.RoomID{"room1"}, nil
 }

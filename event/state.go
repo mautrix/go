@@ -204,6 +204,14 @@ type PinnedEventsEventContent struct {
 // https://spec.matrix.org/v1.2/client-server-api/#mroomhistory_visibility
 type HistoryVisibility string
 
+func (hv HistoryVisibility) SharedHistory() bool {
+	return hv != HistoryVisibilityJoined && hv != HistoryVisibilityInvited
+}
+
+func (hv HistoryVisibility) String() string {
+	return string(hv)
+}
+
 const (
 	HistoryVisibilityInvited       HistoryVisibility = "invited"
 	HistoryVisibilityJoined        HistoryVisibility = "joined"
@@ -215,6 +223,10 @@ const (
 // https://spec.matrix.org/v1.2/client-server-api/#mroomhistory_visibility
 type HistoryVisibilityEventContent struct {
 	HistoryVisibility HistoryVisibility `json:"history_visibility"`
+}
+
+func (hvec *HistoryVisibilityEventContent) SharedHistory() bool {
+	return hvec == nil || hvec.HistoryVisibility.SharedHistory()
 }
 
 // GuestAccess specifies whether or not guest accounts can join.

@@ -111,6 +111,7 @@ type StateStore interface {
 	IsEncrypted(context.Context, id.RoomID) (bool, error)
 	// GetEncryptionEvent returns the encryption event's content for an encrypted room.
 	GetEncryptionEvent(context.Context, id.RoomID) (*event.EncryptionEventContent, error)
+	GetHistoryVisibility(ctx context.Context, roomID id.RoomID) (*event.HistoryVisibilityEventContent, error)
 	// FindSharedRooms returns the encrypted rooms that another user is also in for a user ID.
 	FindSharedRooms(context.Context, id.UserID) ([]id.RoomID, error)
 }
@@ -391,6 +392,32 @@ func (mach *OlmMachine) HandleMemberEvent(ctx context.Context, evt *event.Event)
 	err := mach.CryptoStore.RemoveOutboundGroupSession(ctx, evt.RoomID)
 	if err != nil {
 		mach.Log.Warn().Stringer("room_id", evt.RoomID).Msg("Failed to invalidate outbound group session")
+	}
+}
+
+func (mach *OlmMachine) HandleHistoryVisibility(ctx context.Context, evt *event.Event) {
+	vis, ok := evt.Content.Parsed.(*event.HistoryVisibilityEventContent)
+	if !ok {
+		return
+	}
+	log := mach.machOrContextLog(ctx)
+	outboundSession, err := mach.CryptoStore.GetOutboundGroupSession(ctx, evt.RoomID)
+	if err != nil {
+		log.Err(err).Msg("Failed to get outbound group session to check history visibility change")
+	} else if outboundSession == nil {
+		return
+	}
+	shareHistory := vis.SharedHistory()
+	if outboundSession.SharedHistory != nil && *outboundSession.SharedHistory != shareHistory {
+		log.Trace().
+			Stringer("room_id", evt.RoomID).
+			Any("prev_shared_history", outboundSession.SharedHistory).
+			Stringer("new_history_visibility", vis.HistoryVisibility).
+			Msg("History visibility changed, invalidating outbound group session")
+		err = mach.CryptoStore.RemoveOutboundGroupSession(ctx, evt.RoomID)
+		if err != nil {
+			log.Err(err).Msg("Failed to invalidate outbound group session on history visibility change")
+		}
 	}
 }
 
