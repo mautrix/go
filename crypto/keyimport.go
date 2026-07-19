@@ -119,7 +119,7 @@ func (mach *OlmMachine) importExportedRoomKey(ctx context.Context, session *Expo
 		ReceivedAt:       time.Now().UTC(),
 		SharedHistory:    session.SharedHistory,
 	}
-	err = mach.StoreGroupSession(ctx, igs, true)
+	err = mach.StoreGroupSession(ctx, igs)
 	return err == nil, err
 }
 

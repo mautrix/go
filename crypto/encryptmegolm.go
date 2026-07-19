@@ -124,8 +124,7 @@ func (mach *OlmMachine) EncryptMegolmEvent(ctx context.Context, roomID id.RoomID
 // If you use the event.Content struct, make sure you pass a pointer to the struct,
 // as JSON serialization will not work correctly otherwise.
 func (mach *OlmMachine) EncryptMegolmEventWithStateKey(ctx context.Context, roomID id.RoomID, evtType event.Type, stateKey *string, content interface{}) (*event.EncryptedEventContent, error) {
-	mach.megolmEncryptLock.Lock()
-	defer mach.megolmEncryptLock.Unlock()
+	defer mach.megolmEncryptLock.WithLock(roomID)()
 	session, err := mach.CryptoStore.GetOutboundGroupSession(ctx, roomID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get outbound group session: %w", err)
@@ -231,8 +230,7 @@ type deviceSessionWrapper struct {
 // For devices with TrustStateBlacklisted, a m.room_key.withheld event with code=m.blacklisted is sent.
 // If AllowUnverifiedDevices is false, a similar event with code=m.unverified is sent to devices with TrustStateUnset
 func (mach *OlmMachine) ShareGroupSession(ctx context.Context, roomID id.RoomID, users []id.UserID) error {
-	mach.megolmEncryptLock.Lock()
-	defer mach.megolmEncryptLock.Unlock()
+	defer mach.megolmEncryptLock.WithLock(roomID)()
 	session, err := mach.CryptoStore.GetOutboundGroupSession(ctx, roomID)
 	if err != nil {
 		return fmt.Errorf("failed to get previous outbound group session: %w", err)

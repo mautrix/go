@@ -78,8 +78,8 @@ type OlmMachine struct {
 	olmHashSavePointLock sync.Mutex
 
 	olmLock           sync.Mutex
-	megolmEncryptLock sync.Mutex
-	megolmDecryptLock exsync.KeyedMutex[id.SessionID]
+	megolmEncryptLock exsync.KeyedMutex[id.RoomID]
+	megolmDecryptLock MegolmDecryptLock
 
 	otkUploadLock       sync.Mutex
 	lastOTKUpload       time.Time
@@ -104,6 +104,8 @@ type OlmMachine struct {
 	secretLock      sync.Mutex
 	secretListeners map[string]chan<- string
 }
+
+type MegolmDecryptLock func(ctx context.Context, sessID id.SessionID, storeOnly bool, cb func(context.Context) error) error
 
 // StateStore is used by OlmMachine to get room state information that's needed for encryption.
 type StateStore interface {
@@ -142,6 +144,8 @@ func NewOlmMachine(client *mautrix.Client, log *zerolog.Logger, cryptoStore Stor
 		secretListeners:  make(map[string]chan<- string),
 
 		keyFetchAttempted: exsync.NewSet[userSenderKeyTuple](),
+
+		megolmDecryptLock: defaultMegolmDecryptLock(),
 	}
 	mach.backgroundCtx, mach.cancelBackgroundCtx = context.WithCancel(context.Background())
 	mach.AllowKeyShare = mach.defaultAllowKeyShare
@@ -154,6 +158,18 @@ func (mach *OlmMachine) machOrContextLog(ctx context.Context) *zerolog.Logger {
 		return mach.Log
 	}
 	return log
+}
+
+func (mach *OlmMachine) SetMegolmDecryptLock(lock MegolmDecryptLock) {
+	mach.megolmDecryptLock = lock
+}
+
+func defaultMegolmDecryptLock() MegolmDecryptLock {
+	megolmDecryptLock := exsync.NewKeyedMutex[id.SessionID]()
+	return func(ctx context.Context, sessionID id.SessionID, storeOnly bool, cb func(context.Context) error) error {
+		defer megolmDecryptLock.WithLock(sessionID)()
+		return cb(ctx)
+	}
 }
 
 func (mach *OlmMachine) SetBackgroundCtx(ctx context.Context) {
@@ -646,7 +662,7 @@ func (mach *OlmMachine) createGroupSession(
 		return fmt.Errorf("mismatched session ID while creating inbound group session")
 	}
 	igs.SourceUser = sender
-	err = mach.StoreGroupSession(ctx, igs, true)
+	err = mach.StoreGroupSession(ctx, igs)
 	if err != nil {
 		log.Err(err).Stringer("session_id", sessionID).Msg("Failed to store new inbound group session")
 		return fmt.Errorf("failed to store new inbound group session: %w", err)
@@ -654,18 +670,20 @@ func (mach *OlmMachine) createGroupSession(
 	return nil
 }
 
-func (mach *OlmMachine) StoreGroupSession(ctx context.Context, igs *InboundGroupSession, lock bool) error {
-	sessID := igs.ID()
-	unlockMegolm := func() {}
-	if lock {
-		mach.megolmDecryptLock.Lock(sessID)
-		unlockMegolm = sync.OnceFunc(func() {
-			mach.megolmDecryptLock.Unlock(sessID)
-		})
-		defer unlockMegolm()
+func (mach *OlmMachine) StoreGroupSession(ctx context.Context, igs *InboundGroupSession) error {
+	err := mach.megolmDecryptLock(ctx, igs.ID(), true, func(ctx context.Context) error {
+		return mach.storeGroupSessionInner(ctx, igs)
+	})
+	if err != nil {
+		return err
 	}
+	mach.MarkSessionReceived(ctx, igs.RoomID, igs.ID(), igs.Internal.FirstKnownIndex())
+	return nil
+}
+
+func (mach *OlmMachine) storeGroupSessionInner(ctx context.Context, igs *InboundGroupSession) error {
 	origSource := igs.KeySource
-	existing, err := mach.CryptoStore.GetGroupSession(ctx, igs.RoomID, sessID)
+	existing, err := mach.CryptoStore.GetGroupSession(ctx, igs.RoomID, igs.ID())
 	if err != nil {
 		return fmt.Errorf("failed to check for existing group session: %w", err)
 	} else if existing != nil {
@@ -701,8 +719,6 @@ func (mach *OlmMachine) StoreGroupSession(ctx context.Context, igs *InboundGroup
 	if err != nil {
 		return fmt.Errorf("failed to store new inbound group session: %w", err)
 	}
-	unlockMegolm()
-	mach.MarkSessionReceived(ctx, igs.RoomID, sessID, igs.Internal.FirstKnownIndex())
 	return nil
 }
 

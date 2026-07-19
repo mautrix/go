@@ -95,7 +95,13 @@ func (mach *OlmMachine) DecryptMegolmEvent(ctx context.Context, evt *event.Event
 	if origRoomID, ok := evt.Content.Raw["com.beeper.original_room_id"].(string); ok && strings.HasSuffix(origRoomID, ".local") && strings.HasSuffix(evt.RoomID.String(), ".local") && mach.AllowBeeperRoomReroute {
 		encryptionRoomID = id.RoomID(origRoomID)
 	}
-	sess, plaintext, messageIndex, err := mach.actuallyDecryptMegolmEvent(ctx, evt, encryptionRoomID, content)
+	var sess *InboundGroupSession
+	var plaintext []byte
+	var messageIndex uint
+	err := mach.megolmDecryptLock(ctx, content.SessionID, false, func(ctx context.Context) (retErr error) {
+		sess, plaintext, messageIndex, retErr = mach.actuallyDecryptMegolmEvent(ctx, evt, encryptionRoomID, content)
+		return
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -254,9 +260,6 @@ func (mach *OlmMachine) checkUndecryptableMessageIndexDuplication(ctx context.Co
 }
 
 func (mach *OlmMachine) actuallyDecryptMegolmEvent(ctx context.Context, evt *event.Event, encryptionRoomID id.RoomID, content *event.EncryptedEventContent) (*InboundGroupSession, []byte, uint, error) {
-	mach.megolmDecryptLock.Lock(content.SessionID)
-	defer mach.megolmDecryptLock.Unlock(content.SessionID)
-
 	sess, err := mach.CryptoStore.GetGroupSession(ctx, encryptionRoomID, content.SessionID)
 	if err != nil {
 		return nil, nil, 0, fmt.Errorf("failed to get group session: %w", err)

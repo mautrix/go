@@ -135,7 +135,7 @@ func (mach *OlmMachine) ImportRoomKeyFromBundle(
 	if err != nil {
 		return nil, err
 	}
-	err = mach.StoreGroupSession(ctx, imported, true)
+	err = mach.StoreGroupSession(ctx, imported)
 	if err != nil {
 		return nil, fmt.Errorf("failed to store room key from bundle: %w", err)
 	}
