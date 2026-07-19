@@ -656,9 +656,13 @@ func (mach *OlmMachine) createGroupSession(
 
 func (mach *OlmMachine) StoreGroupSession(ctx context.Context, igs *InboundGroupSession, lock bool) error {
 	sessID := igs.ID()
+	unlockMegolm := func() {}
 	if lock {
 		mach.megolmDecryptLock.Lock(sessID)
-		defer mach.megolmDecryptLock.Unlock(sessID)
+		unlockMegolm = sync.OnceFunc(func() {
+			mach.megolmDecryptLock.Unlock(sessID)
+		})
+		defer unlockMegolm()
 	}
 	origSource := igs.KeySource
 	existing, err := mach.CryptoStore.GetGroupSession(ctx, igs.RoomID, sessID)
@@ -697,6 +701,7 @@ func (mach *OlmMachine) StoreGroupSession(ctx context.Context, igs *InboundGroup
 	if err != nil {
 		return fmt.Errorf("failed to store new inbound group session: %w", err)
 	}
+	unlockMegolm()
 	mach.MarkSessionReceived(ctx, igs.RoomID, sessID, igs.Internal.FirstKnownIndex())
 	return nil
 }
