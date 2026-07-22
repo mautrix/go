@@ -2759,6 +2759,7 @@ func (portal *Portal) GetIntentFor(ctx context.Context, sender EventSender, sour
 
 func (portal *Portal) getRelationMeta(
 	ctx context.Context,
+	source *UserLogin,
 	currentMsgID networkid.MessageID,
 	currentMsg *ConvertedMessage,
 	isBatchSend bool,
@@ -2766,7 +2767,12 @@ func (portal *Portal) getRelationMeta(
 	log := zerolog.Ctx(ctx)
 	var err error
 	if currentMsg.ReplyTo != nil {
-		replyTo, err = portal.Bridge.DB.Message.GetFirstOrSpecificPartByID(ctx, portal.Receiver, *currentMsg.ReplyTo)
+		replyTo, err = getTargetMessageWithAltID[database.Message](ctx, source, currentMsg.ReplyTo.MessageID, nil, func(targetMsg networkid.MessageID) (*database.Message, error) {
+			return portal.Bridge.DB.Message.GetFirstOrSpecificPartByID(ctx, portal.Receiver, networkid.MessageOptionalPartID{
+				MessageID: targetMsg,
+				PartID:    currentMsg.ReplyTo.PartID,
+			})
+		})
 		if err != nil {
 			log.Err(err).Msg("Failed to get reply target message from database")
 		} else if replyTo == nil {
@@ -2855,6 +2861,7 @@ func (portal *Portal) applyRelationMeta(ctx context.Context, content *event.Mess
 
 func (portal *Portal) sendConvertedMessage(
 	ctx context.Context,
+	source *UserLogin,
 	id networkid.MessageID,
 	intent MatrixAPI,
 	senderID networkid.UserID,
@@ -2870,7 +2877,7 @@ func (portal *Portal) sendConvertedMessage(
 	}
 	log := zerolog.Ctx(ctx)
 	replyTo, threadRoot, prevThreadEvent := portal.getRelationMeta(
-		ctx, id, converted, false,
+		ctx, source, id, converted, false,
 	)
 	output := make([]*database.Message, 0, len(converted.Parts))
 	var errorList []error
@@ -3088,7 +3095,7 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 			return EventHandlingResultFailed.WithError(err)
 		}
 	}
-	_, res = portal.sendConvertedMessage(ctx, evt.GetID(), intent, evt.GetSender().Sender, converted, ts, getStreamOrder(evt), nil)
+	_, res = portal.sendConvertedMessage(ctx, source, evt.GetID(), intent, evt.GetSender().Sender, converted, ts, getStreamOrder(evt), nil)
 	if portal.currentlyTypingGhosts.Pop(intent.GetMXID()) {
 		err = intent.MarkTyping(ctx, portal.MXID, TypingTypeText, 0)
 		if err != nil {
@@ -3125,9 +3132,8 @@ func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, e
 		existing = bundledEvt.GetTargetDBMessage()
 	}
 	if existing == nil {
-		targetID := evt.GetTargetMessage()
 		var err error
-		existing, err = portal.Bridge.DB.Message.GetAllPartsByID(ctx, portal.Receiver, targetID)
+		existing, err = portal.getAllTargetMessageParts(ctx, source, evt)
 		if err != nil {
 			log.Err(err).Msg("Failed to get edit target message")
 			return EventHandlingResultFailed.WithError(err)
@@ -3171,7 +3177,7 @@ func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, e
 		portal.sendRemoteErrorNotice(ctx, intent, err, ts, "edit")
 		return EventHandlingResultFailed.WithError(err)
 	}
-	res := portal.sendConvertedEdit(ctx, existing[0].ID, evt.GetSender().Sender, converted, intent, ts, getStreamOrder(evt))
+	res := portal.sendConvertedEdit(ctx, source, existing[0].ID, evt.GetSender().Sender, converted, intent, ts, getStreamOrder(evt))
 	if portal.currentlyTypingGhosts.Pop(intent.GetMXID()) {
 		err = intent.MarkTyping(ctx, portal.MXID, TypingTypeText, 0)
 		if err != nil {
@@ -3183,6 +3189,7 @@ func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, e
 
 func (portal *Portal) sendConvertedEdit(
 	ctx context.Context,
+	source *UserLogin,
 	targetID networkid.MessageID,
 	senderID networkid.UserID,
 	converted *ConvertedEdit,
@@ -3271,7 +3278,7 @@ func (portal *Portal) sendConvertedEdit(
 		}
 	}
 	if converted.AddedParts != nil {
-		_, res := portal.sendConvertedMessage(ctx, targetID, intent, senderID, converted.AddedParts, ts, streamOrder, nil)
+		_, res := portal.sendConvertedMessage(ctx, source, targetID, intent, senderID, converted.AddedParts, ts, streamOrder, nil)
 		if !res.Success {
 			errorList = append(errorList, res.Error)
 		}
@@ -3282,20 +3289,62 @@ func (portal *Portal) sendConvertedEdit(
 	return EventHandlingResultSuccess
 }
 
-func (portal *Portal) getTargetMessagePart(ctx context.Context, evt RemoteEventWithTargetMessage) (*database.Message, error) {
-	if partTargeter, ok := evt.(RemoteEventWithTargetPart); ok {
-		return portal.Bridge.DB.Message.GetPartByID(ctx, portal.Receiver, evt.GetTargetMessage(), partTargeter.GetTargetMessagePart())
-	} else {
-		return portal.Bridge.DB.Message.GetFirstPartByID(ctx, portal.Receiver, evt.GetTargetMessage())
+func getTargetMessageWithAltID[V any, T *V | []*V](
+	ctx context.Context,
+	source *UserLogin,
+	targetMsg networkid.MessageID,
+	evt RemoteEventWithTargetMessage,
+	getter func(targetMsg networkid.MessageID) (T, error),
+) (T, error) {
+	if targetMsg == "" {
+		targetMsg = evt.GetTargetMessage()
 	}
+	res, err := getter(targetMsg)
+	if err != nil || res != nil {
+		return res, err
+	}
+	af, ok := source.Client.(AltTargetFindingNetworkAPI)
+	if !ok {
+		return nil, nil
+	}
+	alts, err := af.FindAltTargetMessage(ctx, targetMsg, evt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get alt target message IDs: %w", err)
+	}
+	for _, alt := range alts {
+		res, err = getter(alt)
+		if err != nil {
+			return nil, err
+		} else if res != nil {
+			zerolog.Ctx(ctx).Debug().Str("alt_target_message_id", string(alt)).Msg("Found target message with alternate ID")
+			return res, nil
+		}
+	}
+	return nil, nil
 }
 
-func (portal *Portal) getTargetReaction(ctx context.Context, evt RemoteReactionRemove) (*database.Reaction, error) {
-	if partTargeter, ok := evt.(RemoteEventWithTargetPart); ok {
-		return portal.Bridge.DB.Reaction.GetByID(ctx, portal.Receiver, evt.GetTargetMessage(), partTargeter.GetTargetMessagePart(), evt.GetSender().Sender, evt.GetRemovedEmojiID())
-	} else {
-		return portal.Bridge.DB.Reaction.GetByIDWithoutMessagePart(ctx, portal.Receiver, evt.GetTargetMessage(), evt.GetSender().Sender, evt.GetRemovedEmojiID())
-	}
+func (portal *Portal) getTargetMessagePart(ctx context.Context, source *UserLogin, evt RemoteEventWithTargetMessage) (*database.Message, error) {
+	return getTargetMessageWithAltID[database.Message](ctx, source, "", evt, func(targetMsg networkid.MessageID) (*database.Message, error) {
+		if partTargeter, ok := evt.(RemoteEventWithTargetPart); ok {
+			return portal.Bridge.DB.Message.GetPartByID(ctx, portal.Receiver, targetMsg, partTargeter.GetTargetMessagePart())
+		}
+		return portal.Bridge.DB.Message.GetFirstPartByID(ctx, portal.Receiver, targetMsg)
+	})
+}
+
+func (portal *Portal) getAllTargetMessageParts(ctx context.Context, source *UserLogin, evt RemoteEventWithTargetMessage) ([]*database.Message, error) {
+	return getTargetMessageWithAltID[database.Message](ctx, source, "", evt, func(targetMsg networkid.MessageID) ([]*database.Message, error) {
+		return portal.Bridge.DB.Message.GetAllPartsByID(ctx, portal.Receiver, targetMsg)
+	})
+}
+
+func (portal *Portal) getTargetReaction(ctx context.Context, source *UserLogin, evt RemoteReactionRemove) (*database.Reaction, error) {
+	return getTargetMessageWithAltID[database.Reaction](ctx, source, "", evt, func(targetMsg networkid.MessageID) (*database.Reaction, error) {
+		if partTargeter, ok := evt.(RemoteEventWithTargetPart); ok {
+			return portal.Bridge.DB.Reaction.GetByID(ctx, portal.Receiver, targetMsg, partTargeter.GetTargetMessagePart(), evt.GetSender().Sender, evt.GetRemovedEmojiID())
+		}
+		return portal.Bridge.DB.Reaction.GetByIDWithoutMessagePart(ctx, portal.Receiver, targetMsg, evt.GetSender().Sender, evt.GetRemovedEmojiID())
+	})
 }
 
 func getEventTS(evt RemoteEvent) time.Time {
@@ -3315,7 +3364,7 @@ func getStreamOrder(evt RemoteEvent) int64 {
 func (portal *Portal) handleRemoteReactionSync(ctx context.Context, source *UserLogin, evt RemoteReactionSync) EventHandlingResult {
 	log := zerolog.Ctx(ctx)
 	eventTS := getEventTS(evt)
-	targetMessage, err := portal.getTargetMessagePart(ctx, evt)
+	targetMessage, err := portal.getTargetMessagePart(ctx, source, evt)
 	if err != nil {
 		log.Err(err).Msg("Failed to get target message for reaction")
 		return EventHandlingResultFailed.WithError(err)
@@ -3325,10 +3374,10 @@ func (portal *Portal) handleRemoteReactionSync(ctx context.Context, source *User
 		return EventHandlingResultIgnored
 	}
 	var existingReactions []*database.Reaction
-	if partTargeter, ok := evt.(RemoteEventWithTargetPart); ok {
-		existingReactions, err = portal.Bridge.DB.Reaction.GetAllToMessagePart(ctx, portal.Receiver, evt.GetTargetMessage(), partTargeter.GetTargetMessagePart())
+	if _, ok := evt.(RemoteEventWithTargetPart); ok {
+		existingReactions, err = portal.Bridge.DB.Reaction.GetAllToMessagePart(ctx, portal.Receiver, targetMessage.ID, targetMessage.PartID)
 	} else {
-		existingReactions, err = portal.Bridge.DB.Reaction.GetAllToMessage(ctx, portal.Receiver, evt.GetTargetMessage())
+		existingReactions, err = portal.Bridge.DB.Reaction.GetAllToMessage(ctx, portal.Receiver, targetMessage.ID)
 	}
 	if err != nil {
 		log.Err(err).Msg("Failed to get existing reactions for reaction sync")
@@ -3451,7 +3500,7 @@ func (portal *Portal) handleRemoteReactionSync(ctx context.Context, source *User
 
 func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogin, evt RemoteReaction) EventHandlingResult {
 	log := zerolog.Ctx(ctx)
-	targetMessage, err := portal.getTargetMessagePart(ctx, evt)
+	targetMessage, err := portal.getTargetMessagePart(ctx, source, evt)
 	if err != nil {
 		log.Err(err).Msg("Failed to get target message for reaction")
 		return EventHandlingResultFailed.WithError(err)
@@ -3568,7 +3617,7 @@ func (portal *Portal) getIntentForMXID(ctx context.Context, userID id.UserID) (M
 
 func (portal *Portal) handleRemoteReactionRemove(ctx context.Context, source *UserLogin, evt RemoteReactionRemove) EventHandlingResult {
 	log := zerolog.Ctx(ctx)
-	targetReaction, err := portal.getTargetReaction(ctx, evt)
+	targetReaction, err := portal.getTargetReaction(ctx, source, evt)
 	if err != nil {
 		log.Err(err).Msg("Failed to get target reaction for removal")
 		return EventHandlingResultFailed.WithError(err)
@@ -3606,7 +3655,7 @@ func (portal *Portal) handleRemoteReactionRemove(ctx context.Context, source *Us
 
 func (portal *Portal) handleRemoteMessageRemove(ctx context.Context, source *UserLogin, evt RemoteMessageRemove) EventHandlingResult {
 	log := zerolog.Ctx(ctx)
-	targetParts, err := portal.Bridge.DB.Message.GetAllPartsByID(ctx, portal.Receiver, evt.GetTargetMessage())
+	targetParts, err := portal.getAllTargetMessageParts(ctx, source, evt)
 	if err != nil {
 		log.Err(err).Msg("Failed to get target message for removal")
 		return EventHandlingResultFailed.WithError(err)
@@ -3642,7 +3691,7 @@ func (portal *Portal) handleRemoteMessageRemove(ctx context.Context, source *Use
 	dontRenderPlaceholderProvider, ok := evt.(RemoteMessageRemoveWithoutPlaceholder)
 	dontRenderPlaceholder := ok && dontRenderPlaceholderProvider.DontRenderPlaceholder()
 	res := portal.redactMessageParts(ctx, targetParts, intent, getEventTS(evt), "", dontRenderPlaceholder)
-	err = portal.Bridge.DB.Message.DeleteAllParts(ctx, portal.Receiver, evt.GetTargetMessage())
+	err = portal.Bridge.DB.Message.DeleteAllParts(ctx, portal.Receiver, targetParts[0].ID)
 	if err != nil {
 		log.Err(err).Msg("Failed to delete target message from database")
 	}

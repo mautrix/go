@@ -169,16 +169,16 @@ func (portal *PortalInternals) GetIntentAndUserMXIDFor(ctx context.Context, send
 	return (*Portal)(portal).getIntentAndUserMXIDFor(ctx, sender, source, otherLogins, evtType)
 }
 
-func (portal *PortalInternals) GetRelationMeta(ctx context.Context, currentMsgID networkid.MessageID, currentMsg *ConvertedMessage, isBatchSend bool) (replyTo, threadRoot, prevThreadEvent *database.Message) {
-	return (*Portal)(portal).getRelationMeta(ctx, currentMsgID, currentMsg, isBatchSend)
+func (portal *PortalInternals) GetRelationMeta(ctx context.Context, source *UserLogin, currentMsgID networkid.MessageID, currentMsg *ConvertedMessage, isBatchSend bool) (replyTo, threadRoot, prevThreadEvent *database.Message) {
+	return (*Portal)(portal).getRelationMeta(ctx, source, currentMsgID, currentMsg, isBatchSend)
 }
 
 func (portal *PortalInternals) ApplyRelationMeta(ctx context.Context, content *event.MessageEventContent, replyTo, threadRoot, prevThreadEvent *database.Message) {
 	(*Portal)(portal).applyRelationMeta(ctx, content, replyTo, threadRoot, prevThreadEvent)
 }
 
-func (portal *PortalInternals) SendConvertedMessage(ctx context.Context, id networkid.MessageID, intent MatrixAPI, senderID networkid.UserID, converted *ConvertedMessage, ts time.Time, streamOrder int64, logContext func(*zerolog.Event) *zerolog.Event) ([]*database.Message, EventHandlingResult) {
-	return (*Portal)(portal).sendConvertedMessage(ctx, id, intent, senderID, converted, ts, streamOrder, logContext)
+func (portal *PortalInternals) SendConvertedMessage(ctx context.Context, source *UserLogin, id networkid.MessageID, intent MatrixAPI, senderID networkid.UserID, converted *ConvertedMessage, ts time.Time, streamOrder int64, logContext func(*zerolog.Event) *zerolog.Event) ([]*database.Message, EventHandlingResult) {
+	return (*Portal)(portal).sendConvertedMessage(ctx, source, id, intent, senderID, converted, ts, streamOrder, logContext)
 }
 
 func (portal *PortalInternals) CheckPendingMessage(ctx context.Context, evt RemoteMessage) (bool, *database.Message) {
@@ -201,16 +201,20 @@ func (portal *PortalInternals) HandleRemoteEdit(ctx context.Context, source *Use
 	return (*Portal)(portal).handleRemoteEdit(ctx, source, evt)
 }
 
-func (portal *PortalInternals) SendConvertedEdit(ctx context.Context, targetID networkid.MessageID, senderID networkid.UserID, converted *ConvertedEdit, intent MatrixAPI, ts time.Time, streamOrder int64) EventHandlingResult {
-	return (*Portal)(portal).sendConvertedEdit(ctx, targetID, senderID, converted, intent, ts, streamOrder)
+func (portal *PortalInternals) SendConvertedEdit(ctx context.Context, source *UserLogin, targetID networkid.MessageID, senderID networkid.UserID, converted *ConvertedEdit, intent MatrixAPI, ts time.Time, streamOrder int64) EventHandlingResult {
+	return (*Portal)(portal).sendConvertedEdit(ctx, source, targetID, senderID, converted, intent, ts, streamOrder)
 }
 
-func (portal *PortalInternals) GetTargetMessagePart(ctx context.Context, evt RemoteEventWithTargetMessage) (*database.Message, error) {
-	return (*Portal)(portal).getTargetMessagePart(ctx, evt)
+func (portal *PortalInternals) GetTargetMessagePart(ctx context.Context, source *UserLogin, evt RemoteEventWithTargetMessage) (*database.Message, error) {
+	return (*Portal)(portal).getTargetMessagePart(ctx, source, evt)
 }
 
-func (portal *PortalInternals) GetTargetReaction(ctx context.Context, evt RemoteReactionRemove) (*database.Reaction, error) {
-	return (*Portal)(portal).getTargetReaction(ctx, evt)
+func (portal *PortalInternals) GetAllTargetMessageParts(ctx context.Context, source *UserLogin, evt RemoteEventWithTargetMessage) ([]*database.Message, error) {
+	return (*Portal)(portal).getAllTargetMessageParts(ctx, source, evt)
+}
+
+func (portal *PortalInternals) GetTargetReaction(ctx context.Context, source *UserLogin, evt RemoteReactionRemove) (*database.Reaction, error) {
+	return (*Portal)(portal).getTargetReaction(ctx, source, evt)
 }
 
 func (portal *PortalInternals) HandleRemoteReactionSync(ctx context.Context, source *UserLogin, evt RemoteReactionSync) EventHandlingResult {
@@ -331,6 +335,10 @@ func (portal *PortalInternals) UpdateParent(ctx context.Context, newParentID net
 
 func (portal *PortalInternals) LockedUpdateInfoFromGhost(ctx context.Context, ghost *Ghost) {
 	(*Portal)(portal).lockedUpdateInfoFromGhost(ctx, ghost)
+}
+
+func (portal *PortalInternals) UpdateChildBridgeInfo(ctx context.Context) {
+	(*Portal)(portal).updateChildBridgeInfo(ctx)
 }
 
 func (portal *PortalInternals) CreateMatrixRoomInLoop(ctx context.Context, source *UserLogin, info *ChatInfo, backfillBundle any) error {

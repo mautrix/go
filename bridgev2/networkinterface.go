@@ -832,6 +832,16 @@ type PersonalFilteringCustomizingNetworkAPI interface {
 	CustomizePersonalFilteringSpace(req *mautrix.ReqCreateRoom)
 }
 
+// AltTargetFindingNetworkAPI can be used by network connectors that are in the middle of a migration
+// to a new identifier format. If the target message for an edit, deletion, reaction or reply isn't
+// found, the bridge will call this method to find alternative IDs.
+//
+// Note that the third event parameter is not set for replies.
+type AltTargetFindingNetworkAPI interface {
+	NetworkAPI
+	FindAltTargetMessage(context.Context, networkid.MessageID, RemoteEventWithTargetMessage) ([]networkid.MessageID, error)
+}
+
 type ProvisioningCapabilities struct {
 	ResolveIdentifier ResolveIdentifierCapabilities    `json:"resolve_identifier"`
 	GroupCreation     map[string]GroupTypeCapabilities `json:"group_creation"`
