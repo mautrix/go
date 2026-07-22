@@ -8,6 +8,7 @@ package bridgev2
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -191,7 +192,9 @@ func (br *Bridge) StartConnectors(ctx context.Context) error {
 	}
 	if !br.Background {
 		didSplitPortals, postMigrate, err := br.MigrateToSplitPortals(ctx)
-		if err != nil {
+		if errors.Is(err, ErrCannotDisableSplitPortals) {
+			return err
+		} else if err != nil {
 			return fmt.Errorf("%w: %w", ErrSplitPortalMigrationFailed, err)
 		}
 		br.didSplitPortals = didSplitPortals
@@ -300,7 +303,13 @@ func (br *Bridge) ResendBridgeInfo(ctx context.Context, resendInfo, resendCaps b
 func (br *Bridge) MigrateToSplitPortals(ctx context.Context) (bool, func(), error) {
 	log := zerolog.Ctx(ctx).With().Str("action", "migrate to split portals").Logger()
 	ctx = log.WithContext(ctx)
-	if !br.Config.SplitPortals || br.DB.KV.Get(ctx, database.KeySplitPortalsEnabled) == "true" {
+	alreadyMigrated := br.DB.KV.Get(ctx, database.KeySplitPortalsEnabled) == "true"
+	if !br.Config.SplitPortals {
+		if alreadyMigrated {
+			return false, nil, ErrCannotDisableSplitPortals
+		}
+		return false, nil, nil
+	} else if alreadyMigrated {
 		return false, nil, nil
 	}
 	affected, err := br.DB.Portal.MigrateToSplitPortals(ctx)
