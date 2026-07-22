@@ -41,6 +41,16 @@ export interface RoomFeatures {
 	location_message?: CapabilitySupportLevel
 	/** Whether polls are supported. */
 	poll?: CapabilitySupportLevel
+	/** Whether ending (closing) a poll is supported. */
+	poll_end?: CapabilitySupportLevel
+	/** Whether polls with hidden votes are supported. */
+	poll_hidden_votes?: CapabilitySupportLevel
+	/** Whether a poll may contain options with duplicate text. If unsupported, options must be unique. */
+	poll_duplicate_options?: CapabilitySupportLevel
+	/** Maximum number of options a poll may have. 0 or omitted means no limit. */
+	poll_max_options?: number
+	/** Maximum length of a single poll option in characters. 0 or omitted means no limit. */
+	poll_option_max_length?: number
 	/** Whether replying in a thread is supported. */
 	thread?: CapabilitySupportLevel
 	/** Whether replying to a specific message is supported. */
