@@ -378,6 +378,8 @@ func (br *BridgeMain) Start() {
 		br.LogDBUpgradeErrorAndExit(dbUpgradeErr.Section, dbUpgradeErr.Err, "Failed to initialize database")
 	} else if errors.Is(err, bridgev2.ErrSplitPortalMigrationFailed) {
 		os.Exit(31)
+	} else if errors.Is(err, bridgev2.ErrCannotDisableSplitPortals) {
+		os.Exit(32)
 	} else if err != nil {
 		br.Log.Fatal().Err(err).Msg("Failed to start bridge")
 	}
