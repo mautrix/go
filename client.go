@@ -2585,6 +2585,19 @@ func (cli *Client) TurnServer(ctx context.Context) (resp *RespTurnServer, err er
 	return
 }
 
+func (cli *Client) RTCTransports(ctx context.Context) (resp *RespRTCTransports, err error) {
+	var urlPath string
+	if cli.SpecVersions.Supports(FeatureUnstableMatrixRTC) {
+		urlPath = cli.BuildClientURL("unstable", "org.matrix.msc4143", "rtc", "transports")
+	} else if cli.SpecVersions.Supports(FeatureStableMatrixRTC) {
+		urlPath = cli.BuildClientURL("v1", "rtc", "transports")
+	} else {
+		return nil, fmt.Errorf("server does not advertise MatrixRTC support")
+	}
+	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	return
+}
+
 func (cli *Client) CreateAlias(ctx context.Context, alias id.RoomAlias, roomID id.RoomID) (resp *RespAliasCreate, err error) {
 	urlPath := cli.BuildClientURL("v3", "directory", "room", alias)
 	_, err = cli.MakeRequest(ctx, http.MethodPut, urlPath, &ReqAliasCreate{RoomID: roomID}, &resp)

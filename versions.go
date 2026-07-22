@@ -75,6 +75,8 @@ var (
 	FeatureUnstableReplaceProfile    = UnstableFeature{UnstableFlag: "com.beeper.msc4437"}
 	FeatureStableReplaceProfile      = UnstableFeature{UnstableFlag: "com.beeper.msc4437.stable"}
 	FeatureFullyReadBackward         = UnstableFeature{UnstableFlag: "com.beeper.msc4446"}
+	FeatureUnstableMatrixRTC         = UnstableFeature{UnstableFlag: "org.matrix.msc4143"}
+	FeatureStableMatrixRTC           = UnstableFeature{UnstableFlag: "org.matrix.msc4143.stable" /*, SpecVersion: SpecV20*/}
 
 	BeeperFeatureHungry                = UnstableFeature{UnstableFlag: "com.beeper.hungry"}
 	BeeperFeatureBatchSending          = UnstableFeature{UnstableFlag: "com.beeper.batch_sending"}
