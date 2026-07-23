@@ -36,9 +36,16 @@ type RoomFeatures struct {
 	MaxTextLength int `json:"max_text_length,omitempty"`
 
 	LocationMessage CapabilitySupportLevel `json:"location_message,omitempty"`
-	Poll            CapabilitySupportLevel `json:"poll,omitempty"`
-	Thread          CapabilitySupportLevel `json:"thread,omitempty"`
-	Reply           CapabilitySupportLevel `json:"reply,omitempty"`
+
+	Poll                 CapabilitySupportLevel `json:"poll,omitempty"`
+	PollEnd              CapabilitySupportLevel `json:"poll_end,omitempty"`
+	PollHiddenVotes      CapabilitySupportLevel `json:"poll_hidden_votes,omitempty"`
+	PollDuplicateOptions CapabilitySupportLevel `json:"poll_duplicate_options,omitempty"`
+	PollMaxOptions       int                    `json:"poll_max_options,omitempty"`
+	PollOptionMaxLength  int                    `json:"poll_option_max_length,omitempty"`
+
+	Thread CapabilitySupportLevel `json:"thread,omitempty"`
+	Reply  CapabilitySupportLevel `json:"reply,omitempty"`
 
 	Edit         CapabilitySupportLevel `json:"edit,omitempty"`
 	EditMaxCount int                    `json:"edit_max_count,omitempty"`
@@ -344,6 +351,11 @@ func (rf *RoomFeatures) Hash() []byte {
 
 	hashValue(hasher, "location_message", rf.LocationMessage)
 	hashValue(hasher, "poll", rf.Poll)
+	hashValue(hasher, "poll_end", rf.PollEnd)
+	hashValue(hasher, "poll_hidden_votes", rf.PollHiddenVotes)
+	hashValue(hasher, "poll_duplicate_options", rf.PollDuplicateOptions)
+	hashInt(hasher, "poll_max_options", rf.PollMaxOptions)
+	hashInt(hasher, "poll_option_max_length", rf.PollOptionMaxLength)
 	hashValue(hasher, "thread", rf.Thread)
 	hashValue(hasher, "reply", rf.Reply)
 
