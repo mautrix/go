@@ -21,6 +21,7 @@ import (
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
+	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/bridgev2/status"
 )
 
@@ -30,13 +31,18 @@ type ProvLogin struct {
 	PrevStep *bridgev2.LoginStep
 	NextStep *bridgev2.LoginStep
 	Override *bridgev2.UserLogin
-	Lock     sync.Mutex
+	// ChallengeFor is set to the login this process is resolving a challenge
+	// for, if it was created via PostLoginChallenge. At most one challenge
+	// process may be outstanding per login.
+	ChallengeFor networkid.UserLoginID
+	Lock         sync.Mutex
 
 	Ctx       context.Context
 	CancelCtx context.CancelFunc
 }
 
 var ErrNilStep = errors.New("bridge returned nil step with no error")
+var ErrNoPendingChallenge = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.NO_PENDING_CHALLENGE", Err: "No pending challenge to resolve", StatusCode: http.StatusNotFound}
 var ErrTooManyLogins = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.TOO_MANY_LOGINS", Err: "Maximum number of logins exceeded"}
 var ErrLoginCancelled = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.LOGIN_CANCELLED", Err: "Login process was cancelled"}
 var ErrLoginTimedOut = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.LOGIN_TIMED_OUT", Err: "Login process timed out"}
@@ -94,6 +100,84 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 		Str("login_id", loginID).
 		Any("first_step", firstStep).
 		Msg("Created login process")
+	exhttp.WriteJSONResponse(w, http.StatusOK, &RespSubmitLogin{LoginID: loginID, LoginStep: firstStep})
+}
+
+func (prov *ProvisioningAPI) PostLoginChallenge(w http.ResponseWriter, r *http.Request) {
+	// A challenge always targets a specific existing login, so require an
+	// explicit login_id.
+	userLogin, failed := prov.GetExplicitLoginForRequest(w, r)
+	if failed {
+		return
+	} else if userLogin == nil {
+		ErrNotLoggedIn.Write(w)
+		return
+	}
+	challengeable, ok := userLogin.Client.(bridgev2.ChallengeProvidingNetworkAPI)
+	if !ok {
+		ErrNoPendingChallenge.Write(w)
+		return
+	}
+	// Check for an existing challenge and re-attach the caller if we have one.
+	prov.loginsLock.RLock()
+	existing := prov.findChallengeLogin(userLogin.ID)
+	prov.loginsLock.RUnlock()
+	if existing != nil {
+		prov.respondWithExistingChallenge(w, r, existing)
+		return
+	}
+	login, err := challengeable.Challenge(r.Context())
+	if err != nil {
+		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to create challenge login process")
+		RespondWithError(w, err, "Internal error starting challenge")
+		return
+	} else if login == nil {
+		ErrNoPendingChallenge.Write(w)
+		return
+	}
+	firstStep, err := login.Start(r.Context())
+	if err == nil && firstStep == nil {
+		err = ErrNilStep
+	}
+	if err != nil {
+		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to start challenge login process")
+		RespondWithError(w, err, "Internal error starting challenge")
+		return
+	}
+	loginID := xid.New().String()
+	ctx, cancel := context.WithTimeout(prov.br.Bridge.BackgroundCtx, 30*time.Minute)
+	ctx = userLogin.Log.With().
+		Str("login_id", loginID).
+		Logger().WithContext(ctx)
+	provLogin := &ProvLogin{
+		ID:           loginID,
+		Process:      login,
+		NextStep:     firstStep,
+		Override:     userLogin,
+		ChallengeFor: userLogin.ID,
+		Ctx:          ctx,
+		CancelCtx:    cancel,
+	}
+	prov.loginsLock.Lock()
+	existing = prov.findChallengeLogin(userLogin.ID)
+	if existing == nil {
+		prov.logins[loginID] = provLogin
+	}
+	prov.loginsLock.Unlock()
+	if existing != nil {
+		// A concurrent request registered its process first. Drop ours (it was
+		// never handed out, so nothing can be driving it) and use theirs.
+		login.Cancel()
+		cancel()
+		prov.respondWithExistingChallenge(w, r, existing)
+		return
+	}
+	go prov.handleLoginTimeout(provLogin)
+	zerolog.Ctx(r.Context()).Info().
+		Str("login_id", loginID).
+		Str("override_login_id", string(userLogin.ID)).
+		Any("first_step", firstStep).
+		Msg("Created challenge login process")
 	exhttp.WriteJSONResponse(w, http.StatusOK, &RespSubmitLogin{LoginID: loginID, LoginStep: firstStep})
 }
 
@@ -281,6 +365,15 @@ func (prov *ProvisioningAPI) handleCompleteStep(login *ProvLogin, step *bridgev2
 	if login.Override == nil || login.Override.ID == step.CompleteParams.UserLoginID {
 		return
 	}
+	if login.ChallengeFor != "" {
+		// Challenges should never adversely affect existing logins; refuse
+		// to delete it.
+		zerolog.Ctx(ctx).Error().
+			Str("challenge_for", string(login.ChallengeFor)).
+			Str("new_login_id", string(step.CompleteParams.UserLoginID)).
+			Msg("Challenge completed with a different login ID, not deleting the original login")
+		return
+	}
 	zerolog.Ctx(ctx).Info().
 		Str("old_login_id", string(login.Override.ID)).
 		Str("new_login_id", string(step.CompleteParams.UserLoginID)).
@@ -300,6 +393,35 @@ func (prov *ProvisioningAPI) handleLoginTimeout(login *ProvLogin) {
 		delete(prov.logins, login.ID)
 		prov.loginsLock.Unlock()
 	}
+}
+
+// findChallengeLogin returns the outstanding challenge process for the given
+// login, or nil if there isn't one.
+//
+// loginsLock must be held.
+func (prov *ProvisioningAPI) findChallengeLogin(loginID networkid.UserLoginID) *ProvLogin {
+	for _, login := range prov.logins {
+		if login.ChallengeFor == loginID && login.Ctx.Err() == nil {
+			return login
+		}
+	}
+	return nil
+}
+
+// respondWithExistingChallenge re-attaches the caller to a challenge process
+// that is already running.
+func (prov *ProvisioningAPI) respondWithExistingChallenge(w http.ResponseWriter, r *http.Request, login *ProvLogin) {
+	login.Lock.Lock()
+	nextStep := login.NextStep
+	login.Lock.Unlock()
+	zerolog.Ctx(r.Context()).Info().
+		Str("login_id", login.ID).
+		Str("challenge_for", string(login.ChallengeFor)).
+		Msg("Re-attaching to existing challenge login process")
+	exhttp.WriteJSONResponse(w, http.StatusOK, &RespSubmitLogin{
+		LoginID:   login.ID,
+		LoginStep: nextStep,
+	})
 }
 
 func (prov *ProvisioningAPI) deleteLogin(login *ProvLogin, cancel bool) {
