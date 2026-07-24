@@ -143,6 +143,7 @@ type TokenResponse struct {
 	TokenType    string           `json:"token_type"`
 	ExpiresIn    jsontime.Seconds `json:"expires_in"`
 	RefreshToken string           `json:"refresh_token,omitempty"`
+	Scope        Scope            `json:"scope,omitempty"`
 }
 
 type ScopeList []Scope
