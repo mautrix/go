@@ -35,6 +35,12 @@ bridge:
 
     # Should leaving Matrix rooms be bridged as leaving groups on the remote network?
     bridge_matrix_leave: false
+    # Should leaving a group on the remote network kick the user out of the
+    # corresponding Matrix room? When `true`, a remote leave is propagated to
+    # Matrix the same as any other membership change. When `false`, the leave
+    # is dropped so the user keeps access to history and stays in the Matrix
+    # room.
+    bridge_remote_leave: true
     # Should `m.notice` messages be bridged?
     bridge_notices: false
     # Should room tags only be synced when creating the portal? Tags mean things like favorite/pin and archive/low priority.
