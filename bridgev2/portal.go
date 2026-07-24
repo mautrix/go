@@ -2779,6 +2779,8 @@ func (portal *Portal) getRelationMeta(
 			if isBatchSend || portal.Bridge.Config.OutgoingMessageReID {
 				// This is somewhat evil
 				replyTo = &database.Message{
+					ID:       currentMsg.ReplyTo.MessageID,
+					PartID:   ptr.Val(currentMsg.ReplyTo.PartID),
 					MXID:     portal.Bridge.Matrix.GenerateDeterministicEventID(portal.MXID, portal.PortalKey, currentMsg.ReplyTo.MessageID, ptr.Val(currentMsg.ReplyTo.PartID)),
 					Room:     currentMsg.ReplyToRoom,
 					SenderID: currentMsg.ReplyToUser,
