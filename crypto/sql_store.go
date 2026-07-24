@@ -935,6 +935,18 @@ func (store *SQLCryptoStore) GetCrossSigningKeys(ctx context.Context, userID id.
 	return data, nil
 }
 
+func (store *SQLCryptoStore) ResetMasterKeyTOFU(ctx context.Context, userID id.UserID, key id.Ed25519) error {
+	res, err := store.DB.Exec(ctx, "UPDATE crypto_cross_signing_keys SET first_seen_key = key WHERE user_id = $1 AND key = $2 AND usage='master'", userID, key)
+	if err != nil {
+		return err
+	} else if affected, err := res.RowsAffected(); err != nil {
+		return err
+	} else if affected == 0 {
+		return fmt.Errorf("no matching master key found for user %s", userID)
+	}
+	return nil
+}
+
 // PutSignature stores a signature of a cross-signing or device key along with the signer's user ID and key.
 func (store *SQLCryptoStore) PutSignature(ctx context.Context, signedUserID id.UserID, signedKey id.Ed25519, signerUserID id.UserID, signerKey id.Ed25519, signature string) error {
 	_, err := store.DB.Exec(ctx, `
