@@ -138,11 +138,18 @@ type ClientMetadata struct {
 	Extra map[string]any `json:",unknown"`
 }
 
+type ScopeGroup string
+
+func (sg ScopeGroup) Split() []Scope {
+	return exslices.CastToString[Scope](strings.Split(string(sg), " "))
+}
+
 type TokenResponse struct {
 	AccessToken  string           `json:"access_token"`
 	TokenType    string           `json:"token_type"`
 	ExpiresIn    jsontime.Seconds `json:"expires_in"`
 	RefreshToken string           `json:"refresh_token,omitempty"`
+	Scope        ScopeGroup       `json:"scope,omitempty"`
 }
 
 type ScopeList []Scope
