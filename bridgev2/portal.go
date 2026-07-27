@@ -5063,10 +5063,13 @@ func (portal *Portal) UpdateInfoFromGhost(ctx context.Context, ghost *Ghost) (ch
 	}
 	changed = portal.updateName(ctx, ghost.Name, nil, time.Time{}, false) || changed
 	changed = portal.updateAvatar(ctx, &Avatar{
-		ID:     ghost.AvatarID,
-		MXC:    ghost.AvatarMXC,
-		Hash:   ghost.AvatarHash,
-		Remove: ghost.AvatarID == "",
+		ID:   ghost.AvatarID,
+		MXC:  ghost.AvatarMXC,
+		Hash: ghost.AvatarHash,
+		// This avatar has no Get function, so an empty MXC can only mean the ghost has no
+		// avatar. Networks may use a non-empty sentinel ID for that case (e.g. mautrix-whatsapp
+		// uses "remove" and "unauthorized"), so checking the ID alone isn't enough.
+		Remove: ghost.AvatarID == "" || ghost.AvatarMXC == "",
 	}, nil, time.Time{}, false) || changed
 	return
 }
