@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"regexp"
 	"strings"
 
@@ -60,6 +61,11 @@ type LoginProcessCookies interface {
 	SubmitCookies(ctx context.Context, cookies map[string]string) (*LoginStep, error)
 }
 
+type LoginProcessClientHTTP interface {
+	LoginProcess
+	SubmitClientHTTPResponse(ctx context.Context, response *LoginClientHTTPResponse) (*LoginStep, error)
+}
+
 type LoginProcessWebAuthn interface {
 	LoginProcess
 	SubmitWebAuthnResponse(ctx context.Context, response json.RawMessage) (*LoginStep, error)
@@ -76,6 +82,7 @@ type LoginStepType string
 const (
 	LoginStepTypeUserInput      LoginStepType = "user_input"
 	LoginStepTypeCookies        LoginStepType = "cookies"
+	LoginStepTypeClientHTTP     LoginStepType = "client_http"
 	LoginStepTypeDisplayAndWait LoginStepType = "display_and_wait"
 	LoginStepTypeWebAuthn       LoginStepType = "webauthn"
 	LoginStepTypeComplete       LoginStepType = "complete"
@@ -106,9 +113,27 @@ type LoginStep struct {
 
 	DisplayAndWaitParams *LoginDisplayAndWaitParams `json:"display_and_wait,omitempty"`
 	CookiesParams        *LoginCookiesParams        `json:"cookies,omitempty"`
+	ClientHTTPParams     *LoginClientHTTPParams     `json:"client_http,omitempty"`
 	UserInputParams      *LoginUserInputParams      `json:"user_input,omitempty"`
 	WebAuthnParams       *LoginWebAuthnParams       `json:"webauthn,omitempty"`
 	CompleteParams       *LoginCompleteParams       `json:"complete,omitempty"`
+}
+
+type LoginClientHTTPParams struct {
+	RequestID string      `json:"request_id"`
+	Method    string      `json:"method"`
+	URL       string      `json:"url"`
+	Headers   http.Header `json:"headers,omitempty"`
+	Body      []byte      `json:"body,omitempty"`
+}
+
+type LoginClientHTTPResponse struct {
+	RequestID  string      `json:"request_id"`
+	StatusCode int         `json:"status_code,omitempty"`
+	FinalURL   string      `json:"final_url,omitempty"`
+	Headers    http.Header `json:"headers,omitempty"`
+	Body       []byte      `json:"body,omitempty"`
+	Error      string      `json:"error,omitempty"`
 }
 
 type LoginWebAuthnParams struct {

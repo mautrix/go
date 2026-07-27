@@ -111,9 +111,18 @@ func (prov *ProvisioningAPI) PostLoginStep(w http.ResponseWriter, r *http.Reques
 	stepType := bridgev2.LoginStepType(r.PathValue("stepType"))
 	var params map[string]string
 	var rawParams json.RawMessage
+	var clientHTTPResponse *bridgev2.LoginClientHTTPResponse
 	switch stepType {
 	case bridgev2.LoginStepTypeUserInput, bridgev2.LoginStepTypeCookies:
 		err := json.NewDecoder(r.Body).Decode(&params)
+		if err != nil {
+			zerolog.Ctx(r.Context()).Err(err).Msg("Failed to decode request body")
+			mautrix.MNotJSON.WithMessage("Failed to decode request body").Write(w)
+			return
+		}
+	case bridgev2.LoginStepTypeClientHTTP:
+		clientHTTPResponse = &bridgev2.LoginClientHTTPResponse{}
+		err := json.NewDecoder(r.Body).Decode(clientHTTPResponse)
 		if err != nil {
 			zerolog.Ctx(r.Context()).Err(err).Msg("Failed to decode request body")
 			mautrix.MNotJSON.WithMessage("Failed to decode request body").Write(w)
@@ -139,7 +148,7 @@ func (prov *ProvisioningAPI) PostLoginStep(w http.ResponseWriter, r *http.Reques
 		mautrix.MUnrecognized.WithMessage("Invalid step type %q", r.PathValue("stepType")).Write(w)
 		return
 	}
-	resp, err := prov.doLoginStep(r.Context(), login, stepType, stepID, params, rawParams)
+	resp, err := prov.doLoginStep(r.Context(), login, stepType, stepID, params, rawParams, clientHTTPResponse)
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to complete login step")
 		RespondWithError(w, err, "Internal error in login step")
@@ -177,6 +186,7 @@ func (prov *ProvisioningAPI) doLoginStep(
 	expectedID string,
 	params map[string]string,
 	rawParams json.RawMessage,
+	clientHTTPResponse *bridgev2.LoginClientHTTPResponse,
 ) (*bridgev2.LoginStep, error) {
 	log := zerolog.Ctx(ctx).With().Str("login_id", login.ID).Logger()
 	var returnPrevIfMatch bool
@@ -228,6 +238,20 @@ func (prov *ProvisioningAPI) doLoginStep(
 		nextStep, err = login.Process.(bridgev2.LoginProcessUserInput).SubmitUserInput(login.Ctx, params)
 	case bridgev2.LoginStepTypeCookies:
 		nextStep, err = login.Process.(bridgev2.LoginProcessCookies).SubmitCookies(login.Ctx, params)
+	case bridgev2.LoginStepTypeClientHTTP:
+		request := login.NextStep.ClientHTTPParams
+		if request == nil {
+			return nil, mautrix.MBadState.WithMessage("Client HTTP step is missing request parameters")
+		} else if clientHTTPResponse == nil || clientHTTPResponse.RequestID == "" {
+			return nil, mautrix.MInvalidParam.WithMessage("Client HTTP response is missing request_id")
+		} else if clientHTTPResponse.RequestID != request.RequestID {
+			return nil, mautrix.MInvalidParam.WithMessage("Client HTTP response request_id does not match")
+		} else if clientHTTPResponse.Error == "" && (clientHTTPResponse.StatusCode < 100 || clientHTTPResponse.StatusCode > 599) {
+			return nil, mautrix.MInvalidParam.WithMessage("Client HTTP response has an invalid status_code")
+		} else if clientHTTPResponse.Error != "" && clientHTTPResponse.StatusCode != 0 {
+			return nil, mautrix.MInvalidParam.WithMessage("Client HTTP response must contain either status_code or error")
+		}
+		nextStep, err = login.Process.(bridgev2.LoginProcessClientHTTP).SubmitClientHTTPResponse(login.Ctx, clientHTTPResponse)
 	case bridgev2.LoginStepTypeDisplayAndWait:
 		nextStep, err = login.Process.(bridgev2.LoginProcessDisplayAndWait).Wait(login.Ctx)
 	case bridgev2.LoginStepTypeWebAuthn:

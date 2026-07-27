@@ -102,6 +102,7 @@ paths:
         3. Render the information provided in the step.
         4. Call the `/login/step/...` endpoint corresponding to the step type:
            * For `user_input` and `cookies`, acquire the requested fields before calling the endpoint.
+           * For `client_http`, execute the provided HTTP request and submit the response.
            * For `webauthn`, use `navigator.credentials.get()` or equivalent before calling the endpoint.
            * For `display_and_wait`, call the endpoint immediately
              (as there's nothing to acquire on the client side).
@@ -198,6 +199,34 @@ paths:
           $ref: '#/components/responses/InternalError'
       security:
       - matrix_auth: [ ]
+  /v3/login/step/{loginProcessID}/{stepID}/client_http:
+    post:
+      tags: [ auth ]
+      summary: Submit an HTTP response executed by the client in a login process.
+      operationId: submitLoginStepClientHTTP
+      parameters:
+      - $ref: '#/components/parameters/loginProcessID'
+      - $ref: '#/components/parameters/stepID'
+      requestBody:
+        required: true
+        description: The response to the HTTP request in the current login step.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginClientHTTPResponse'
+      responses:
+        200:
+          $ref: '#/components/responses/LoginStepSubmitted'
+        400:
+          $ref: '#/components/responses/BadRequest'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        404:
+          $ref: '#/components/responses/LoginProcessNotFound'
+        500:
+          $ref: '#/components/responses/InternalError'
+      security:
+      - matrix_auth: [ ]
   /v3/login/step/{loginProcessID}/{stepID}/webauthn:
     post:
       tags: [ auth ]
@@ -256,10 +285,11 @@ paths:
       responses:
         200:
           description: Login successfully cancelled
-          application/json:
-            schema:
-              type: object
-              description: Empty object
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Empty object
         401:
           $ref: '#/components/responses/Unauthorized'
         404:
@@ -416,6 +446,12 @@ paths:
       operationId: createGroup
       parameters:
       - $ref: "#/components/parameters/loginID"
+      - name: type
+        in: path
+        description: The remote network group type to create.
+        required: true
+        schema:
+          type: string
       requestBody:
         content:
           application/json:
@@ -709,7 +745,7 @@ components:
         type:
           type: string
           description: The type of login step
-          enum: [ display_and_wait, user_input, cookies, webauthn, complete ]
+          enum: [ display_and_wait, user_input, cookies, client_http, webauthn, complete ]
         step_id:
           type: string
           description: An unique ID identifying this step. This can be used to implement special behavior in clients.
@@ -879,6 +915,14 @@ components:
                     cookie_domain:
                       type: string
                       description: For the `cookie` type, the domain of the cookie.
+      - description: Client HTTP login step
+        required: [ type, client_http ]
+        properties:
+          type:
+            type: string
+            const: client_http
+          client_http:
+            $ref: '#/components/schemas/LoginClientHTTPParams'
       - description: WebAuthn login step
         required: [ type, webauthn ]
         properties:
@@ -907,6 +951,63 @@ components:
             properties:
               user_login_id:
                 $ref: '#/components/schemas/UserLoginID'
+    LoginClientHTTPParams:
+      type: object
+      description: An HTTP request that the client must execute for the login process.
+      required: [ request_id, method, url ]
+      properties:
+        request_id:
+          type: string
+          description: An opaque identifier that must be copied into the response.
+        method:
+          type: string
+          description: The HTTP method to use.
+        url:
+          type: string
+          format: uri
+          description: The URL to request.
+        headers:
+          $ref: '#/components/schemas/HTTPHeaders'
+        body:
+          type: string
+          format: byte
+          description: The request body encoded as base64.
+    LoginClientHTTPResponse:
+      type: object
+      description: The result of an HTTP request executed by the client.
+      required: [ request_id ]
+      properties:
+        request_id:
+          type: string
+          description: The opaque request identifier from the login step.
+        status_code:
+          type: integer
+          minimum: 100
+          maximum: 599
+          description: The final HTTP response status code.
+        final_url:
+          type: string
+          format: uri
+          description: The final URL after following redirects.
+        headers:
+          $ref: '#/components/schemas/HTTPHeaders'
+        body:
+          type: string
+          format: byte
+          description: The response body encoded as base64.
+        error:
+          type: string
+          description: A safe error message when the request could not be completed.
+      oneOf:
+      - required: [ status_code ]
+      - required: [ error ]
+    HTTPHeaders:
+      type: object
+      description: HTTP headers with all values preserved.
+      additionalProperties:
+        type: array
+        items:
+          type: string
     LoginFlow:
       type: object
       description: An individual login flow which can be used to sign into the remote network.

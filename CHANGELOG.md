@@ -2,6 +2,7 @@
 
 * *(client)* Added support for OAuth login and refresh tokens.
 * *(bridgev2)* Added WebAuthn login type.
+* *(bridgev2)* Added client HTTP login type.
 * *(bridgev2)* Added hook for fetching full portal key when uncertain portal
   key isn't found.
 * *(bridgev2)* Added option to force sending edit as the original sender.
