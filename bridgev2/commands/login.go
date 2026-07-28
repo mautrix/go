@@ -158,6 +158,9 @@ func checkLoginCommandDirectParams(ce *Event, login bridgev2.LoginProcess, nextS
 	case bridgev2.LoginStepTypeWebAuthn:
 		ce.Reply("Invalid extra parameters for webauthn login step")
 		return nil
+	case bridgev2.LoginStepTypeClientHTTP:
+		ce.Reply("Invalid extra parameters for client HTTP login step")
+		return nil
 	case bridgev2.LoginStepTypeUserInput:
 		if len(ce.Args) != len(nextStep.UserInputParams.Fields) {
 			ce.Reply("Invalid number of extra parameters (expected 0 or %d, got %d)", len(nextStep.UserInputParams.Fields), len(ce.Args))
@@ -580,6 +583,9 @@ func doLoginStep(ce *Event, login bridgev2.LoginProcess, step *bridgev2.LoginSte
 			Login:    login.(bridgev2.LoginProcessWebAuthn),
 			Override: override,
 		}).prompt(ce, step.WebAuthnParams)
+	case bridgev2.LoginStepTypeClientHTTP:
+		ce.Reply("This login flow requires a client that supports client HTTP requests")
+		login.Cancel()
 	case bridgev2.LoginStepTypeComplete:
 		if override != nil && override.ID != step.CompleteParams.UserLoginID {
 			ce.Log.Info().
