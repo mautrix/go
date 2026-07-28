@@ -2931,6 +2931,15 @@ func (portal *Portal) sendConvertedMessage(
 		}
 		err := portal.Bridge.DB.Message.Insert(ctx, dbMessage)
 		if err != nil {
+			existing, dupErr := portal.Bridge.DB.Message.GetPartByMXID(ctx, dbMessage.MXID)
+			if dupErr == nil && existing != nil {
+				logContext(log.Warn()).
+					Str("part_id", string(part.ID)).
+					Stringer("event_id", dbMessage.MXID).
+					Str("existing_message_id", string(existing.ID)).
+					Msg("Message part is already bridged under a different ID, not saving again")
+				continue
+			}
 			logContext(log.Err(err)).Str("part_id", string(part.ID)).Msg("Failed to save message part to database")
 			errorList = append(errorList, fmt.Errorf("%w: failed to save message part to database: %w", ErrDatabaseError, err))
 		}
