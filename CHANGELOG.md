@@ -78,7 +78,7 @@
   (thanks to [@timedoutuk] in [#496]).
 * *(crypto/goolm)* Fixed various small issues.
 
-[MSC445]: https://github.com/matrix-org/matrix-spec-proposals/pull/4459
+[MSC4459]: https://github.com/matrix-org/matrix-spec-proposals/pull/4459
 [#491]: https://github.com/mautrix/go/pull/491
 [#496]: https://github.com/mautrix/go/pull/496
 [#497]: https://github.com/mautrix/go/pull/497
