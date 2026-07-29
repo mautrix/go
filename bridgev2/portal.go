@@ -1476,6 +1476,11 @@ func (portal *Portal) pendingMessageTimeoutLoop(ctx context.Context, cfg *Outgoi
 }
 
 func (portal *Portal) checkPendingMessages(ctx context.Context, cfg *OutgoingTimeoutConfig) {
+	if login := portal.Bridge.GetCachedUserLoginByID(portal.Receiver); login != nil {
+		if suppressor, ok := login.Client.(OutgoingTimeoutSuppressingNetworkAPI); ok && suppressor.SuppressOutgoingTimeouts() {
+			return
+		}
+	}
 	portal.outgoingMessagesLock.Lock()
 	defer portal.outgoingMessagesLock.Unlock()
 	for _, msg := range portal.outgoingMessages {
