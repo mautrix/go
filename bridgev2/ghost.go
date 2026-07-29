@@ -326,7 +326,7 @@ func (ghost *Ghost) updateDMPortals(ctx context.Context) {
 		return
 	}
 	for _, portal := range dmPortals {
-		go portal.lockedUpdateInfoFromGhost(ctx, ghost)
+		go portal.lockedUpdateInfoFromGhost(portal.backgroundContext(ctx), ghost)
 	}
 }
 

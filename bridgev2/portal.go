@@ -109,6 +109,11 @@ type Portal struct {
 	nextBackfillDoneCallback func(error)
 }
 
+// backgroundContext preserves request logging while using the portal lifecycle.
+func (portal *Portal) backgroundContext(ctx context.Context) context.Context {
+	return zerolog.Ctx(ctx).WithContext(portal.backgroundCtx)
+}
+
 var PortalEventBuffer = 64
 var PanicOnStuckEvent = false
 var EventHandlingTimeoutTicks = 10
