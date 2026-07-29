@@ -59,6 +59,7 @@ func doUpgrade(helper up.Helper) {
 	helper.Copy(up.Bool, "bridge", "relay", "prefer_default")
 	helper.Copy(up.Bool, "bridge", "relay", "allow_bridge")
 	helper.Copy(up.List, "bridge", "relay", "default_relays")
+	helper.Copy(up.List, "bridge", "relay", "user_distinguishers")
 	helper.Copy(up.Map, "bridge", "relay", "message_formats")
 	helper.Copy(up.Str, "bridge", "relay", "displayname_format")
 	helper.Copy(up.Str, "bridge", "portal_create_filter", "mode")

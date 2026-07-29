@@ -799,8 +799,9 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 		}
 		login = portal.Relay
 		origSender = &OrigSender{
-			User:   sender,
-			UserID: sender.MXID,
+			User:          sender,
+			UserID:        sender.MXID,
+			Distinguisher: portal.Bridge.Config.Relay.GetUserDistinguisher(sender.MXID),
 		}
 		log.UpdateContext(func(c zerolog.Context) zerolog.Context {
 			return c.Bool("is_relay", true)
