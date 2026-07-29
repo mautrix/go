@@ -4706,16 +4706,20 @@ func (portal *Portal) syncParticipants(
 			raw["com.beeper.exclude_from_timeline"] = true
 		}
 	}
-	syncUser := func(extraUserID id.UserID, member ChatMember, intent MatrixAPI) bool {
+	syncUser := func(extraUserID id.UserID, member ChatMember, intent MatrixAPI, ghost *Ghost) bool {
 		if member.Membership == "" {
 			member.Membership = event.MembershipJoin
 		}
 		if member.PowerLevel != nil {
 			powerChanged = currentPower.EnsureUserLevelAs(portal.Bridge.Bot.GetMXID(), extraUserID, *member.PowerLevel) || powerChanged
 		}
+		if ghost != nil && (ghost.Name == "" || member.Membership != event.MembershipJoin || ghost.Intent.GetMXID() != extraUserID) {
+			ghost = nil
+		}
 		currentMember, ok := currentMembers[extraUserID]
 		delete(currentMembers, extraUserID)
-		if ok && currentMember.Membership == member.Membership {
+		if ok && currentMember.Membership == member.Membership &&
+			(ghost == nil || currentMember.Displayname == ghost.Name) {
 			return false
 		}
 		if currentMember == nil {
@@ -4735,10 +4739,17 @@ func (portal *Portal) syncParticipants(
 			Displayname: currentMember.Displayname,
 			AvatarURL:   currentMember.AvatarURL,
 		}
+		if ghost != nil && ok {
+			content.Displayname = ghost.Name
+			if ghost.AvatarMXC != "" {
+				content.AvatarURL = ghost.AvatarMXC
+			}
+		}
 		wrappedContent := &event.Content{Parsed: content, Raw: exmaps.NonNilClone(member.MemberEventExtra)}
 		addExcludeFromTimeline(wrappedContent.Raw)
 		thisEvtSender := sender
-		if member.Membership == event.MembershipJoin && (intent == nil || !portal.roomIsPublic(ctx)) {
+		if member.Membership == event.MembershipJoin && currentMember.Membership != event.MembershipJoin &&
+			(intent == nil || !portal.roomIsPublic(ctx)) {
 			content.Membership = event.MembershipInvite
 			if intent != nil {
 				wrappedContent.Raw["fi.mau.will_auto_accept"] = true
@@ -4801,8 +4812,8 @@ func (portal *Portal) syncParticipants(
 		}
 		return true
 	}
-	syncIntent := func(intent MatrixAPI, member ChatMember) {
-		if !syncUser(intent.GetMXID(), member, intent) {
+	syncIntent := func(intent MatrixAPI, member ChatMember, ghost *Ghost) {
+		if !syncUser(intent.GetMXID(), member, intent, ghost) {
 			return
 		}
 		if member.Membership == event.MembershipJoin || member.Membership == "" {
@@ -4818,10 +4829,12 @@ func (portal *Portal) syncParticipants(
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
+		var ghost *Ghost
 		if member.Sender != "" && member.UserInfo != nil {
-			ghost, err := portal.Bridge.GetGhostByID(ctx, member.Sender)
-			if err != nil {
-				zerolog.Ctx(ctx).Err(err).Str("ghost_id", string(member.Sender)).Msg("Failed to get ghost from member list to update info")
+			var ghostErr error
+			ghost, ghostErr = portal.Bridge.GetGhostByID(ctx, member.Sender)
+			if ghostErr != nil {
+				zerolog.Ctx(ctx).Err(ghostErr).Str("ghost_id", string(member.Sender)).Msg("Failed to get ghost from member list to update info")
 			} else {
 				ghost.UpdateInfo(ctx, member.UserInfo)
 			}
@@ -4831,10 +4844,10 @@ func (portal *Portal) syncParticipants(
 			return err
 		}
 		if intent != nil {
-			syncIntent(intent, member)
+			syncIntent(intent, member, ghost)
 		}
 		if extraUserID != "" {
-			syncUser(extraUserID, member, nil)
+			syncUser(extraUserID, member, nil, ghost)
 		}
 	}
 	if powerChanged {
