@@ -32,6 +32,7 @@ func doUpgrade(helper up.Helper) {
 	helper.Copy(up.Bool, "bridge", "resend_bridge_info")
 	helper.Copy(up.Bool, "bridge", "no_bridge_info_state_key")
 	helper.Copy(up.Str|up.Null, "bridge", "bridge_status_notices")
+	helper.Copy(up.Str|up.Int|up.Null, "bridge", "transient_state_debounce")
 	helper.Copy(up.Str|up.Int|up.Null, "bridge", "unknown_error_auto_reconnect")
 	helper.Copy(up.Int, "bridge", "unknown_error_max_auto_reconnects")
 	helper.Copy(up.Bool, "bridge", "bridge_matrix_leave")

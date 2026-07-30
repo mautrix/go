@@ -99,8 +99,43 @@ func (bsq *BridgeStateQueue) loop() {
 			}
 		}()
 	}
-	for state := range bsq.ch {
+	for rawState := range bsq.ch {
+		state, ok := bsq.debounceTransientState(rawState)
+		if !ok {
+			return
+		}
 		bsq.immediateSendBridgeState(state)
+	}
+}
+
+func isTransientState(evt status.BridgeStateEvent) bool {
+	return evt == status.StateTransientDisconnect || evt == status.StateConnecting
+}
+
+func (bsq *BridgeStateQueue) debounceTransientState(state status.BridgeState) (status.BridgeState, bool) {
+	debounce := bsq.bridge.Config.TransientStateDebounce
+	if debounce <= 0 || !isTransientState(state.StateEvent) {
+		return state, true
+	}
+	timer := time.NewTimer(debounce)
+	defer timer.Stop()
+	for {
+		select {
+		case next, ok := <-bsq.ch:
+			if !ok {
+				return state, false
+			} else if !isTransientState(next.StateEvent) {
+				bsq.login.Log.Debug().
+					Str("state_event", string(next.StateEvent)).
+					Msg("Dropping debounced state superseded within the debounce period")
+				return next, true
+			}
+			state = next
+		case <-timer.C:
+			return state, true
+		case <-bsq.stopChan:
+			return state, false
+		}
 	}
 }
 
