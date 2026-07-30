@@ -1391,6 +1391,7 @@ type OrigSender struct {
 	User   *User
 	UserID id.UserID
 
+	Distinguisher          string
 	RequiresDisambiguation bool
 	DisambiguatedName      string
 	FormattedName          string

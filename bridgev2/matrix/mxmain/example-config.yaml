@@ -103,10 +103,15 @@ bridge:
         allow_bridge: true
         # List of user login IDs which anyone can set as a relay, as long as the relay user is in the room.
         default_relays: []
+        # An array of possible values for the .Sender.Distinguisher variable in message formats.
+        # Each user gets one of the values here, based on a hash of their Matrix user ID.
+        # If the array is empty, .Sender.Distinguisher will also be empty.
+        user_distinguishers: ["🟦", "🟣", "🟩", "⭕️", "🔶", "⬛️", "🔵", "🟢"]
         # The formats to use when sending messages via the relaybot.
         # Available variables:
         #   .Sender.UserID - The Matrix user ID of the sender.
         #   .Sender.Displayname - The display name of the sender (if set).
+        #   .Sender.Distinguisher - The stable distinguisher selected from user_distinguishers.
         #   .Sender.RequiresDisambiguation - Whether the sender's name may be confused with the name of another user in the room.
         #   .Sender.DisambiguatedName - The disambiguated name of the sender. This will be the displayname if set,
         #                               plus the user ID in parentheses if the displayname is not unique.
