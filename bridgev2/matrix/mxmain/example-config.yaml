@@ -26,11 +26,8 @@ bridge:
     # These contain the same data that can be posted to an external HTTP server using homeserver -> status_endpoint.
     # Allowed values: none, errors, all
     bridge_status_notices: errors
-    # How long should TRANSIENT_DISCONNECT and CONNECTING states be held back before being
-    # reported? Most disconnects recover within a couple of seconds, and debouncing means a
-    # login that drops and reconnects within the delay reports no state changes at all.
-    # Whatever state the login is in when the delay passes is reported as normal, and errors
-    # are never delayed. 0s disables the debounce.
+    # How long should TRANSIENT_DISCONNECT and CONNECTING states be held back before being reported?
+    # If another state update occurs while waiting, the previous state won't be reported at all.
     transient_state_debounce: 0s
     # How long after an unknown error should the bridge attempt a full reconnect?
     # Must be at least 1 minute. The bridge will add an extra ±20% jitter to this value.
