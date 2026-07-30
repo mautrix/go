@@ -130,3 +130,20 @@ type StoredPerMessageProfile struct {
 type StoredProfilesEventContent struct {
 	Profiles []*StoredPerMessageProfile `json:"profiles,omitempty"`
 }
+
+func (spec *StoredProfilesEventContent) Match(input string) (string, *BeeperPerMessageProfile) {
+	if spec == nil || len(spec.Profiles) == 0 {
+		return input, nil
+	}
+	for _, profile := range spec.Profiles {
+		if profile == nil {
+			continue
+		}
+		for _, trigger := range profile.Trigger.Prefix {
+			if remaining, match := strings.CutPrefix(input, trigger); match {
+				return remaining, &profile.BeeperPerMessageProfile
+			}
+		}
+	}
+	return input, nil
+}
