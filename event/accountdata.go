@@ -117,3 +117,16 @@ func (bmec *BeeperMuteEventContent) GetMuteDuration() time.Duration {
 		return ts.Sub(now)
 	}
 }
+
+type StoredPerMessageProfileTrigger struct {
+	Prefix []string `json:"prefix,omitempty"`
+}
+
+type StoredPerMessageProfile struct {
+	BeeperPerMessageProfile
+	Trigger StoredPerMessageProfileTrigger `json:"trigger"`
+}
+
+type StoredProfilesEventContent struct {
+	Profiles []*StoredPerMessageProfile `json:"profiles,omitempty"`
+}
