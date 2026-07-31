@@ -71,6 +71,8 @@ type BridgeMain struct {
 	PostInit  func()
 	PostStart func()
 
+	DBOwner string
+
 	// PostMigratePortal is a function that will be called during a legacy
 	// migration for each portal.
 	PostMigratePortal func(context.Context, *bridgev2.Portal) error
@@ -255,6 +257,13 @@ func (br *BridgeMain) Init() {
 	}
 }
 
+func (br *BridgeMain) GetDBOwner() string {
+	if br.DBOwner != "" {
+		return br.DBOwner
+	}
+	return "megabridge/" + br.Name
+}
+
 func (br *BridgeMain) initDB() {
 	br.Log.Debug().Msg("Initializing database connection")
 	dbConfig := br.Config.Database
@@ -276,7 +285,7 @@ func (br *BridgeMain) initDB() {
 			Msg("Using SQLite without _txlock=immediate is not recommended")
 	}
 	var err error
-	br.DB, err = dbutil.NewFromConfig("megabridge/"+br.Name, dbConfig, dbutil.ZeroLogger(br.Log.With().Str("db_section", "main").Logger()))
+	br.DB, err = dbutil.NewFromConfig(br.GetDBOwner(), dbConfig, dbutil.ZeroLogger(br.Log.With().Str("db_section", "main").Logger()))
 	if err != nil {
 		br.Log.WithLevel(zerolog.FatalLevel).Err(err).Msg("Failed to initialize database connection")
 		if sqlError := (&sqlite3.Error{}); errors.As(err, sqlError) && sqlError.Code == sqlite3.ErrCorrupt {
