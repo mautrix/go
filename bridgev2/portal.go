@@ -4390,6 +4390,9 @@ func (portal *Portal) getBridgeInfo() (string, event.BridgeEventContent) {
 	}
 	parent := portal.GetTopLevelParent()
 	if parent != nil {
+		if portal.Parent != nil && portal.Parent != parent && portal.Bridge.Network.GetCapabilities().NetworkIsImmediateParent {
+			parent = portal.Parent
+		}
 		bridgeInfo.Network = &event.BridgeInfoSection{
 			ID:          string(parent.ID),
 			DisplayName: parent.Name,
