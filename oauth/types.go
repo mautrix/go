@@ -24,9 +24,6 @@ const (
 	AccountManagementActionDeviceView        AccountManagementAction = "org.matrix.device_view"
 	AccountManagementActionDeviceDelete      AccountManagementAction = "org.matrix.device_delete"
 	AccountManagementActionCrossSigningReset AccountManagementAction = "org.matrix.cross_signing_reset"
-	AccountManagementActionSessionList       AccountManagementAction = "org.matrix.sessions_list"
-	AccountManagementActionSessionView       AccountManagementAction = "org.matrix.session_view"
-	AccountManagementActionSessionEnd        AccountManagementAction = "org.matrix.session_end"
 	AccountManagementActionAccountDeactivate AccountManagementAction = "org.matrix.account_deactivate"
 )
 
