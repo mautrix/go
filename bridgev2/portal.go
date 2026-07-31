@@ -5007,7 +5007,7 @@ func (portal *Portal) UpdateDisappearingSetting(
 
 func (portal *Portal) updateParent(ctx context.Context, newParentID networkid.PortalID, source *UserLogin) bool {
 	newParent := networkid.PortalKey{ID: newParentID}
-	if portal.Bridge.Config.SplitPortals {
+	if portal.Bridge.Config.SplitPortals && newParentID != "" {
 		newParent.Receiver = portal.Receiver
 	}
 	if portal.ParentKey == newParent {
@@ -5015,7 +5015,7 @@ func (portal *Portal) updateParent(ctx context.Context, newParentID networkid.Po
 	}
 	var err error
 	if portal.MXID != "" && portal.InSpace && portal.Parent != nil && portal.Parent.MXID != "" {
-		err = portal.toggleSpace(ctx, portal.Parent.MXID, false, true)
+		err = portal.toggleSpace(ctx, portal.Parent.MXID, true, true)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Stringer("old_space_mxid", portal.Parent.MXID).Msg("Failed to remove portal from old space")
 		}
