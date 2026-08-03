@@ -119,6 +119,12 @@ paths:
         required: false
         schema:
           $ref: '#/components/schemas/UserLoginID'
+      - name: client_http
+        in: query
+        description: Whether the client supports client HTTP proxying.
+        required: false
+        schema:
+          type: number
       - name: flowID
         in: path
         description: The login flow ID to use.
