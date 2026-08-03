@@ -102,7 +102,7 @@ paths:
         3. Render the information provided in the step.
         4. Call the `/login/step/...` endpoint corresponding to the step type:
            * For `user_input` and `cookies`, acquire the requested fields before calling the endpoint.
-           * For `client_http`, execute the provided HTTP request and submit the response.
+           * For `client_http`, execute the provided HTTP request and submit the response with the separate endpoint.
            * For `webauthn`, use `navigator.credentials.get()` or equivalent before calling the endpoint.
            * For `display_and_wait`, call the endpoint immediately
              (as there's nothing to acquire on the client side).
@@ -149,6 +149,7 @@ paths:
       parameters:
       - $ref: '#/components/parameters/loginProcessID'
       - $ref: '#/components/parameters/stepID'
+      - $ref: '#/components/parameters/txnID'
       requestBody:
         description: The data entered by the user
         content:
@@ -178,6 +179,7 @@ paths:
       parameters:
       - $ref: '#/components/parameters/loginProcessID'
       - $ref: '#/components/parameters/stepID'
+      - $ref: '#/components/parameters/txnID'
       requestBody:
         description: The cookies extracted from the website
         content:
@@ -199,14 +201,15 @@ paths:
           $ref: '#/components/responses/InternalError'
       security:
       - matrix_auth: [ ]
-  /v3/login/step/{loginProcessID}/{stepID}/client_http:
+  /v3/login/client_http/{loginProcessID}/{txnID}/{reqID}:
     post:
       tags: [ auth ]
       summary: Submit an HTTP response executed by the client in a login process.
       operationId: submitLoginStepClientHTTP
       parameters:
       - $ref: '#/components/parameters/loginProcessID'
-      - $ref: '#/components/parameters/stepID'
+      - $ref: '#/components/parameters/requestID'
+      - $ref: '#/components/parameters/txnIDInPath'
       requestBody:
         required: true
         description: The response to the HTTP request in the current login step.
@@ -235,6 +238,7 @@ paths:
       parameters:
       - $ref: '#/components/parameters/loginProcessID'
       - $ref: '#/components/parameters/stepID'
+      - $ref: '#/components/parameters/txnID'
       requestBody:
         description: The raw WebAuthn response as JSON
         content:
@@ -262,6 +266,7 @@ paths:
       parameters:
       - $ref: '#/components/parameters/loginProcessID'
       - $ref: '#/components/parameters/stepID'
+      - $ref: '#/components/parameters/txnID'
       responses:
         200:
           $ref: '#/components/responses/LoginStepSubmitted'
@@ -501,6 +506,27 @@ components:
       name: stepID
       in: path
       description: The ID of the step being submitted, as returned in the `step_id` field of the start call or the previous submit call.
+      required: true
+      schema:
+        type: string
+    txnID:
+      name: txnID
+      in: query
+      description: The transaction ID of the step being submitted, as returned in the `txn_id` field of the start call or the previous submit call.
+      required: false
+      schema:
+        type: string
+    txnIDInPath:
+      name: txnID
+      in: path
+      description: The transaction ID of the step being submitted, as returned in the `txn_id` field of the start call or the previous submit call.
+      required: true
+      schema:
+        type: string
+    requestID:
+      name: reqID
+      in: path
+      description: The request ID of the client_http step being submitted, as returned in the `request_id` field of the client HTTP params.
       required: true
       schema:
         type: string

@@ -46,6 +46,17 @@ type LoginProcessWithOverride interface {
 	StartWithOverride(ctx context.Context, override *UserLogin) (*LoginStep, error)
 }
 
+type LoginStartParams struct {
+	Override *UserLogin
+	HTTP     http.RoundTripper
+}
+
+type LoginProcessWithParams interface {
+	LoginProcess
+	// StartWithParams is a replacement for both Start and StartWithOverride.
+	StartWithParams(ctx context.Context, params LoginStartParams) (*LoginStep, error)
+}
+
 type LoginProcessDisplayAndWait interface {
 	LoginProcess
 	Wait(ctx context.Context) (*LoginStep, error)
@@ -59,11 +70,6 @@ type LoginProcessUserInput interface {
 type LoginProcessCookies interface {
 	LoginProcess
 	SubmitCookies(ctx context.Context, cookies map[string]string) (*LoginStep, error)
-}
-
-type LoginProcessClientHTTP interface {
-	LoginProcess
-	SubmitClientHTTPResponse(ctx context.Context, response *LoginClientHTTPResponse) (*LoginStep, error)
 }
 
 type LoginProcessWebAuthn interface {
@@ -106,6 +112,9 @@ type LoginStep struct {
 	// For example, Telegram's QR scan followed by a 2-factor password
 	// might use the IDs `fi.mau.telegram.qr` and `fi.mau.telegram.2fa_password`.
 	StepID string `json:"step_id"`
+	// A unique ID for submitting the step. This is randomly generated for every step.
+	// It's used to allow safely retrying requests.
+	TxnID string `json:"txn_id"`
 	// Instructions contains human-readable instructions for completing the login step.
 	Instructions string `json:"instructions"`
 
@@ -128,7 +137,6 @@ type LoginClientHTTPParams struct {
 }
 
 type LoginClientHTTPResponse struct {
-	RequestID  string      `json:"request_id"`
 	StatusCode int         `json:"status_code,omitempty"`
 	FinalURL   string      `json:"final_url,omitempty"`
 	Headers    http.Header `json:"headers,omitempty"`
