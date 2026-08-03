@@ -438,6 +438,9 @@ type ChallengeProvidingNetworkAPI interface {
 	// lets the user resolve the current challenge, or nil if a challenge isn't
 	// pending.
 	//
+	// Challenge is called on every client reconnect attempt, so the nil-return
+	// path must be cheap and must not perform network I/O.
+	//
 	// "Attached to this existing login" implies that, once the challenge is
 	// resolved, you must:
 	//
