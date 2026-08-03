@@ -87,8 +87,6 @@ type Portal struct {
 	outgoingMessages     map[networkid.TransactionID]*outgoingMessage
 	outgoingMessagesLock sync.Mutex
 
-	lastCapUpdate time.Time
-
 	roomCreateLock   sync.Mutex
 	cancelRoomCreate atomic.Pointer[context.CancelFunc]
 	backgroundCtx    context.Context
@@ -2391,7 +2389,6 @@ func (portal *Portal) UpdateMatrixRoomID(
 	portal.TopicSet = false
 	portal.InSpace = false
 	portal.CapState = database.CapabilityState{}
-	portal.lastCapUpdate = time.Time{}
 	if params.SyncDBMetadata != nil {
 		params.SyncDBMetadata()
 	}
@@ -4424,8 +4421,6 @@ func (portal *Portal) UpdateBridgeInfo(ctx context.Context) {
 func (portal *Portal) UpdateCapabilities(ctx context.Context, source *UserLogin, implicit bool) bool {
 	if portal.MXID == "" {
 		return false
-	} else if !implicit && time.Since(portal.lastCapUpdate) < 24*time.Hour {
-		return false
 	} else if portal.CapState.ID != "" && source.ID != portal.CapState.Source && source.ID != portal.Receiver {
 		// TODO allow capability state source to change if the old user login is removed from the portal
 		return false
@@ -4457,7 +4452,6 @@ func (portal *Portal) UpdateCapabilities(ctx context.Context, source *UserLogin,
 		}
 		portal.CapState.Flags |= database.CapStateFlagDisappearingTimerSet
 	}
-	portal.lastCapUpdate = time.Now()
 	if implicit {
 		err := portal.Save(ctx)
 		if err != nil {
@@ -5148,7 +5142,6 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *Us
 	if source != nil {
 		source.MarkInPortal(ctx, portal)
 		portal.updateUserLocalInfo(ctx, info.UserLocal, source, false)
-		changed = portal.UpdateCapabilities(ctx, source, false) || changed
 	}
 	if info.CanBackfill && source != nil && portal.MXID != "" {
 		err := portal.Bridge.DB.BackfillTask.EnsureExists(ctx, portal.PortalKey, source.ID)
@@ -5159,6 +5152,10 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *Us
 	}
 	if info.ExtraUpdates != nil {
 		changed = info.ExtraUpdates(ctx, portal) || changed
+	}
+	// Capabilities must be computed after ExtraUpdates, as connectors apply the metadata they depend on there.
+	if source != nil {
+		changed = portal.UpdateCapabilities(ctx, source, false) || changed
 	}
 	if changed {
 		portal.UpdateBridgeInfo(ctx)
