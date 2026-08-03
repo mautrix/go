@@ -33,6 +33,8 @@ type stepManager struct {
 	lock    sync.Mutex
 	err     error
 
+	reqCounter int
+
 	pendingHTTP chan *bridgev2.LoginClientHTTPResponse
 }
 

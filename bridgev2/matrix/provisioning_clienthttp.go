@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 
 	"github.com/rs/xid"
 	"github.com/rs/zerolog"
@@ -137,7 +138,8 @@ func (p *ProvLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 		if sm.prev != nil {
 			txnID = sm.prev.TxnID
 		}
-		reqID := "fi.mau.bridgev2.client_http." + xid.New().String()
+		sm.reqCounter++
+		reqID := "fi.mau.bridgev2.client_http." + strconv.Itoa(sm.reqCounter)
 		sm.next = &bridgev2.LoginStep{
 			Type:   bridgev2.LoginStepTypeClientHTTP,
 			StepID: reqID,
