@@ -355,6 +355,15 @@ type OutgoingTimeoutConfig struct {
 	NoAckMessage  string
 }
 
+// OutgoingTimeoutSuppressingNetworkAPI is an optional interface that network connectors can implement to
+// pause the timeouts in [OutgoingTimeoutConfig] while the remote network is known to be deferring updates.
+type OutgoingTimeoutSuppressingNetworkAPI interface {
+	NetworkAPI
+	// SuppressOutgoingTimeouts is called before checking pending outgoing messages in a portal.
+	// If it returns true, no messages are timed out until the next check.
+	SuppressOutgoingTimeouts() bool
+}
+
 type NetworkGeneralCapabilities struct {
 	// Does the network connector support disappearing messages?
 	// This flag enables the message disappearing loop in the bridge.
