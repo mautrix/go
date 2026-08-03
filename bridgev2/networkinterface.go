@@ -437,6 +437,46 @@ type NetworkAPIWithUserID interface {
 	GetUserID() networkid.UserID
 }
 
+// ChallengeProvidingNetworkAPI is an optional interface for network clients
+// that can be arbitrarily interrupted at runtime by a condition that the user
+// must interactively resolve. This is appropriate for situations such as
+// CAPTCHAs or verification checkpoints.
+//
+// Challenge resolution is performed through a [LoginProcess], which
+// effectively provides bridge-driven UI to clients.
+type ChallengeProvidingNetworkAPI interface {
+	NetworkAPI
+	// Challenge returns a [LoginProcess] attached to this existing login that
+	// lets the user resolve the current challenge, or nil if a challenge isn't
+	// pending.
+	//
+	// Challenge is called on every client reconnect attempt, so the nil-return
+	// path must be cheap and must not perform network I/O.
+	//
+	// "Attached to this existing login" implies that, once the challenge is
+	// resolved, you must:
+	//
+	// * Return the login to a working state, usually by calling Connect on
+	//   the existing client, and enqueue a bridge state reflecting that.
+	//
+	// * Persist anything new by calling [UserLogin.Save].
+	//
+	// * Return a [LoginCompleteParams] whose UserLoginID is the existing
+	//   login's ID.
+	//
+	// Do NOT call [User.NewLogin], as is usually done in the implementation of
+	// a login process; this will leave behind a dangling client that is never
+	// disconnected. The returned [LoginProcess] merely resolves a condition on
+	// the existing [NetworkAPI].
+	//
+	// Implementations should always return a fresh LoginProcess; deduplication
+	// occurs on the provisioning API.
+	//
+	// The returned process's Cancel (called after 30 minutes or explicit
+	// cancel) must only drop the pending interaction; do not log the user out.
+	Challenge(ctx context.Context) (LoginProcess, error)
+}
+
 type ConnectBackgroundParams struct {
 	// RawData is the raw data in the push that triggered the background connection.
 	RawData json.RawMessage
