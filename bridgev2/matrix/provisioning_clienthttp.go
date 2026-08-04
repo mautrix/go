@@ -197,6 +197,14 @@ func (p *ProvLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 	if resp.Headers == nil {
 		resp.Headers = make(http.Header)
+	} else {
+		for key, values := range resp.Headers {
+			canon := http.CanonicalHeaderKey(key)
+			if canon != key {
+				resp.Headers[canon] = append(resp.Headers[canon], values...)
+				delete(resp.Headers, key)
+			}
+		}
 	}
 	finalURL, _ := url.Parse(resp.FinalURL)
 	if finalURL == nil || resp.FinalURL == "" {
