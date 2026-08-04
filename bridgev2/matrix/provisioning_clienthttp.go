@@ -187,12 +187,12 @@ func (p *ProvLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, req.Context().Err()
 	}
 	if resp.Error != "" {
-		return nil, fmt.Errorf("error from client: %s", resp.Error)
+		return nil, errors.New(ErrorFromClientPrefix + resp.Error)
 	}
 	return &http.Response{
 		Status:        fmt.Sprintf("%d Meow", resp.StatusCode),
 		StatusCode:    resp.StatusCode,
-		Proto:         "MauClientHTTP/1.0",
+		Proto:         ClientHTTPProto,
 		ProtoMajor:    1,
 		Header:        resp.Headers,
 		Body:          io.NopCloser(bytes.NewReader(resp.Body)),
@@ -200,3 +200,9 @@ func (p *ProvLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 		Request:       nil,
 	}, nil
 }
+
+// Note: bridges may check these without referencing the constants, so they shouldn't be changed
+const (
+	ErrorFromClientPrefix = "error from client: "
+	ClientHTTPProto       = "MauClientHTTP/1.0"
+)
