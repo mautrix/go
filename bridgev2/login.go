@@ -30,8 +30,7 @@ type LoginProcess interface {
 	// Cancel stops the login process and cleans up any resources.
 	// No other methods will be called after cancel.
 	//
-	// Cancel will not be called if any other method returned an error:
-	// errors are always treated as fatal and the process is assumed to be automatically cancelled.
+	// Errors from other methods are always treated as fatal, but Cancel may still be called afterward.
 	Cancel()
 }
 
@@ -44,6 +43,17 @@ type LoginProcessWithOverride interface {
 	// The user login being overridden will still be logged out automatically
 	// in case the complete step returns a different login.
 	StartWithOverride(ctx context.Context, override *UserLogin) (*LoginStep, error)
+}
+
+type LoginStartParams struct {
+	Override *UserLogin
+	HTTP     http.RoundTripper
+}
+
+type LoginProcessWithParams interface {
+	LoginProcess
+	// StartWithParams is a replacement for both Start and StartWithOverride.
+	StartWithParams(ctx context.Context, params LoginStartParams) (*LoginStep, error)
 }
 
 type LoginProcessDisplayAndWait interface {
@@ -59,11 +69,6 @@ type LoginProcessUserInput interface {
 type LoginProcessCookies interface {
 	LoginProcess
 	SubmitCookies(ctx context.Context, cookies map[string]string) (*LoginStep, error)
-}
-
-type LoginProcessClientHTTP interface {
-	LoginProcess
-	SubmitClientHTTPResponse(ctx context.Context, response *LoginClientHTTPResponse) (*LoginStep, error)
 }
 
 type LoginProcessWebAuthn interface {
@@ -106,6 +111,9 @@ type LoginStep struct {
 	// For example, Telegram's QR scan followed by a 2-factor password
 	// might use the IDs `fi.mau.telegram.qr` and `fi.mau.telegram.2fa_password`.
 	StepID string `json:"step_id"`
+	// A unique ID for submitting the step. This is randomly generated for every step.
+	// It's used to allow safely retrying requests.
+	TxnID string `json:"txn_id"`
 	// Instructions contains human-readable instructions for completing the login step.
 	Instructions string `json:"instructions"`
 
@@ -128,12 +136,18 @@ type LoginClientHTTPParams struct {
 }
 
 type LoginClientHTTPResponse struct {
-	RequestID  string      `json:"request_id"`
 	StatusCode int         `json:"status_code,omitempty"`
 	FinalURL   string      `json:"final_url,omitempty"`
 	Headers    http.Header `json:"headers,omitempty"`
 	Body       []byte      `json:"body,omitempty"`
 	Error      string      `json:"error,omitempty"`
+}
+
+func (lchr *LoginClientHTTPResponse) IsValid() bool {
+	if lchr.Error != "" {
+		return true
+	}
+	return lchr.StatusCode >= 100 && lchr.StatusCode <= 599
 }
 
 type LoginWebAuthnParams struct {

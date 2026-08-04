@@ -121,9 +121,13 @@ func fnLogin(ce *Event) {
 		ce.Reply("Failed to prepare login process: %v", err)
 		return
 	}
-	overridable, ok := login.(bridgev2.LoginProcessWithOverride)
+
 	var nextStep *bridgev2.LoginStep
-	if ok && reauth != nil {
+	if paramable, ok := login.(bridgev2.LoginProcessWithParams); ok {
+		nextStep, err = paramable.StartWithParams(ce.Ctx, bridgev2.LoginStartParams{
+			Override: reauth,
+		})
+	} else if overridable, ok := login.(bridgev2.LoginProcessWithOverride); ok && reauth != nil {
 		nextStep, err = overridable.StartWithOverride(ce.Ctx, reauth)
 	} else {
 		nextStep, err = login.Start(ce.Ctx)
