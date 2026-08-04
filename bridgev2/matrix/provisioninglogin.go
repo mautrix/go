@@ -119,29 +119,10 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 	if r.URL.Query().Get("client_http") == "1" {
 		rt = provLogin
 	}
-	go func() {
-		var firstStep *bridgev2.LoginStep
-		if paramable, ok := login.(bridgev2.LoginProcessWithParams); ok {
-			firstStep, err = paramable.StartWithParams(provLogin.Ctx, bridgev2.LoginStartParams{
-				Override: overrideLogin,
-				HTTP:     rt,
-			})
-		} else if overridable, ok := login.(bridgev2.LoginProcessWithOverride); ok && overrideLogin != nil {
-			firstStep, err = overridable.StartWithOverride(provLogin.Ctx, overrideLogin)
-		} else {
-			firstStep, err = login.Start(provLogin.Ctx)
-		}
-		if err == nil && firstStep == nil {
-			err = ErrNilStep
-		}
-		if err != nil {
-			prov.deleteLogin(provLogin, true, err)
-		} else {
-			provLogin.step.WithNonErroringLock(func(sm *stepManager) {
-				finishStep(sm, firstStep, provLogin)
-			})
-		}
-	}()
+	go prov.executeStep(provLogin, "start", nil, nil, &bridgev2.LoginStartParams{
+		Override: overrideLogin,
+		HTTP:     rt,
+	})
 	select {
 	case <-ch:
 	case <-r.Context().Done():
@@ -285,7 +266,7 @@ func (prov *ProvisioningAPI) doLoginStep(
 				Str("step_id", currentStep.StepID).
 				Str("step_type", string(currentStep.Type)).
 				Msg("Submitting login step")
-			go prov.executeStep(ctx, login, currentStep, params, rawParams)
+			go prov.executeStep(login, currentStep.Type, params, rawParams, nil)
 		} else {
 			log.Debug().
 				Str("step_id", currentStep.StepID).
@@ -313,15 +294,15 @@ func (prov *ProvisioningAPI) doLoginStep(
 }
 
 func (prov *ProvisioningAPI) executeStep(
-	ctx context.Context,
 	login *ProvLogin,
-	currentStep *bridgev2.LoginStep,
+	currentStepType bridgev2.LoginStepType,
 	params map[string]string,
 	rawParams json.RawMessage,
+	startParams *bridgev2.LoginStartParams,
 ) {
 	var nextStep *bridgev2.LoginStep
 	var err error
-	switch currentStep.Type {
+	switch currentStepType {
 	case bridgev2.LoginStepTypeUserInput:
 		nextStep, err = login.Process.(bridgev2.LoginProcessUserInput).SubmitUserInput(login.Ctx, params)
 	case bridgev2.LoginStepTypeCookies:
@@ -330,12 +311,23 @@ func (prov *ProvisioningAPI) executeStep(
 		nextStep, err = login.Process.(bridgev2.LoginProcessDisplayAndWait).Wait(login.Ctx)
 	case bridgev2.LoginStepTypeWebAuthn:
 		nextStep, err = login.Process.(bridgev2.LoginProcessWebAuthn).SubmitWebAuthnResponse(login.Ctx, rawParams)
+	case "start":
+		if startParams == nil {
+			panic("Impossible state")
+		}
+		if paramable, ok := login.Process.(bridgev2.LoginProcessWithParams); ok {
+			nextStep, err = paramable.StartWithParams(login.Ctx, *startParams)
+		} else if overridable, ok := login.Process.(bridgev2.LoginProcessWithOverride); ok && startParams.Override != nil {
+			nextStep, err = overridable.StartWithOverride(login.Ctx, startParams.Override)
+		} else {
+			nextStep, err = login.Process.Start(login.Ctx)
+		}
 	default:
 		panic("Impossible state")
 	}
 	if nextStep != nil {
 		switch nextStep.Type {
-		case bridgev2.LoginStepTypeUserInput, bridgev2.LoginStepTypeCookies, bridgev2.LoginStepTypeDisplayAndWait:
+		case bridgev2.LoginStepTypeUserInput, bridgev2.LoginStepTypeCookies, bridgev2.LoginStepTypeDisplayAndWait, bridgev2.LoginStepTypeComplete:
 			// ok
 		case bridgev2.LoginStepTypeWebAuthn:
 			if prov.br.Config.Provisioning.FailOnWebAuthn {

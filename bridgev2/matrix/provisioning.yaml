@@ -782,6 +782,10 @@ components:
           type: string
           description: An unique ID identifying this step. This can be used to implement special behavior in clients.
           examples: [ fi.mau.signal.qr ]
+        txn_id:
+          type: string
+          description: An opaque transaction ID for this step. This can be used for safely retrying steps.
+          examples: [ bls_d9odvo93kqebp739hrmg ]
         instructions:
           type: string
           description: Human-readable instructions for completing this login step.

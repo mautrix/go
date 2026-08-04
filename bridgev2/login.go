@@ -30,8 +30,7 @@ type LoginProcess interface {
 	// Cancel stops the login process and cleans up any resources.
 	// No other methods will be called after cancel.
 	//
-	// Cancel will not be called if any other method returned an error:
-	// errors are always treated as fatal and the process is assumed to be automatically cancelled.
+	// Errors from other methods are always treated as fatal, but Cancel may still be called afterward.
 	Cancel()
 }
 
@@ -142,6 +141,13 @@ type LoginClientHTTPResponse struct {
 	Headers    http.Header `json:"headers,omitempty"`
 	Body       []byte      `json:"body,omitempty"`
 	Error      string      `json:"error,omitempty"`
+}
+
+func (lchr *LoginClientHTTPResponse) IsValid() bool {
+	if lchr.Error != "" {
+		return true
+	}
+	return lchr.StatusCode >= 100 && lchr.StatusCode <= 599
 }
 
 type LoginWebAuthnParams struct {

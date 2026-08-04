@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	"github.com/rs/xid"
@@ -44,6 +45,9 @@ func (prov *ProvisioningAPI) PostLoginClientHTTP(w http.ResponseWriter, r *http.
 	if err != nil {
 		log.Err(err).Msg("Failed to decode request body")
 		mautrix.MNotJSON.WithMessage("Failed to decode request body").Write(w)
+		return
+	} else if !resp.IsValid() {
+		mautrix.MBadJSON.WithMessage("Invalid client HTTP response payload in body").Write(w)
 		return
 	}
 	var currentStep *bridgev2.LoginStep
@@ -189,6 +193,13 @@ func (p *ProvLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 	if resp.Error != "" {
 		return nil, errors.New(ErrorFromClientPrefix + resp.Error)
 	}
+	if resp.Headers == nil {
+		resp.Headers = make(http.Header)
+	}
+	finalURL, _ := url.Parse(resp.FinalURL)
+	if finalURL == nil || resp.FinalURL == "" {
+		finalURL = req.URL
+	}
 	return &http.Response{
 		Status:        fmt.Sprintf("%d Meow", resp.StatusCode),
 		StatusCode:    resp.StatusCode,
@@ -197,7 +208,10 @@ func (p *ProvLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 		Header:        resp.Headers,
 		Body:          io.NopCloser(bytes.NewReader(resp.Body)),
 		ContentLength: int64(len(resp.Body)),
-		Request:       nil,
+		Request: &http.Request{
+			Method: req.Method,
+			URL:    finalURL,
+		},
 	}, nil
 }
 
