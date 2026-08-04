@@ -72,6 +72,8 @@ func (prov *ProvisioningAPI) PostLoginClientHTTP(w http.ResponseWriter, r *http.
 				log.Debug().
 					Str("req_id", reqID).
 					Int("status_code", resp.StatusCode).
+					Int("header_count", len(resp.Headers)).
+					Int("body_length", len(resp.Body)).
 					Str("error_msg", resp.Error).
 					Msg("Submitted client HTTP response")
 			default:
