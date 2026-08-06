@@ -103,7 +103,7 @@ func ParseXMatrixAuth(auth string) (xma XMatrixAuth) {
 }
 
 func (sa *ServerAuth) GetKeysWithCache(ctx context.Context, serverName string, keyID id.KeyID) (*ServerKeyResponse, error) {
-	res, err := sa.Keys.LoadKeys(serverName)
+	res, err := sa.Keys.LoadKeys(ctx, serverName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read cache: %w", err)
 	} else if res.HasKey(keyID) {
@@ -120,14 +120,15 @@ func (sa *ServerAuth) GetKeysWithCache(ctx context.Context, serverName string, k
 
 	lock.Lock()
 	defer lock.Unlock()
-	res, err = sa.Keys.LoadKeys(serverName)
+	res, err = sa.Keys.LoadKeys(ctx, serverName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read cache: %w", err)
 	} else if res != nil {
 		if res.HasKey(keyID) {
 			return res, nil
-		} else if !sa.Keys.ShouldReQuery(serverName) {
+		} else if shouldQuery, err := sa.Keys.ShouldReQuery(ctx, serverName); !shouldQuery {
 			zerolog.Ctx(ctx).Trace().
+				Err(err).
 				Str("server_name", serverName).
 				Stringer("key_id", keyID).
 				Msg("Not sending key request for missing key ID, last query was too recent")
@@ -136,10 +137,12 @@ func (sa *ServerAuth) GetKeysWithCache(ctx context.Context, serverName string, k
 	}
 	res, err = sa.Client.ServerKeys(ctx, serverName)
 	if err != nil {
-		sa.Keys.StoreFetchError(serverName, err)
+		sa.Keys.StoreFetchError(ctx, serverName, err)
 		return nil, err
 	}
-	sa.Keys.StoreKeys(res)
+	if err := sa.Keys.StoreKeys(ctx, res); err != nil {
+		return nil, err
+	}
 	return res, nil
 }
 
