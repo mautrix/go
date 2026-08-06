@@ -2012,16 +2012,24 @@ func (cli *Client) UploadLink(ctx context.Context, link string) (*RespMediaUploa
 	return cli.Upload(ctx, res.Body, res.Header.Get("Content-Type"), res.ContentLength)
 }
 
-func (cli *Client) Download(ctx context.Context, mxcURL id.ContentURI) (*http.Response, error) {
+type DownloadExtra struct {
+	Query map[string]string
+}
+
+func (cli *Client) DownloadWithParams(ctx context.Context, mxcURL id.ContentURI, params DownloadExtra) (*http.Response, error) {
 	if mxcURL.IsEmpty() {
 		return nil, fmt.Errorf("empty mxc uri provided to Download")
 	}
 	_, resp, err := cli.MakeFullRequestWithResp(ctx, FullRequest{
 		Method:           http.MethodGet,
-		URL:              cli.BuildClientURL("v1", "media", "download", mxcURL.Homeserver, mxcURL.FileID),
+		URL:              cli.BuildURLWithQuery(ClientURLPath{"v1", "media", "download", mxcURL.Homeserver, mxcURL.FileID}, params.Query),
 		DontReadResponse: true,
 	})
 	return resp, err
+}
+
+func (cli *Client) Download(ctx context.Context, mxcURL id.ContentURI) (*http.Response, error) {
+	return cli.DownloadWithParams(ctx, mxcURL, DownloadExtra{})
 }
 
 type DownloadThumbnailExtra struct {
