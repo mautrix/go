@@ -37,22 +37,18 @@ func (br *Bridge) handleBotInvite(ctx context.Context, evt *event.Event, sender 
 		log.Err(err).Msg("Failed to get members of room after accepting invite")
 	}
 	if len(members) == 2 {
-		var message string
 		if sender.ManagementRoom == "" {
-			message = fmt.Sprintf("Hello, I'm a %s bridge bot.\n\nUse `help` for help or `login` to log in.\n\nThis room has been marked as your management room.", br.Network.GetName().DisplayName)
-			sender.ManagementRoom = evt.RoomID
-			err = br.DB.User.Update(ctx, sender.User)
-			if err != nil {
-				log.Err(err).Msg("Failed to update user's management room in database")
+			if err = br.prepareManagementRoom(ctx, sender, evt.RoomID); err != nil {
+				log.Err(err).Msg("Failed to prepare new management room")
 			}
 		} else {
-			message = fmt.Sprintf("Hello, I'm a %s bridge bot.\n\nUse `%s help` for help.", br.Network.GetName().DisplayName, br.Config.CommandPrefix)
-		}
-		_, err = br.Bot.SendMessage(ctx, evt.RoomID, event.EventMessage, &event.Content{
-			Parsed: format.RenderMarkdown(message, true, false),
-		}, nil)
-		if err != nil {
-			log.Err(err).Msg("Failed to send welcome message to room")
+			message := fmt.Sprintf("Hello, I'm a %s bridge bot.\n\nUse `%s help` for help.", br.Network.GetName().DisplayName, br.Config.CommandPrefix)
+			_, err = br.Bot.SendMessage(ctx, evt.RoomID, event.EventMessage, &event.Content{
+				Parsed: format.RenderMarkdown(message, true, false),
+			}, nil)
+			if err != nil {
+				log.Err(err).Msg("Failed to send welcome message to room")
+			}
 		}
 	}
 	return EventHandlingResultSuccess
