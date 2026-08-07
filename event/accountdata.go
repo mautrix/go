@@ -7,6 +7,7 @@
 package event
 
 import (
+	"cmp"
 	"encoding/json"
 	"strings"
 	"time"
@@ -132,6 +133,42 @@ type PerMessageProfilesEventContent struct {
 	DefaultProfileID *string `json:"default_profile_id,omitempty"`
 
 	Profiles []*StoredPerMessageProfile `json:"profiles,omitempty"`
+}
+
+func PickPerMessageProfile(globalData, roomData *PerMessageProfilesEventContent, input string) (string, *BeeperPerMessageProfile) {
+	if text, profile := roomData.Match(input); profile != nil {
+		return text, profile
+	} else if text, profile = globalData.Match(input); profile != nil {
+		return text, profile
+	}
+	defaultProfile := cmp.Or(roomData.GetDefaultProfileID(), globalData.GetDefaultProfileID())
+	if defaultProfile != nil && *defaultProfile != "" {
+		if profile := roomData.GetByID(*defaultProfile); profile != nil {
+			return input, profile
+		} else if profile = globalData.GetByID(*defaultProfile); profile != nil {
+			return input, profile
+		}
+	}
+	return input, nil
+}
+
+func (spec *PerMessageProfilesEventContent) GetDefaultProfileID() *string {
+	if spec == nil {
+		return nil
+	}
+	return spec.DefaultProfileID
+}
+
+func (spec *PerMessageProfilesEventContent) GetByID(id string) *BeeperPerMessageProfile {
+	if spec == nil {
+		return nil
+	}
+	for _, profile := range spec.Profiles {
+		if profile != nil && profile.ID == id {
+			return &profile.BeeperPerMessageProfile
+		}
+	}
+	return nil
 }
 
 func (spec *PerMessageProfilesEventContent) Match(input string) (string, *BeeperPerMessageProfile) {
