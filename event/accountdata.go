@@ -119,19 +119,22 @@ func (bmec *BeeperMuteEventContent) GetMuteDuration() time.Duration {
 }
 
 type StoredPerMessageProfileTrigger struct {
-	Prefix []string `json:"prefix,omitempty"`
+	Prefix string `json:"prefix,omitempty"`
+	Suffix string `json:"suffix,omitempty"`
 }
 
 type StoredPerMessageProfile struct {
 	BeeperPerMessageProfile
-	Trigger StoredPerMessageProfileTrigger `json:"trigger"`
+	Triggers []StoredPerMessageProfileTrigger `json:"triggers,omitempty"`
 }
 
-type StoredProfilesEventContent struct {
+type PerMessageProfilesEventContent struct {
+	DefaultProfileID *string `json:"default_profile_id,omitempty"`
+
 	Profiles []*StoredPerMessageProfile `json:"profiles,omitempty"`
 }
 
-func (spec *StoredProfilesEventContent) Match(input string) (string, *BeeperPerMessageProfile) {
+func (spec *PerMessageProfilesEventContent) Match(input string) (string, *BeeperPerMessageProfile) {
 	if spec == nil || len(spec.Profiles) == 0 {
 		return input, nil
 	}
@@ -139,9 +142,11 @@ func (spec *StoredProfilesEventContent) Match(input string) (string, *BeeperPerM
 		if profile == nil {
 			continue
 		}
-		for _, trigger := range profile.Trigger.Prefix {
-			if remaining, match := strings.CutPrefix(input, trigger); match {
-				return remaining, &profile.BeeperPerMessageProfile
+		for _, trigger := range profile.Triggers {
+			if len(input) >= len(trigger.Prefix)+len(trigger.Suffix) &&
+				strings.HasPrefix(input, trigger.Prefix) &&
+				strings.HasSuffix(input, trigger.Suffix) {
+				return input[len(trigger.Prefix) : len(input)-len(trigger.Suffix)], &profile.BeeperPerMessageProfile
 			}
 		}
 	}
