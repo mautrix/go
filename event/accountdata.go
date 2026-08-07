@@ -160,7 +160,7 @@ func (spec *PerMessageProfilesEventContent) GetDefaultProfileID() *string {
 }
 
 func (spec *PerMessageProfilesEventContent) GetByID(id string) *BeeperPerMessageProfile {
-	if spec == nil {
+	if spec == nil || id == "" {
 		return nil
 	}
 	for _, profile := range spec.Profiles {
@@ -176,7 +176,7 @@ func (spec *PerMessageProfilesEventContent) Match(input string) (string, *Beeper
 		return input, nil
 	}
 	for _, profile := range spec.Profiles {
-		if profile == nil {
+		if profile == nil || profile.ID == "" {
 			continue
 		}
 		for _, trigger := range profile.Triggers {
