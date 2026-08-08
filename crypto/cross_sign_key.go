@@ -26,6 +26,14 @@ type CrossSigningKeysCache struct {
 	UserSigningKey olm.PKSigning
 }
 
+func (cskc *CrossSigningKeysCache) Seeds() CrossSigningSeeds {
+	return CrossSigningSeeds{
+		MasterKey:      cskc.MasterKey.Seed(),
+		SelfSigningKey: cskc.SelfSigningKey.Seed(),
+		UserSigningKey: cskc.UserSigningKey.Seed(),
+	}
+}
+
 func (cskc *CrossSigningKeysCache) PublicKeys() *CrossSigningPublicKeysCache {
 	return &CrossSigningPublicKeysCache{
 		MasterKey:      cskc.MasterKey.PublicKey(),
@@ -40,24 +48,27 @@ type CrossSigningSeeds struct {
 	UserSigningKey jsonbytes.UnpaddedURLBytes `json:"m.cross_signing.user_signing"`
 }
 
-func (mach *OlmMachine) ExportCrossSigningKeys() CrossSigningSeeds {
-	return CrossSigningSeeds{
-		MasterKey:      mach.CrossSigningKeys.MasterKey.Seed(),
-		SelfSigningKey: mach.CrossSigningKeys.SelfSigningKey.Seed(),
-		UserSigningKey: mach.CrossSigningKeys.UserSigningKey.Seed(),
+func (css *CrossSigningSeeds) Decode() (keysCache CrossSigningKeysCache, err error) {
+	if keysCache.MasterKey, err = olm.NewPKSigningFromSeed(css.MasterKey); err != nil {
+		return
 	}
+	if keysCache.SelfSigningKey, err = olm.NewPKSigningFromSeed(css.SelfSigningKey); err != nil {
+		return
+	}
+	if keysCache.UserSigningKey, err = olm.NewPKSigningFromSeed(css.UserSigningKey); err != nil {
+		return
+	}
+	return
+}
+
+func (mach *OlmMachine) ExportCrossSigningKeys() CrossSigningSeeds {
+	return mach.CrossSigningKeys.Seeds()
 }
 
 func (mach *OlmMachine) ImportCrossSigningKeys(keys CrossSigningSeeds) (err error) {
-	var keysCache CrossSigningKeysCache
-	if keysCache.MasterKey, err = olm.NewPKSigningFromSeed(keys.MasterKey); err != nil {
-		return
-	}
-	if keysCache.SelfSigningKey, err = olm.NewPKSigningFromSeed(keys.SelfSigningKey); err != nil {
-		return
-	}
-	if keysCache.UserSigningKey, err = olm.NewPKSigningFromSeed(keys.UserSigningKey); err != nil {
-		return
+	keysCache, err := keys.Decode()
+	if err != nil {
+		return err
 	}
 
 	mach.Log.Debug().
