@@ -926,13 +926,13 @@ func (cli *Client) executeCompiledRequest(
 		return cli.doRetry(
 			origCtx, req, fmt.Errorf("HTTP %d", res.StatusCode), retries, backoff, responseJSON, handler, dontReadResponse, sizeLimit, client,
 		)
-	} else if res.StatusCode == 401 && cli.shouldRetryWithRefreshedToken(origCtx, token) {
-		_, err = ParseErrorResponse(attemptReq, res)
-		return cli.doRetry(
-			origCtx, req, err, retries, backoff, responseJSON, handler, dontReadResponse, sizeLimit, client,
-		)
 	} else if res.StatusCode < 200 || res.StatusCode >= 300 {
 		body, err = ParseErrorResponse(attemptReq, res)
+		if errors.Is(err, MUnknownToken) && cli.shouldRetryWithRefreshedToken(origCtx, token) {
+			return cli.doRetry(
+				origCtx, req, err, retries, backoff, responseJSON, handler, dontReadResponse, sizeLimit, client,
+			)
+		}
 		cli.LogRequestDone(attemptReq, res, nil, nil, len(body), duration)
 	} else {
 		body, err = handler(attemptReq, res, responseJSON, sizeLimit)
