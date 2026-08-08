@@ -69,6 +69,7 @@ type PDU struct {
 	Sender         id.UserID                      `json:"sender"`
 	Signatures     map[string]map[id.KeyID]string `json:"signatures,omitzero"`
 	StateKey       *string                        `json:"state_key,omitzero"`
+	Sticky         *event.Sticky                  `json:"msc4354_sticky,omitzero"`
 	Type           string                         `json:"type"`
 	Unsigned       jsontext.Value                 `json:"unsigned,omitzero"`
 	InternalMeta   InternalMeta                   `json:"-"`
@@ -113,6 +114,7 @@ func (pdu *PDU) ToClientEvent(roomVersion id.RoomVersion) (*event.Event, error) 
 		ID:        eventID,
 		RoomID:    roomID,
 		Redacts:   ptr.Val(pdu.Redacts),
+		Sticky:    pdu.Sticky,
 	}
 	err = json.Unmarshal(pdu.Content, &evt.Content)
 	if err != nil {
