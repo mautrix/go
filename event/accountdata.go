@@ -120,8 +120,9 @@ func (bmec *BeeperMuteEventContent) GetMuteDuration() time.Duration {
 }
 
 type StoredPerMessageProfileTrigger struct {
-	Prefix string `json:"prefix,omitempty"`
-	Suffix string `json:"suffix,omitempty"`
+	Prefix      string `json:"prefix,omitempty"`
+	Suffix      string `json:"suffix,omitempty"`
+	KeepTrigger bool   `json:"keep_trigger,omitempty"`
 }
 
 type StoredPerMessageProfile struct {
@@ -183,7 +184,10 @@ func (spec *PerMessageProfilesEventContent) Match(input string) (string, *Beeper
 			if len(input) >= len(trigger.Prefix)+len(trigger.Suffix) &&
 				strings.HasPrefix(input, trigger.Prefix) &&
 				strings.HasSuffix(input, trigger.Suffix) {
-				return input[len(trigger.Prefix) : len(input)-len(trigger.Suffix)], &profile.BeeperPerMessageProfile
+				if !trigger.KeepTrigger {
+					input = input[len(trigger.Prefix) : len(input)-len(trigger.Suffix)]
+				}
+				return input, &profile.BeeperPerMessageProfile
 			}
 		}
 	}
