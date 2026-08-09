@@ -126,7 +126,13 @@ func isRejected(evt *pdu.PDU) bool {
 
 type GetEventsFunc = func(ids []id.EventID) ([]*pdu.PDU, error)
 
-func Authorize(roomVersion id.RoomVersion, evt *pdu.PDU, getEvents GetEventsFunc, getKey pdu.GetKeyFunc) error {
+func Authorize(
+	roomVersion id.RoomVersion,
+	evt *pdu.PDU,
+	precomputedAuthEvents []*pdu.PDU,
+	getEvents GetEventsFunc,
+	getKey pdu.GetKeyFunc,
+) error {
 	if evt.Type == event.StateCreate.Type {
 		// 1. If type is m.room.create:
 		return authorizeCreate(roomVersion, evt)
@@ -147,44 +153,63 @@ func Authorize(roomVersion id.RoomVersion, evt *pdu.PDU, getEvents GetEventsFunc
 			createEvt = createEvts[0]
 		}
 	}
-	authEvents, err := getEvents(evt.AuthEvents)
-	if err != nil {
-		return fmt.Errorf("%w: %w", ErrFailedToGetAuthEvents, err)
-	}
-	expectedAuthEvents := evt.AuthEventSelection(roomVersion)
-	deduplicator := make(map[pdu.StateKey]id.EventID, len(expectedAuthEvents))
-	// 3. Considering the event’s auth_events:
-	for i, ae := range authEvents {
-		authEvtID := evt.AuthEvents[i]
-		if ae == nil {
-			return fmt.Errorf("%w (%s)", ErrMissingAuthEvent, authEvtID)
-		} else if ae.StateKey == nil {
-			// This approximately falls under rule 3.2.
-			return fmt.Errorf("%w (%s)", ErrNonStateAuthEvent, authEvtID)
+	var authEvents []*pdu.PDU
+	var err error
+	// When doing steps 5 or 6 of the checks performed on receipt of a PDU, or when doing state resolution,
+	// we don't actually care about the auth events in the event and instead want to check it with different events.
+	// In that case, also skip the auth rules that are only applicable to the auth_events list.
+	// The caller is expected to only provide events that AuthEventSelection for the event wants.
+	if precomputedAuthEvents != nil {
+		authEvents = precomputedAuthEvents
+		for _, ae := range authEvents {
+			if ae.Type == event.StateCreate.Type {
+				if createEvt == nil {
+					createEvt = ae
+				} else {
+					return fmt.Errorf("%w: found multiple create event in precomputed auth events", ErrUnexpectedAuthEvent)
+				}
+			}
 		}
-		key := pdu.StateKey{Type: ae.Type, StateKey: *ae.StateKey}
-		if prevEvtID, alreadyFound := deduplicator[key]; alreadyFound {
-			// 3.1. If there are duplicate entries for a given type and state_key pair, reject.
-			return fmt.Errorf("%w for %s/%s: found %s and %s", ErrDuplicateAuthEvent, ae.Type, *ae.StateKey, prevEvtID, authEvtID)
-		} else if !expectedAuthEvents.Has(key) {
-			// 3.2. If there are entries whose type and state_key don’t match those specified by
-			//      the auth events selection algorithm described in the server specification, reject.
-			return fmt.Errorf("%w: found %s with key %s/%s", ErrUnexpectedAuthEvent, authEvtID, ae.Type, *ae.StateKey)
-		} else if isRejected(ae) {
-			// 3.3. If there are entries which were themselves rejected under the checks performed on receipt of a PDU, reject.
-			return fmt.Errorf("%w (%s)", ErrRejectedAuthEvent, authEvtID)
-		} else if ae.RoomID != evt.RoomID {
-			// 3.4. If any event in auth_events has a room_id which does not match that of the event being authorised, reject.
-			return fmt.Errorf("%w (%s)", ErrMismatchingRoomIDInAuthEvent, authEvtID)
-		} else {
-			deduplicator[key] = authEvtID
+	} else {
+		authEvents, err = getEvents(evt.AuthEvents)
+		if err != nil {
+			return fmt.Errorf("%w: %w", ErrFailedToGetAuthEvents, err)
 		}
-		if ae.Type == event.StateCreate.Type {
-			if createEvt == nil {
-				createEvt = ae
+		expectedAuthEvents := evt.AuthEventSelection(roomVersion)
+		deduplicator := make(map[pdu.StateKey]id.EventID, len(expectedAuthEvents))
+		// 3. Considering the event’s auth_events:
+		for i, ae := range authEvents {
+			authEvtID := evt.AuthEvents[i]
+			if ae == nil {
+				return fmt.Errorf("%w (%s)", ErrMissingAuthEvent, authEvtID)
+			} else if ae.StateKey == nil {
+				// This approximately falls under rule 3.2.
+				return fmt.Errorf("%w (%s)", ErrNonStateAuthEvent, authEvtID)
+			}
+			key := pdu.StateKey{Type: ae.Type, StateKey: *ae.StateKey}
+			if prevEvtID, alreadyFound := deduplicator[key]; alreadyFound {
+				// 3.1. If there are duplicate entries for a given type and state_key pair, reject.
+				return fmt.Errorf("%w for %s/%s: found %s and %s", ErrDuplicateAuthEvent, ae.Type, *ae.StateKey, prevEvtID, authEvtID)
+			} else if !expectedAuthEvents.Has(key) {
+				// 3.2. If there are entries whose type and state_key don’t match those specified by
+				//      the auth events selection algorithm described in the server specification, reject.
+				return fmt.Errorf("%w: found %s with key %s/%s", ErrUnexpectedAuthEvent, authEvtID, ae.Type, *ae.StateKey)
+			} else if isRejected(ae) {
+				// 3.3. If there are entries which were themselves rejected under the checks performed on receipt of a PDU, reject.
+				return fmt.Errorf("%w (%s)", ErrRejectedAuthEvent, authEvtID)
+			} else if ae.RoomID != evt.RoomID {
+				// 3.4. If any event in auth_events has a room_id which does not match that of the event being authorised, reject.
+				return fmt.Errorf("%w (%s)", ErrMismatchingRoomIDInAuthEvent, authEvtID)
 			} else {
-				// Duplicates are prevented by deduplicator, AuthEventSelection also won't allow a create event at all for v12+
-				panic(fmt.Errorf("impossible case: multiple create events found in auth events"))
+				deduplicator[key] = authEvtID
+			}
+			if ae.Type == event.StateCreate.Type {
+				if createEvt == nil {
+					createEvt = ae
+				} else {
+					// Duplicates are prevented by deduplicator, AuthEventSelection also won't allow a create event at all for v12+
+					panic(fmt.Errorf("impossible case: multiple create events found in auth events"))
+				}
 			}
 		}
 	}
