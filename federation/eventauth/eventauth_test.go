@@ -72,7 +72,7 @@ func TestAuthorize(t *testing.T) {
 				assert.True(t, evt.VerifyContentHash(), i)
 
 				events[evtID] = evt
-				err = eventauth.Authorize(*roomVersion, evt, events.Get, GetKey)
+				err = eventauth.Authorize(*roomVersion, evt, nil, events.Get, GetKey)
 				if err != nil {
 					evt.InternalMeta.Rejected = true
 				}
