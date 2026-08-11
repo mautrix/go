@@ -3,6 +3,7 @@ package mautrix
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"strconv"
 	"time"
 
@@ -709,4 +710,71 @@ func (sg SearchGroupings) IsZero() bool {
 
 type SearchGroup struct {
 	Key string `json:"key"`
+}
+
+type PushFormat string
+
+const (
+	PushFormatDefault     PushFormat = ""
+	PushFormatEventIDOnly PushFormat = "event_id_only"
+)
+
+type PusherData map[string]any
+
+func (pd PusherData) Format() PushFormat {
+	val, _ := pd["format"].(string)
+	return PushFormat(val)
+}
+
+func (pd PusherData) URL() string {
+	val, _ := pd["url"].(string)
+	return val
+}
+
+func (pd PusherData) WebPushAuth() string {
+	val, _ := pd["auth"].(string)
+	return val
+}
+
+// ConvertToNotificationData returns a copy of the map with the url and format fields removed.
+func (pd PusherData) ConvertToNotificationData() PusherData {
+	pdCopy := maps.Clone(pd)
+	delete(pdCopy, "format")
+	delete(pdCopy, "url")
+	delete(pdCopy, "auth")
+	return pdCopy
+}
+
+type PusherKind string
+
+const (
+	PusherKindHTTP    PusherKind = "http"
+	PusherKindEmail   PusherKind = "email"
+	PusherKindWebPush PusherKind = "org.matrix.msc4174.webpush"
+)
+
+type PusherAppID string
+
+const (
+	PusherAppEmail PusherAppID = "m.email"
+)
+
+type Pusher struct {
+	AppDisplayName    string      `json:"app_display_name"`
+	AppID             PusherAppID `json:"app_id"`
+	Append            bool        `json:"append,omitempty"`
+	Data              PusherData  `json:"data"`
+	DeviceDisplayName string      `json:"device_display_name"`
+	Kind              *PusherKind `json:"kind"`
+	Language          string      `json:"lang"`
+	ProfileTag        string      `json:"profile_tag,omitempty"`
+	PushKey           string      `json:"pushkey"`
+
+	// Only present for web push pushers in the server response
+	Activated bool `json:"activated,omitempty"`
+}
+
+type ReqAckWebPusher struct {
+	AppID    PusherAppID `json:"app_id"`
+	AckToken string      `json:"ack_token"`
 }

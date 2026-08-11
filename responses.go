@@ -556,6 +556,7 @@ type RespCapabilities struct {
 	SetAvatarURL              *CapBooleanTrue               `json:"m.set_avatar_url,omitempty"`
 	ThreePIDChanges           *CapBooleanTrue               `json:"m.3pid_changes,omitempty"`
 	GetLoginToken             *CapBooleanTrue               `json:"m.get_login_token,omitempty"`
+	WebPush                   *CapWebPush                   `json:"org.matrix.msc4174.webpush,omitempty"`
 	UnstableAccountModeration *CapUnstableAccountModeration `json:"uk.timedout.msc4323,omitempty"`
 
 	Custom map[string]interface{} `json:"-"`
@@ -635,6 +636,22 @@ type CapBooleanFalse CapBoolean
 // IsEnabled returns true if the capability is enabled explicitly. If it's not specified, this returns false.
 func (cb *CapBooleanFalse) IsEnabled() bool {
 	return cb != nil && cb.Enabled
+}
+
+type CapWebPush struct {
+	Enabled  bool   `json:"enabled"`
+	VAPIDKey string `json:"vapid,omitempty"`
+}
+
+func (cb *CapWebPush) IsEnabled() bool {
+	return cb != nil && cb.Enabled
+}
+
+func (cb *CapWebPush) GetVAPIDKey() string {
+	if cb == nil {
+		return ""
+	}
+	return cb.VAPIDKey
 }
 
 type CapRoomVersionStability string
@@ -823,4 +840,8 @@ type SearchResult struct {
 	Rank    float64      `json:"rank"`
 	Event   *event.Event `json:"result"`
 	Context *RespContext `json:"context,omitempty"`
+}
+
+type RespPushers struct {
+	Pushers []Pusher `json:"pushers"`
 }
