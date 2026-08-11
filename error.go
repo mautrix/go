@@ -77,6 +77,9 @@ var (
 
 	MUnredactedContentDeleted     = RespError{ErrCode: "FI.MAU.MSC2815_UNREDACTED_CONTENT_DELETED"}
 	MUnredactedContentNotReceived = RespError{ErrCode: "FI.MAU.MSC2815_UNREDACTED_CONTENT_NOT_RECEIVED"}
+
+	// The sender of the requested event is ignored by the requesting user (MSC4406).
+	UnstableMSenderIgnored = RespError{ErrCode: "UK.TIMEDOUT.MSC4406.SENDER_IGNORED", StatusCode: http.StatusNotFound}
 )
 
 var (
