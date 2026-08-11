@@ -529,6 +529,10 @@ func (prov *ProvisioningAPI) PostPaginate(w http.ResponseWriter, r *http.Request
 	login := prov.GetLoginForRequest(w, r)
 	if login == nil {
 		return
+	} else if login.Client == nil || !login.Client.IsLoggedIn() {
+		log.Debug().Str("login_id", string(login.ID)).Msg("Paginate requested with logged out login")
+		mautrix.MForbidden.WithMessage("Login is not logged in").Write(w)
+		return
 	}
 	targetRoomID := id.RoomID(r.PathValue("roomID"))
 	portal, err := prov.br.Bridge.GetPortalByMXID(r.Context(), targetRoomID)
