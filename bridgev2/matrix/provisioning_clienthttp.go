@@ -99,6 +99,7 @@ func (prov *ProvisioningAPI) PostLoginClientHTTP(w http.ResponseWriter, r *http.
 	select {
 	case <-stepWaitChan:
 	case <-r.Context().Done():
+		log.Warn().Str("req_id", reqID).Msg("Client HTTP step context canceled")
 		w.WriteHeader(499)
 		return
 	}
@@ -110,6 +111,7 @@ func (prov *ProvisioningAPI) PostLoginClientHTTP(w http.ResponseWriter, r *http.
 			ErrLoginCancelled.Write(w)
 		}
 	} else if err != nil {
+		log.Err(err).Str("req_id", reqID).Msg("Client HTTP step failed")
 		RespondWithError(w, err, "Internal error in login step")
 	} else {
 		exhttp.WriteJSONResponse(w, http.StatusOK, &RespSubmitLogin{LoginID: login.ID, LoginStep: nextStep})
