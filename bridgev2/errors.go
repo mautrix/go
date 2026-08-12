@@ -120,6 +120,10 @@ func (re RespError) Write(w http.ResponseWriter) {
 	mautrix.RespError(re).Write(w)
 }
 
+func (re RespError) WithInternalError(err error) RespError {
+	return RespError(mautrix.RespError(re).WithInternalError(err))
+}
+
 func (re RespError) WithMessage(msg string, args ...any) RespError {
 	return RespError(mautrix.RespError(re).WithMessage(msg, args...))
 }
