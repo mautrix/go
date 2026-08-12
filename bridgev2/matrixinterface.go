@@ -48,6 +48,7 @@ type MatrixConnector interface {
 	GetCapabilities() *MatrixCapabilities
 
 	ParseGhostMXID(userID id.UserID) (networkid.UserID, bool)
+	FormatGhostMXID(userID networkid.UserID) id.UserID
 	GhostIntent(userID networkid.UserID) MatrixAPI
 	NewUserIntent(ctx context.Context, userID id.UserID, accessToken string) (MatrixAPI, string, error)
 	BotIntent() MatrixAPI
