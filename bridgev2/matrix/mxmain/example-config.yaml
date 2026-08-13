@@ -173,6 +173,7 @@ database:
     #           https://github.com/mattn/go-sqlite3#connection-string
     #   Postgres: Connection string. For example, postgres://user:password@host/database?sslmode=disable
     #             To connect via Unix socket, use something like postgres:///dbname?host=/var/run/postgresql
+    #             Using special characters in the password is strongly discouraged (but should work with manual URL encoding)
     uri: postgres://user:password@host/database?sslmode=disable
     # Maximum number of connections.
     max_open_conns: 5
