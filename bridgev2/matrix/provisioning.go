@@ -18,6 +18,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/rs/xid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/hlog"
 	"go.mau.fi/util/exerrors"
@@ -90,6 +91,19 @@ func (br *Connector) GetProvisioning() bridgev2.IProvisioningAPI {
 	return br.Provisioning
 }
 
+const DefaultRequestIDHeader = "Request-Id"
+
+func inputRequestIDMiddleware(header string) exhttp.Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if reqID, err := xid.FromString(r.Header.Get(header)); err == nil {
+				r = r.WithContext(hlog.CtxWithID(r.Context(), reqID))
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 func (prov *ProvisioningAPI) Init() {
 	prov.matrixAuthCache = make(map[string]matrixAuthCacheEntry)
 	prov.logins = make(map[string]*ProvLogin)
@@ -144,16 +158,25 @@ func (prov *ProvisioningAPI) Init() {
 		NotFound:         exerrors.Must(ptr.Ptr(mautrix.MUnrecognized.WithMessage("Unrecognized endpoint")).MarshalJSON()),
 		MethodNotAllowed: exerrors.Must(ptr.Ptr(mautrix.MUnrecognized.WithMessage("Invalid method for endpoint")).MarshalJSON()),
 	}
-	prov.br.AS.Router.Handle("/_matrix/provision/", exhttp.ApplyMiddleware(
-		prov.Router,
+	requestIDHeader := prov.br.Config.Provisioning.RequestIDHeader
+	if requestIDHeader == "" {
+		requestIDHeader = DefaultRequestIDHeader
+	}
+	middlewares := []exhttp.Middleware{
 		exhttp.StripPrefix("/_matrix/provision"),
 		hlog.NewHandler(prov.log),
-		hlog.RequestIDHandler("request_id", "Request-Id"),
+	}
+	if prov.br.Config.Provisioning.TrustIncomingRequestID {
+		middlewares = append(middlewares, inputRequestIDMiddleware(requestIDHeader))
+	}
+	middlewares = append(middlewares,
+		hlog.RequestIDHandler("request_id", requestIDHeader),
 		exhttp.CORSMiddleware,
 		requestlog.AccessLogger(requestlog.Options{TrustXForwardedFor: true}),
 		exhttp.HandleErrors(errorBodies),
 		prov.AuthMiddleware,
-	))
+	)
+	prov.br.AS.Router.Handle("/_matrix/provision/", exhttp.ApplyMiddleware(prov.Router, middlewares...))
 }
 
 func (prov *ProvisioningAPI) checkMatrixAuth(ctx context.Context, userID id.UserID, token string) error {

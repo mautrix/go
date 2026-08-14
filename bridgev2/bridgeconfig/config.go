@@ -117,6 +117,8 @@ type ProvisioningConfig struct {
 	DebugEndpoints         bool   `yaml:"debug_endpoints"`
 	EnableSessionTransfers bool   `yaml:"enable_session_transfers"`
 	FailOnWebAuthn         bool   `yaml:"fail_on_webauthn"`
+	RequestIDHeader        string `yaml:"request_id_header"`
+	TrustIncomingRequestID bool   `yaml:"trust_incoming_request_id"`
 }
 
 type DirectMediaConfig struct {

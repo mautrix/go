@@ -309,6 +309,10 @@ provisioning:
     # Should the provisioning API fail immediately if a webauthn step is returned?
     # This is mostly useful for clients that don't yet support it and want a trackable error instead.
     fail_on_webauthn: false
+    # The header that the request ID is sent back in.
+    request_id_header: Request-Id
+    # Should the request ID be read from the above header of incoming requests
+    trust_incoming_request_id: false
 
 # Some networks require publicly accessible media download links (e.g. for user avatars when using Discord webhooks).
 # These settings control whether the bridge will provide such public media access.
