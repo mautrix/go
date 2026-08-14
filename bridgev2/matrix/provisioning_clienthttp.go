@@ -104,15 +104,17 @@ func (prov *ProvisioningAPI) PostLoginClientHTTP(w http.ResponseWriter, r *http.
 		return
 	}
 	nextStep, err := login.step.GetNext()
-	if login.Ctx.Err() != nil && nextStep != nil && nextStep.Type != bridgev2.LoginStepTypeComplete {
+	// Check the actual error before checking if the context expired, because if there was an
+	// error, then we already deleted the login session, which canceled the context.
+	if err != nil {
+		log.Err(err).Str("req_id", reqID).Msg("Client HTTP step failed")
+		RespondWithError(w, err, "Internal error in login step")
+	} else if login.Ctx.Err() != nil && nextStep != nil && nextStep.Type != bridgev2.LoginStepTypeComplete {
 		if errors.Is(login.Ctx.Err(), context.DeadlineExceeded) {
 			ErrLoginTimedOut.Write(w)
 		} else {
 			ErrLoginCancelled.Write(w)
 		}
-	} else if err != nil {
-		log.Err(err).Str("req_id", reqID).Msg("Client HTTP step failed")
-		RespondWithError(w, err, "Internal error in login step")
 	} else {
 		exhttp.WriteJSONResponse(w, http.StatusOK, &RespSubmitLogin{LoginID: login.ID, LoginStep: nextStep})
 	}
