@@ -92,6 +92,17 @@ func (br *Connector) GetProvisioning() bridgev2.IProvisioningAPI {
 }
 
 const DefaultRequestIDHeader = "Request-Id"
+const requestIDLogField = "request_id"
+
+func copyRequestIDToLogContext(r *http.Request) func(zerolog.Context) zerolog.Context {
+	reqID, ok := hlog.IDFromRequest(r)
+	if !ok {
+		return nil
+	}
+	return func(c zerolog.Context) zerolog.Context {
+		return c.Stringer(requestIDLogField, reqID)
+	}
+}
 
 func inputRequestIDMiddleware(header string) exhttp.Middleware {
 	return func(next http.Handler) http.Handler {
@@ -170,7 +181,7 @@ func (prov *ProvisioningAPI) Init() {
 		middlewares = append(middlewares, inputRequestIDMiddleware(requestIDHeader))
 	}
 	middlewares = append(middlewares,
-		hlog.RequestIDHandler("request_id", requestIDHeader),
+		hlog.RequestIDHandler(requestIDLogField, requestIDHeader),
 		exhttp.CORSMiddleware,
 		requestlog.AccessLogger(requestlog.Options{TrustXForwardedFor: true}),
 		exhttp.HandleErrors(errorBodies),
@@ -579,8 +590,9 @@ func (prov *ProvisioningAPI) PostPaginate(w http.ResponseWriter, r *http.Request
 		doneChan := make(chan error, 1)
 		var done atomic.Bool
 		prov.br.Bridge.WakeupBackfillQueue(&bridgev2.ManualBackfill{
-			Source: login,
-			Portal: portal,
+			Source:     login,
+			Portal:     portal,
+			LogContext: copyRequestIDToLogContext(r),
 			DoneCallback: func(err error) {
 				if done.Swap(true) {
 					log.Warn().Err(err).Msg("Backfill done callback called multiple times, ignoring")

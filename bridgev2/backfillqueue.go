@@ -51,6 +51,7 @@ type ManualBackfill struct {
 	Portal *Portal
 	Data   *FetchMessagesResponse
 
+	LogContext   func(zerolog.Context) zerolog.Context
 	DoneCallback func(error)
 }
 
@@ -122,11 +123,14 @@ func (br *Bridge) RunBackfillQueue() {
 }
 
 func (mt *ManualBackfill) addLogAndDo(ctx context.Context) {
-	log := zerolog.Ctx(ctx).With().
+	with := zerolog.Ctx(ctx).With().
 		Object("portal_key", mt.Portal.PortalKey).
 		Str("login_id", string(mt.Source.ID)).
-		Str("task_type", "manual").
-		Logger()
+		Str("task_type", "manual")
+	if mt.LogContext != nil {
+		with = mt.LogContext(with)
+	}
+	log := with.Logger()
 	ctx = log.WithContext(ctx)
 	mt.Do(ctx)
 }
