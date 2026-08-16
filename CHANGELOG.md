@@ -1,3 +1,47 @@
+## v0.30.0 (2026-08-16)
+
+* *(crypto)* Added support for room history sharing.
+* *(crypto)* Added more consistent Megolm session saving and locking.
+* *(federation)* Added option to block outgoing requests by server name.
+* *(federation/eventauth)* Added option to provide precomputed auth events to
+  make it easier to use the method for state resolution.
+* *(federation/pdu)* Added MSC4354 sticky field to federation PDUs.
+* *(event)* Added types for latest v3 revision of [MSC4461].
+* *(bridgev2)* Added check to prevent starting the bridge if `split_portals` is
+  unset after being set before.
+* *(bridgev2)* Added interface for providing alternate target message IDs for
+  things like replies and reactions. This is used for WhatsApp where the message
+  ID is ambiguous due to an ongoing migration to a different user ID format.
+* *(bridgev2)* Added configurable debounce for transient disconnects to avoid
+  sending unnecessary bridge state updates.
+* *(bridgev2)* Added distinguisher option to relay message formatting
+  (thanks to [@Katze-942] in [#536]).
+* *(bridgev2)* Added optional interface for suppressing pending message timeouts.
+* *(bridgev2)* Added bridge capability flag to use the immediate parent instead
+  of the top-level parent for the `network` field in the `m.bridge` event.
+* *(bridgev2/provisioning)* Added client HTTP to provisioning API logins, which
+  allows proxying requests via the user's device.
+* *(bridgev2/provisioning)* Added config options to customize request ID logging
+  and passthrough.
+* *(bridgev2/matrix)* Added `FormatGhostMXID` to Matrix connector interface.
+* *(bridgev2)* Fixed room capabilities not being updated correctly in some cases.
+* *(bridgev2)* Fixed backfill message cutoff leaving existing messages in some
+  edge cases where multiple messages have the same timestamp.
+* *(bridgev2)* Fixed backfill queue done flag not being cleared properly when
+  marking a portal as having more data to backfill.
+* *(bridgev2)* Fixed DM portal info updates failing due to context cancellation
+  if triggered by another portal being created.
+* *(bridgev2)* Fixed `m.space.parent` event not being removed when portal parent
+  space changes.
+* *(client)* Fixed automatic OAuth token refresh to only happen on proper
+  `M_UNKNOWN_TOKEN` errors instead of any 401 response.
+* *(format)* Fixed duplicate user IDs in `m.mentions` when generating it based
+  on mentions in HTML.
+
+[@Katze-942]: https://github.com/Katze-942
+[#536]: https://github.com/mautrix/go/pull/536
+[MSC4461]: https://github.com/matrix-org/matrix-spec-proposals/pull/4461
+
 ## v0.29.0 (2026-07-16)
 
 * *(client)* Added support for OAuth login and refresh tokens.
