@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
 	"go.mau.fi/util/exerrors"
 	"go.mau.fi/util/exfmt"
 
@@ -27,6 +26,7 @@ func TestExportKeys(t *testing.T) {
 		exerrors.Must(olm.NewOutboundGroupSession()).Key(),
 		7*exfmt.Day,
 		100,
+		nil,
 		false,
 	))
 	data, err := crypto.ExportKeys("meow", []*crypto.InboundGroupSession{sess})

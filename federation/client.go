@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -29,13 +30,14 @@ import (
 )
 
 type Client struct {
-	HTTP       *http.Client
-	ExtHTTP    *http.Client
-	Dialer     *net.Dialer
-	AllowIP    func(net.IP) bool
-	ServerName string
-	UserAgent  string
-	Key        *SigningKey
+	HTTP        *http.Client
+	ExtHTTP     *http.Client
+	Dialer      *net.Dialer
+	AllowIP     func(net.IP) bool
+	AllowServer func(string) bool
+	ServerName  string
+	UserAgent   string
+	Key         *SigningKey
 
 	ResponseSizeLimit int64
 }
@@ -548,7 +550,13 @@ func (c *Client) MakeFullRequest(ctx context.Context, params RequestParams) ([]b
 	return body, resp, nil
 }
 
+var ErrNotConfiguredForAuth = errors.New("client not configured for authentication")
+var ErrServerNameFiltered = errors.New("refusing to make a request")
+
 func (c *Client) compileRequest(ctx context.Context, params RequestParams) (*http.Request, error) {
+	if c.AllowServer != nil && !c.AllowServer(params.ServerName) {
+		return nil, fmt.Errorf("%w to %s", ErrServerNameFiltered, params.ServerName)
+	}
 	reqURL := mautrix.BuildURL(&url.URL{
 		Scheme: "matrix-federation",
 		Host:   params.ServerName,
@@ -577,9 +585,7 @@ func (c *Client) compileRequest(ctx context.Context, params RequestParams) (*htt
 	req.Header.Set("User-Agent", c.UserAgent)
 	if params.Authenticate {
 		if c.ServerName == "" || c.Key == nil {
-			return nil, mautrix.HTTPError{
-				Message: "client not configured for authentication",
-			}
+			return nil, mautrix.HTTPError{WrappedError: ErrNotConfiguredForAuth}
 		}
 		auth, err := (&signableRequest{
 			Method:      req.Method,

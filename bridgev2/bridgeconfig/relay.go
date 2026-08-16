@@ -8,6 +8,7 @@ package bridgeconfig
 
 import (
 	"fmt"
+	"hash/crc32"
 	"strings"
 	"text/template"
 
@@ -16,18 +17,20 @@ import (
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/format"
+	"maunium.net/go/mautrix/id"
 )
 
 type RelayConfig struct {
-	Enabled           bool                         `yaml:"enabled"`
-	AdminOnly         bool                         `yaml:"admin_only"`
-	PreferDefault     bool                         `yaml:"prefer_default"`
-	AllowBridge       bool                         `yaml:"allow_bridge"`
-	DefaultRelays     []networkid.UserLoginID      `yaml:"default_relays"`
-	MessageFormats    map[event.MessageType]string `yaml:"message_formats"`
-	DisplaynameFormat string                       `yaml:"displayname_format"`
-	messageTemplates  *template.Template           `yaml:"-"`
-	nameTemplate      *template.Template           `yaml:"-"`
+	Enabled            bool                         `yaml:"enabled"`
+	AdminOnly          bool                         `yaml:"admin_only"`
+	PreferDefault      bool                         `yaml:"prefer_default"`
+	AllowBridge        bool                         `yaml:"allow_bridge"`
+	DefaultRelays      []networkid.UserLoginID      `yaml:"default_relays"`
+	UserDistinguishers []string                     `yaml:"user_distinguishers"`
+	MessageFormats     map[event.MessageType]string `yaml:"message_formats"`
+	DisplaynameFormat  string                       `yaml:"displayname_format"`
+	messageTemplates   *template.Template           `yaml:"-"`
+	nameTemplate       *template.Template           `yaml:"-"`
 }
 
 type umRelayConfig RelayConfig
@@ -52,6 +55,15 @@ func (rc *RelayConfig) UnmarshalYAML(node *yaml.Node) error {
 	}
 
 	return nil
+}
+
+func (rc *RelayConfig) GetUserDistinguisher(userID id.UserID) string {
+	if len(rc.UserDistinguishers) == 0 {
+		return ""
+	}
+
+	hash := crc32.ChecksumIEEE([]byte(userID))
+	return rc.UserDistinguishers[hash%uint32(len(rc.UserDistinguishers))]
 }
 
 type formatData struct {

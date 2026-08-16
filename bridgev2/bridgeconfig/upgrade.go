@@ -32,6 +32,7 @@ func doUpgrade(helper up.Helper) {
 	helper.Copy(up.Bool, "bridge", "resend_bridge_info")
 	helper.Copy(up.Bool, "bridge", "no_bridge_info_state_key")
 	helper.Copy(up.Str|up.Null, "bridge", "bridge_status_notices")
+	helper.Copy(up.Str|up.Int|up.Null, "bridge", "transient_state_debounce")
 	helper.Copy(up.Str|up.Int|up.Null, "bridge", "unknown_error_auto_reconnect")
 	helper.Copy(up.Int, "bridge", "unknown_error_max_auto_reconnects")
 	helper.Copy(up.Bool, "bridge", "bridge_matrix_leave")
@@ -59,6 +60,7 @@ func doUpgrade(helper up.Helper) {
 	helper.Copy(up.Bool, "bridge", "relay", "prefer_default")
 	helper.Copy(up.Bool, "bridge", "relay", "allow_bridge")
 	helper.Copy(up.List, "bridge", "relay", "default_relays")
+	helper.Copy(up.List, "bridge", "relay", "user_distinguishers")
 	helper.Copy(up.Map, "bridge", "relay", "message_formats")
 	helper.Copy(up.Str, "bridge", "relay", "displayname_format")
 	helper.Copy(up.Str, "bridge", "portal_create_filter", "mode")
@@ -121,8 +123,10 @@ func doUpgrade(helper up.Helper) {
 	} else {
 		helper.Copy(up.Str, "provisioning", "shared_secret")
 	}
+	helper.Copy(up.Bool, "provisioning", "allow_matrix_auth")
 	helper.Copy(up.Bool, "provisioning", "debug_endpoints")
 	helper.Copy(up.Bool, "provisioning", "enable_session_transfers")
+	helper.Copy(up.Bool, "provisioning", "fail_on_webauthn")
 
 	helper.Copy(up.Bool, "direct_media", "enabled")
 	helper.Copy(up.Str|up.Null, "direct_media", "media_id_prefix")

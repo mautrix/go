@@ -43,6 +43,15 @@ type Context struct {
 	PreserveWhitespace bool
 }
 
+func (ctx Context) Mentions() *event.Mentions {
+	mentions, ok := ctx.ReturnData[contextKeyMentions].(*event.Mentions)
+	if !ok {
+		mentions = &event.Mentions{}
+		ctx.ReturnData[contextKeyMentions] = mentions
+	}
+	return mentions
+}
+
 func NewContext(ctx context.Context) Context {
 	return Context{
 		Ctx:        ctx,
@@ -69,13 +78,12 @@ type CodeBlockConverter func(code, language string, ctx Context) string
 type PillConverter func(displayname, mxid, eventID string, ctx Context) string
 type ImageConverter func(src, alt, title, width, height string, isEmoji bool) string
 
-const ContextKeyMentions = "_mentions"
+const contextKeyMentions = "_mentions"
 
 func DefaultPillConverter(displayname, mxid, eventID string, ctx Context) string {
 	switch {
 	case len(mxid) == 0, mxid[0] == '@':
-		existingMentions, _ := ctx.ReturnData[ContextKeyMentions].([]id.UserID)
-		ctx.ReturnData[ContextKeyMentions] = append(existingMentions, id.UserID(mxid))
+		ctx.Mentions().Add(id.UserID(mxid))
 		// User link, always just show the displayname
 		return displayname
 	case len(eventID) > 0:
@@ -503,11 +511,9 @@ func HTMLToMarkdownFull(parser *HTMLParser, html string) (parsed string, mention
 		parser = MarkdownHTMLParser
 	}
 	ctx := NewContext(context.TODO())
+	mentions = &event.Mentions{}
+	ctx.ReturnData[contextKeyMentions] = mentions
 	parsed = parser.Parse(html, ctx)
-	mentionList, _ := ctx.ReturnData[ContextKeyMentions].([]id.UserID)
-	mentions = &event.Mentions{
-		UserIDs: mentionList,
-	}
 	return
 }
 

@@ -10,6 +10,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -23,13 +25,44 @@ import (
 	"maunium.net/go/mautrix/bridgev2/status"
 )
 
+type stepManager struct {
+	next    *bridgev2.LoginStep
+	prev    *bridgev2.LoginStep
+	started bool
+	wait    chan struct{}
+	lock    sync.Mutex
+	err     error
+
+	reqCounter int
+
+	pendingHTTP chan *bridgev2.LoginClientHTTPResponse
+}
+
+func (sm *stepManager) GetNext() (*bridgev2.LoginStep, error) {
+	sm.lock.Lock()
+	defer sm.lock.Unlock()
+	return sm.next, sm.err
+}
+
+func (sm *stepManager) WithLock(fn func(*stepManager) error) error {
+	sm.lock.Lock()
+	defer sm.lock.Unlock()
+	return fn(sm)
+}
+
+func (sm *stepManager) WithNonErroringLock(fn func(*stepManager)) {
+	sm.lock.Lock()
+	defer sm.lock.Unlock()
+	fn(sm)
+}
+
 type ProvLogin struct {
 	ID       string
 	Process  bridgev2.LoginProcess
-	PrevStep *bridgev2.LoginStep
-	NextStep *bridgev2.LoginStep
+	step     *stepManager
 	Override *bridgev2.UserLogin
-	Lock     sync.Mutex
+
+	HTTPLock sync.Mutex
 
 	Ctx       context.Context
 	CancelCtx context.CancelFunc
@@ -57,33 +90,22 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 		RespondWithError(w, err, "Internal error creating login process")
 		return
 	}
-	var firstStep *bridgev2.LoginStep
-	overridable, ok := login.(bridgev2.LoginProcessWithOverride)
-	if ok && overrideLogin != nil {
-		firstStep, err = overridable.StartWithOverride(r.Context(), overrideLogin)
-	} else {
-		firstStep, err = login.Start(r.Context())
-	}
-	if err == nil && firstStep == nil {
-		err = ErrNilStep
-	}
-	if err != nil {
-		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to start login")
-		RespondWithError(w, err, "Internal error starting login")
-		return
-	}
 	loginID := xid.New().String()
 	ctx, cancel := context.WithTimeout(prov.br.Bridge.BackgroundCtx, 30*time.Minute)
 	ctx = user.Log.With().
 		Str("login_id", loginID).
 		Logger().WithContext(ctx)
+	ch := make(chan struct{})
 	provLogin := &ProvLogin{
 		ID:        loginID,
 		Process:   login,
-		NextStep:  firstStep,
 		Override:  overrideLogin,
 		Ctx:       ctx,
 		CancelCtx: cancel,
+		step: &stepManager{
+			started: true,
+			wait:    ch,
+		},
 	}
 	go prov.handleLoginTimeout(provLogin)
 	prov.loginsLock.Lock()
@@ -91,8 +113,32 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 	prov.loginsLock.Unlock()
 	zerolog.Ctx(r.Context()).Info().
 		Str("login_id", loginID).
+		Msg("Created login process, now starting")
+
+	var rt http.RoundTripper
+	if r.URL.Query().Get("client_http") == "1" {
+		rt = provLogin
+	}
+	go prov.executeStep(provLogin, "start", nil, nil, &bridgev2.LoginStartParams{
+		Override: overrideLogin,
+		HTTP:     rt,
+	})
+	select {
+	case <-ch:
+	case <-r.Context().Done():
+		prov.deleteLogin(provLogin, true, ErrLoginCancelled)
+		return
+	}
+	firstStep, err := provLogin.step.GetNext()
+	if err != nil {
+		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to start login")
+		RespondWithError(w, err, "Internal error starting login")
+		return
+	}
+	zerolog.Ctx(r.Context()).Info().
+		Str("login_id", loginID).
 		Any("first_step", firstStep).
-		Msg("Created login process")
+		Msg("Started login process")
 	exhttp.WriteJSONResponse(w, http.StatusOK, &RespSubmitLogin{LoginID: loginID, LoginStep: firstStep})
 }
 
@@ -106,15 +152,28 @@ func (prov *ProvisioningAPI) PostLoginStep(w http.ResponseWriter, r *http.Reques
 		mautrix.MNotFound.WithMessage("Login not found").Write(w)
 		return
 	}
+	txnID := r.URL.Query().Get("txn_id")
 	stepID := r.PathValue("stepID")
 	stepType := bridgev2.LoginStepType(r.PathValue("stepType"))
 	var params map[string]string
+	var rawParams json.RawMessage
 	switch stepType {
 	case bridgev2.LoginStepTypeUserInput, bridgev2.LoginStepTypeCookies:
 		err := json.NewDecoder(r.Body).Decode(&params)
 		if err != nil {
 			zerolog.Ctx(r.Context()).Err(err).Msg("Failed to decode request body")
 			mautrix.MNotJSON.WithMessage("Failed to decode request body").Write(w)
+			return
+		}
+	case bridgev2.LoginStepTypeWebAuthn:
+		var err error
+		rawParams, err = io.ReadAll(r.Body)
+		if err != nil {
+			zerolog.Ctx(r.Context()).Err(err).Msg("Failed to read request body")
+			mautrix.MNotJSON.WithMessage("Failed to read request body").Write(w)
+			return
+		} else if !json.Valid(rawParams) {
+			mautrix.MNotJSON.WithMessage("Request body is not valid JSON").Write(w)
 			return
 		}
 	case bridgev2.LoginStepTypeDisplayAndWait:
@@ -126,7 +185,7 @@ func (prov *ProvisioningAPI) PostLoginStep(w http.ResponseWriter, r *http.Reques
 		mautrix.MUnrecognized.WithMessage("Invalid step type %q", r.PathValue("stepType")).Write(w)
 		return
 	}
-	resp, err := prov.doLoginStep(r.Context(), login, stepType, stepID, params)
+	resp, err := prov.doLoginStep(r.Context(), login, stepType, stepID, txnID, params, rawParams)
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to complete login step")
 		RespondWithError(w, err, "Internal error in login step")
@@ -145,87 +204,171 @@ func (prov *ProvisioningAPI) PostLoginCancel(w http.ResponseWriter, r *http.Requ
 		mautrix.MNotFound.WithMessage("Login not found").Write(w)
 		return
 	}
-	prov.deleteLogin(login, true)
+	prov.deleteLogin(login, true, ErrLoginCancelled)
 	exhttp.WriteEmptyJSONResponse(w, http.StatusOK)
 }
+
+const LoginStepTxnIDPrefix = "bls_"
+
+var errReturnCurrentStep = errors.New("return current step")
 
 func (prov *ProvisioningAPI) doLoginStep(
 	ctx context.Context,
 	login *ProvLogin,
 	expectedType bridgev2.LoginStepType,
 	expectedID string,
+	expectedTxnID string,
 	params map[string]string,
+	rawParams json.RawMessage,
 ) (*bridgev2.LoginStep, error) {
 	log := zerolog.Ctx(ctx).With().Str("login_id", login.ID).Logger()
-	var returnPrevIfMatch bool
-	if !login.Lock.TryLock() {
-		log.Warn().Msg("Failed to acquire login lock immediately")
-		returnPrevIfMatch = true
-		login.Lock.Lock()
-	}
-	defer login.Lock.Unlock()
 	if login.Ctx.Err() != nil {
-		prov.deleteLogin(login, true)
-		if login.NextStep.Type == bridgev2.LoginStepTypeComplete {
-			return login.NextStep, nil
+		prov.deleteLogin(login, true, nil)
+		if nextStep, err := login.step.GetNext(); nextStep != nil && nextStep.Type == bridgev2.LoginStepTypeComplete {
+			return nextStep, nil
+		} else if err != nil {
+			return nil, err
 		} else if errors.Is(login.Ctx.Err(), context.DeadlineExceeded) {
 			return nil, ErrLoginTimedOut
 		}
 		return nil, ErrLoginCancelled
 	}
 
-	if returnPrevIfMatch && login.PrevStep != nil && login.PrevStep.StepID == expectedID {
+	var currentStep *bridgev2.LoginStep
+	var stepWaitChan chan struct{}
+	err := login.step.WithLock(func(sm *stepManager) error {
+		if sm.err != nil {
+			return sm.err
+		}
+		currentStep = sm.next
+		if sm.prev != nil && ((sm.started && sm.prev.StepID == expectedID) ||
+			(expectedTxnID != "" && sm.prev.TxnID == expectedTxnID)) {
+			log.Debug().
+				Str("prev_step_id", sm.prev.StepID).
+				Str("prev_step_txn_id", sm.prev.TxnID).
+				Any("next_step", currentStep).
+				Msg("Login step requested previous ID, returning last response")
+			return errReturnCurrentStep
+		}
+		if currentStep.StepID != expectedID {
+			return mautrix.MBadState.WithMessage("Step ID does not match")
+		}
+		if expectedTxnID != "" && currentStep.TxnID != expectedTxnID {
+			return mautrix.MBadState.WithMessage("Transaction ID does not match")
+		}
+		if currentStep.Type != expectedType {
+			return mautrix.MBadState.WithMessage("Step type does not match")
+		}
+		if !sm.started {
+			sm.started = true
+			sm.wait = make(chan struct{})
+			log.Debug().
+				Str("step_id", currentStep.StepID).
+				Str("step_type", string(currentStep.Type)).
+				Msg("Submitting login step")
+			go prov.executeStep(login, currentStep.Type, params, rawParams, nil)
+		} else {
+			log.Debug().
+				Str("step_id", currentStep.StepID).
+				Msg("Login step was already started, not submitting again")
+		}
+		stepWaitChan = sm.wait
+		return nil
+	})
+	if errors.Is(err, errReturnCurrentStep) {
+		return currentStep, nil
+	} else if err != nil {
+		return nil, fmt.Errorf("step validation failed: %w", err)
+	}
+	select {
+	case <-stepWaitChan:
+		nextStep, err := login.step.GetNext()
 		log.Debug().
-			Str("prev_step_id", login.PrevStep.StepID).
-			Any("next_step", login.NextStep).
-			Msg("Login step that failed to acquire lock requested previous ID, returning last response")
-		return login.NextStep, nil
+			Any("next_step", nextStep).
+			AnErr("step_error", err).
+			Msg("Returning next login step")
+		return nextStep, err
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
-	if login.NextStep.StepID != expectedID {
-		log.Warn().
-			Str("request_step_id", expectedID).
-			Str("expected_step_id", login.NextStep.StepID).
-			Msg("Step ID does not match")
-		return nil, mautrix.MBadState.WithMessage("Step ID does not match")
-	}
-	if login.NextStep.Type != expectedType {
-		log.Warn().
-			Str("request_step_type", string(expectedType)).
-			Str("expected_step_type", string(login.NextStep.Type)).
-			Msg("Step type does not match")
-		return nil, mautrix.MBadState.WithMessage("Step type does not match")
-	}
-	log.Debug().
-		Str("step_id", login.NextStep.StepID).
-		Str("step_type", string(login.NextStep.Type)).
-		Msg("Submitting login step")
+}
+
+func (prov *ProvisioningAPI) executeStep(
+	login *ProvLogin,
+	currentStepType bridgev2.LoginStepType,
+	params map[string]string,
+	rawParams json.RawMessage,
+	startParams *bridgev2.LoginStartParams,
+) {
 	var nextStep *bridgev2.LoginStep
 	var err error
-	switch login.NextStep.Type {
+	switch currentStepType {
 	case bridgev2.LoginStepTypeUserInput:
 		nextStep, err = login.Process.(bridgev2.LoginProcessUserInput).SubmitUserInput(login.Ctx, params)
 	case bridgev2.LoginStepTypeCookies:
 		nextStep, err = login.Process.(bridgev2.LoginProcessCookies).SubmitCookies(login.Ctx, params)
 	case bridgev2.LoginStepTypeDisplayAndWait:
 		nextStep, err = login.Process.(bridgev2.LoginProcessDisplayAndWait).Wait(login.Ctx)
+	case bridgev2.LoginStepTypeWebAuthn:
+		nextStep, err = login.Process.(bridgev2.LoginProcessWebAuthn).SubmitWebAuthnResponse(login.Ctx, rawParams)
+	case "start":
+		if startParams == nil {
+			panic("Impossible state")
+		}
+		if paramable, ok := login.Process.(bridgev2.LoginProcessWithParams); ok {
+			nextStep, err = paramable.StartWithParams(login.Ctx, *startParams)
+		} else if overridable, ok := login.Process.(bridgev2.LoginProcessWithOverride); ok && startParams.Override != nil {
+			nextStep, err = overridable.StartWithOverride(login.Ctx, startParams.Override)
+		} else {
+			nextStep, err = login.Process.Start(login.Ctx)
+		}
 	default:
 		panic("Impossible state")
 	}
-	if err != nil {
-		prov.deleteLogin(login, true)
-		return nil, err
-	} else if nextStep == nil {
-		prov.deleteLogin(login, true)
-		return nil, ErrNilStep
+	if nextStep != nil {
+		switch nextStep.Type {
+		case bridgev2.LoginStepTypeUserInput, bridgev2.LoginStepTypeCookies, bridgev2.LoginStepTypeDisplayAndWait, bridgev2.LoginStepTypeComplete:
+			// ok
+		case bridgev2.LoginStepTypeWebAuthn:
+			if prov.br.Config.Provisioning.FailOnWebAuthn {
+				zerolog.Ctx(login.Ctx).Warn().Msg("Got WebAuthn step, failing login")
+				err = bridgev2.RespError{
+					ErrCode:    "COM.BEEPER.WEBAUTHN_UNSUPPORTED",
+					Err:        "Logging in with a passkey is not yet supported",
+					StatusCode: http.StatusBadRequest,
+				}
+			}
+		default:
+			err = fmt.Errorf("invalid response step type %q from login process", nextStep.Type)
+		}
 	}
-	login.PrevStep = login.NextStep
-	login.NextStep = nextStep
+	if err != nil {
+		prov.deleteLogin(login, true, err)
+		return
+	} else if nextStep == nil {
+		prov.deleteLogin(login, true, ErrNilStep)
+		return
+	}
+	nextStep.TxnID = LoginStepTxnIDPrefix + xid.New().String()
+	login.step.WithNonErroringLock(func(sm *stepManager) {
+		finishStep(sm, nextStep, login)
+	})
 	if nextStep.Type == bridgev2.LoginStepTypeComplete {
 		prov.handleCompleteStep(login, nextStep)
-	} else {
-		log.Debug().Any("next_step", nextStep).Msg("Returning next login step")
 	}
-	return nextStep, nil
+}
+
+func finishStep(sm *stepManager, nextStep *bridgev2.LoginStep, login *ProvLogin) {
+	sm.prev = sm.next
+	sm.next = nextStep
+	sm.started = false
+	if sm.wait != nil {
+		close(sm.wait)
+		sm.wait = nil
+	} else {
+		// This can happen if the login fails in the middle of a RoundTrip call
+		zerolog.Ctx(login.Ctx).Warn().Msg("Login step isn't waiting when submit returned")
+	}
 }
 
 func (prov *ProvisioningAPI) handleCompleteStep(login *ProvLogin, step *bridgev2.LoginStep) {
@@ -235,7 +378,7 @@ func (prov *ProvisioningAPI) handleCompleteStep(login *ProvLogin, step *bridgev2
 		Str("user_login_id", string(step.CompleteParams.UserLoginID)).
 		Msg("Login completed successfully")
 	defer login.CancelCtx()
-	prov.deleteLogin(login, false)
+	prov.deleteLogin(login, false, nil)
 	if login.Override == nil || login.Override.ID == step.CompleteParams.UserLoginID {
 		return
 	}
@@ -260,10 +403,19 @@ func (prov *ProvisioningAPI) handleLoginTimeout(login *ProvLogin) {
 	}
 }
 
-func (prov *ProvisioningAPI) deleteLogin(login *ProvLogin, cancel bool) {
+func (prov *ProvisioningAPI) deleteLogin(login *ProvLogin, cancel bool, err error) {
 	if cancel {
 		login.Process.Cancel()
 		login.CancelCtx()
+		login.step.WithNonErroringLock(func(sm *stepManager) {
+			if sm.err == nil {
+				sm.err = err
+			}
+			if sm.wait != nil {
+				close(sm.wait)
+				sm.wait = nil
+			}
+		})
 	}
 	prov.loginsLock.Lock()
 	delete(prov.logins, login.ID)

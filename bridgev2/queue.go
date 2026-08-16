@@ -241,6 +241,16 @@ func (br *Bridge) QueueRemoteEvent(login *UserLogin, evt RemoteEvent) EventHandl
 	var err error
 	if isUncertain && !br.Config.SplitPortals {
 		portal, err = br.GetExistingPortalByKey(ctx, key)
+		if err == nil && portal == nil {
+			fetcher, ok := evt.(RemoteEventWithUncertainPortalReceiverFetcher)
+			if ok {
+				newKey := fetcher.FetchCertainPortalKey(ctx)
+				if !newKey.IsEmpty() {
+					key = newKey
+					portal, err = br.GetPortalByKey(ctx, newKey)
+				}
+			}
+		}
 	} else {
 		portal, err = br.GetPortalByKey(ctx, key)
 	}

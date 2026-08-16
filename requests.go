@@ -24,6 +24,7 @@ const (
 	AuthTypeToken      AuthType = "m.login.token"
 	AuthTypeDummy      AuthType = "m.login.dummy"
 	AuthTypeAppservice AuthType = "m.login.application_service"
+	AuthTypeOAuth      AuthType = "m.oauth"
 
 	AuthTypeSynapseJWT AuthType = "org.matrix.login.jwt"
 

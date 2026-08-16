@@ -8,7 +8,9 @@ package bridgev2
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"regexp"
 	"strings"
 
@@ -28,8 +30,7 @@ type LoginProcess interface {
 	// Cancel stops the login process and cleans up any resources.
 	// No other methods will be called after cancel.
 	//
-	// Cancel will not be called if any other method returned an error:
-	// errors are always treated as fatal and the process is assumed to be automatically cancelled.
+	// Errors from other methods are always treated as fatal, but Cancel may still be called afterward.
 	Cancel()
 }
 
@@ -42,6 +43,17 @@ type LoginProcessWithOverride interface {
 	// The user login being overridden will still be logged out automatically
 	// in case the complete step returns a different login.
 	StartWithOverride(ctx context.Context, override *UserLogin) (*LoginStep, error)
+}
+
+type LoginStartParams struct {
+	Override *UserLogin
+	HTTP     http.RoundTripper
+}
+
+type LoginProcessWithParams interface {
+	LoginProcess
+	// StartWithParams is a replacement for both Start and StartWithOverride.
+	StartWithParams(ctx context.Context, params LoginStartParams) (*LoginStep, error)
 }
 
 type LoginProcessDisplayAndWait interface {
@@ -59,6 +71,11 @@ type LoginProcessCookies interface {
 	SubmitCookies(ctx context.Context, cookies map[string]string) (*LoginStep, error)
 }
 
+type LoginProcessWebAuthn interface {
+	LoginProcess
+	SubmitWebAuthnResponse(ctx context.Context, response json.RawMessage) (*LoginStep, error)
+}
+
 type LoginFlow struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
@@ -70,7 +87,9 @@ type LoginStepType string
 const (
 	LoginStepTypeUserInput      LoginStepType = "user_input"
 	LoginStepTypeCookies        LoginStepType = "cookies"
+	LoginStepTypeClientHTTP     LoginStepType = "client_http"
 	LoginStepTypeDisplayAndWait LoginStepType = "display_and_wait"
+	LoginStepTypeWebAuthn       LoginStepType = "webauthn"
 	LoginStepTypeComplete       LoginStepType = "complete"
 )
 
@@ -92,6 +111,9 @@ type LoginStep struct {
 	// For example, Telegram's QR scan followed by a 2-factor password
 	// might use the IDs `fi.mau.telegram.qr` and `fi.mau.telegram.2fa_password`.
 	StepID string `json:"step_id"`
+	// A unique ID for submitting the step. This is randomly generated for every step.
+	// It's used to allow safely retrying requests.
+	TxnID string `json:"txn_id"`
 	// Instructions contains human-readable instructions for completing the login step.
 	Instructions string `json:"instructions"`
 
@@ -99,8 +121,42 @@ type LoginStep struct {
 
 	DisplayAndWaitParams *LoginDisplayAndWaitParams `json:"display_and_wait,omitempty"`
 	CookiesParams        *LoginCookiesParams        `json:"cookies,omitempty"`
+	ClientHTTPParams     *LoginClientHTTPParams     `json:"client_http,omitempty"`
 	UserInputParams      *LoginUserInputParams      `json:"user_input,omitempty"`
+	WebAuthnParams       *LoginWebAuthnParams       `json:"webauthn,omitempty"`
 	CompleteParams       *LoginCompleteParams       `json:"complete,omitempty"`
+}
+
+type LoginClientHTTPParams struct {
+	RequestID string      `json:"request_id"`
+	Method    string      `json:"method"`
+	URL       string      `json:"url"`
+	Headers   http.Header `json:"headers,omitempty"`
+	Body      []byte      `json:"body,omitempty"`
+}
+
+type LoginClientHTTPResponse struct {
+	StatusCode int         `json:"status_code,omitempty"`
+	FinalURL   string      `json:"final_url,omitempty"`
+	Headers    http.Header `json:"headers,omitempty"`
+	Body       []byte      `json:"body,omitempty"`
+	Error      string      `json:"error,omitempty"`
+}
+
+func (lchr *LoginClientHTTPResponse) IsValid() bool {
+	if lchr.Error != "" {
+		return true
+	}
+	return lchr.StatusCode >= 100 && lchr.StatusCode <= 599
+}
+
+type LoginWebAuthnParams struct {
+	// The origin URL where the credential should be extracted from.
+	URL string `json:"url,omitempty"`
+
+	// Standard parameters for https://developer.mozilla.org/en-US/docs/Web/API/CredentialsContainer/get
+	// Only publicKey seems to be used in practice, so the other options aren't allowed yet.
+	PublicKey json.RawMessage `json:"publicKey,omitempty"`
 }
 
 type LoginDisplayAndWaitParams struct {
@@ -166,6 +222,9 @@ type LoginCookiesParams struct {
 	// even if this URL is not reached, but it should only automatically close the webview after
 	// both cookies and the URL match.
 	WaitForURLPattern string `json:"wait_for_url_pattern,omitempty"`
+	// If set, the client should load the URL and run ExtractJS in a webview that is not shown to the
+	// user.
+	Hidden bool `json:"hidden,omitempty"`
 }
 
 type LoginInputFieldType string

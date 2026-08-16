@@ -140,6 +140,8 @@ type Store interface {
 	PutCrossSigningKey(context.Context, id.UserID, id.CrossSigningUsage, id.Ed25519) error
 	// GetCrossSigningKeys retrieves a user's stored cross-signing keys.
 	GetCrossSigningKeys(context.Context, id.UserID) (map[id.CrossSigningUsage]id.CrossSigningKey, error)
+	// ResetMasterKeyTOFU marks a user's master key as trusted after it changes.
+	ResetMasterKeyTOFU(context.Context, id.UserID, id.Ed25519) error
 	// PutSignature stores a signature of a cross-signing or device key along with the signer's user ID and key.
 	PutSignature(ctx context.Context, signedUser id.UserID, signedKey id.Ed25519, signerUser id.UserID, signerKey id.Ed25519, signature string) error
 	// IsKeySignedBy returns whether a cross-signing or device key is signed by the given signer.
@@ -666,6 +668,24 @@ func (gs *MemoryStore) GetCrossSigningKeys(_ context.Context, userID id.UserID) 
 		return map[id.CrossSigningUsage]id.CrossSigningKey{}, nil
 	}
 	return keys, nil
+}
+
+func (gs *MemoryStore) ResetMasterKeyTOFU(_ context.Context, userID id.UserID, key id.Ed25519) error {
+	gs.lock.RLock()
+	defer gs.lock.RUnlock()
+	userKeys, ok := gs.CrossSigningKeys[userID]
+	if !ok {
+		return fmt.Errorf("no cross-signing keys for user %s", userID)
+	}
+	masterKey, ok := userKeys[id.XSUsageMaster]
+	if !ok {
+		return fmt.Errorf("no master key for user %s", userID)
+	} else if masterKey.Key != key {
+		return fmt.Errorf("master key mismatch for user %s", userID)
+	}
+	masterKey.First = key
+	userKeys[id.XSUsageMaster] = masterKey
+	return gs.save()
 }
 
 func (gs *MemoryStore) PutSignature(_ context.Context, signedUserID id.UserID, signedKey id.Ed25519, signerUserID id.UserID, signerKey id.Ed25519, signature string) error {

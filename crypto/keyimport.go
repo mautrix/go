@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"time"
 
+	"go.mau.fi/util/ptr"
+
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
 )
@@ -59,7 +61,7 @@ func decodeKeyExport(data []byte) ([]byte, error) {
 	return exportData[:n], nil
 }
 
-func decryptKeyExport(passphrase string, exportData []byte) ([]ExportedSession, error) {
+func decryptKeyExport(passphrase string, exportData []byte) ([]*ExportedSession, error) {
 	if exportData[0] != exportVersion1 {
 		return nil, ErrUnsupportedExportVersion
 	}
@@ -88,7 +90,7 @@ func decryptKeyExport(passphrase string, exportData []byte) ([]ExportedSession, 
 	cipher.NewCTR(block, iv).XORKeyStream(unencryptedData, encryptedData)
 
 	// Parse the decrypted JSON
-	var sessionsJSON []ExportedSession
+	var sessionsJSON []*ExportedSession
 	err := json.Unmarshal(unencryptedData, &sessionsJSON)
 	if err != nil {
 		return nil, fmt.Errorf("invalid export json: %w", err)
@@ -96,7 +98,7 @@ func decryptKeyExport(passphrase string, exportData []byte) ([]ExportedSession, 
 	return sessionsJSON, nil
 }
 
-func (mach *OlmMachine) importExportedRoomKey(ctx context.Context, session ExportedSession) (bool, error) {
+func (mach *OlmMachine) importExportedRoomKey(ctx context.Context, session *ExportedSession) (bool, error) {
 	if session.Algorithm != id.AlgorithmMegolmV1 {
 		return false, ErrInvalidExportedAlgorithm
 	}
@@ -112,24 +114,13 @@ func (mach *OlmMachine) importExportedRoomKey(ctx context.Context, session Expor
 		SigningKey:       session.SenderClaimedKeys.Ed25519,
 		SenderKey:        session.SenderKey,
 		RoomID:           session.RoomID,
-		ForwardingChains: session.ForwardingChains,
+		ForwardingChains: ptr.Val(session.ForwardingChains),
 		KeySource:        id.KeySourceImport,
 		ReceivedAt:       time.Now().UTC(),
+		SharedHistory:    session.SharedHistory,
 	}
-	existingIGS, _ := mach.CryptoStore.GetGroupSession(ctx, igs.RoomID, igs.ID())
-	firstKnownIndex := igs.Internal.FirstKnownIndex()
-	if existingIGS != nil && existingIGS.Internal.FirstKnownIndex() <= firstKnownIndex {
-		// We already have an equivalent or better session in the store, so don't override it,
-		// but do notify the session received callback just in case.
-		mach.MarkSessionReceived(ctx, session.RoomID, igs.ID(), existingIGS.Internal.FirstKnownIndex())
-		return false, nil
-	}
-	err = mach.CryptoStore.PutGroupSession(ctx, igs)
-	if err != nil {
-		return false, fmt.Errorf("failed to store imported session: %w", err)
-	}
-	mach.MarkSessionReceived(ctx, session.RoomID, igs.ID(), firstKnownIndex)
-	return true, nil
+	err = mach.StoreGroupSession(ctx, igs)
+	return err == nil, err
 }
 
 // ImportKeys imports data that was exported with the format specified in the Matrix spec.

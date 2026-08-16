@@ -102,10 +102,11 @@ func (content *EncryptedEventContent) MarshalJSON() ([]byte, error) {
 // RoomKeyEventContent represents the content of a m.room_key to_device event.
 // https://spec.matrix.org/v1.2/client-server-api/#mroom_key
 type RoomKeyEventContent struct {
-	Algorithm  id.Algorithm `json:"algorithm"`
-	RoomID     id.RoomID    `json:"room_id"`
-	SessionID  id.SessionID `json:"session_id"`
-	SessionKey string       `json:"session_key"`
+	Algorithm     id.Algorithm `json:"algorithm"`
+	RoomID        id.RoomID    `json:"room_id"`
+	SessionID     id.SessionID `json:"session_id"`
+	SessionKey    string       `json:"session_key"`
+	SharedHistory *bool        `json:"shared_history,omitempty"`
 
 	MaxAge      int64 `json:"com.beeper.max_age_ms,omitempty"`
 	MaxMessages int   `json:"com.beeper.max_messages,omitempty"`
@@ -119,6 +120,11 @@ type ForwardedRoomKeyEventContent struct {
 	SenderKey          id.SenderKey `json:"sender_key"`
 	SenderClaimedKey   id.Ed25519   `json:"sender_claimed_ed25519_key"`
 	ForwardingKeyChain []string     `json:"forwarding_curve25519_key_chain"`
+}
+
+type RoomKeyBundleEventContent struct {
+	File   EncryptedFileInfo `json:"file"`
+	RoomID id.RoomID         `json:"room_id"`
 }
 
 type KeyRequestAction string

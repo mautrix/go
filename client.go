@@ -31,6 +31,7 @@ import (
 	"maunium.net/go/mautrix/crypto/backup"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/oauth"
 	"maunium.net/go/mautrix/pushrules"
 )
 
@@ -92,6 +93,15 @@ type Client struct {
 	Verification   VerificationHelper
 	SpecVersions   *RespVersions
 	ExternalClient *http.Client // The HTTP client used for external (not matrix) media HTTP requests.
+
+	oauthMetadata     *oauth.ServerMetadata
+	oauthClientID     string
+	oauthMetadataLock sync.Mutex
+	refreshToken      string
+	accessTokenExpiry time.Time
+	longTokenLifetime bool
+	refreshLock       sync.RWMutex
+	SaveNewToken      func(ctx context.Context, refreshToken, accessToken string, expiry time.Time) error
 
 	Log zerolog.Logger
 
@@ -254,7 +264,34 @@ func (cli *Client) SyncWithContext(ctx context.Context) error {
 	lastSuccessfulSync := time.Now().Add(-cli.StreamSyncMinAge - 1*time.Hour)
 	// Always do first sync with 0 timeout
 	isFailing := true
+	onError := func(resSync *RespSync, err error) error {
+		isFailing = true
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		duration, err := cli.Syncer.OnFailedSync(resSync, err)
+		if err != nil {
+			return err
+		}
+		if duration <= 0 {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(duration):
+			return nil
+		}
+	}
 	for {
+		_, err = cli.refreshTokenIfNeeded(ctx, true)
+		if err != nil {
+			err = onError(nil, fmt.Errorf("%w in sync loop: %w", ErrFailedToRefreshToken, err))
+			if err != nil {
+				return err
+			}
+			continue
+		}
 		streamResp := false
 		if cli.StreamSyncMinAge > 0 && time.Since(lastSuccessfulSync) > cli.StreamSyncMinAge {
 			cli.Log.Debug().Msg("Last sync is old, will stream next response")
@@ -273,23 +310,11 @@ func (cli *Client) SyncWithContext(ctx context.Context) error {
 			StreamResponse: streamResp,
 		})
 		if err != nil {
-			isFailing = true
-			if ctx.Err() != nil {
-				return ctx.Err()
+			err = onError(resSync, err)
+			if err != nil {
+				return err
 			}
-			duration, err2 := cli.Syncer.OnFailedSync(resSync, err)
-			if err2 != nil {
-				return err2
-			}
-			if duration <= 0 {
-				continue
-			}
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(duration):
-				continue
-			}
+			continue
 		}
 		isFailing = false
 		lastSuccessfulSync = time.Now()
@@ -337,6 +362,7 @@ const (
 	LogRequestIDContextKey
 	MaxAttemptsContextKey
 	SyncTokenContextKey
+	oauthReqContextKey
 )
 
 func (cli *Client) RequestStart(req *http.Request) {
@@ -421,11 +447,11 @@ type FullRequest struct {
 	Method            string
 	URL               string
 	Headers           http.Header
-	RequestJSON       interface{}
+	RequestJSON       any
 	RequestBytes      []byte
 	RequestBody       io.Reader
 	RequestLength     int64
-	ResponseJSON      interface{}
+	ResponseJSON      any
 	MaxAttempts       int
 	BackoffDuration   time.Duration
 	SensitiveContent  bool
@@ -470,7 +496,11 @@ func (params *FullRequest) compileRequest(ctx context.Context) (*http.Request, e
 		reqBody = bytes.NewReader(jsonStr)
 		reqLen = int64(len(jsonStr))
 	} else if params.RequestBytes != nil {
-		logBody = fmt.Sprintf("<%d bytes>", len(params.RequestBytes))
+		if params.Headers.Get("Content-Type") == "application/x-www-form-urlencoded" && len(params.RequestBytes) < 4196 {
+			logBody = string(params.RequestBytes)
+		} else {
+			logBody = fmt.Sprintf("<%d bytes>", len(params.RequestBytes))
+		}
 		reqBody = bytes.NewReader(params.RequestBytes)
 		reqLen = int64(len(params.RequestBytes))
 	} else if params.RequestBody != nil {
@@ -557,9 +587,6 @@ func (cli *Client) MakeFullRequestWithResp(ctx context.Context, params FullReque
 	if cli.UserAgent != "" {
 		req.Header.Set("User-Agent", cli.UserAgent)
 	}
-	if len(cli.AccessToken) > 0 {
-		req.Header.Set("Authorization", "Bearer "+cli.AccessToken)
-	}
 	if params.ResponseSizeLimit == 0 {
 		params.ResponseSizeLimit = cli.ResponseSizeLimit
 	}
@@ -570,6 +597,7 @@ func (cli *Client) MakeFullRequestWithResp(ctx context.Context, params FullReque
 		params.Client = cli.Client
 	}
 	return cli.executeCompiledRequest(
+		ctx,
 		req,
 		params.MaxAttempts-1,
 		params.BackoffDuration,
@@ -590,6 +618,7 @@ func (cli *Client) cliOrContextLog(ctx context.Context) *zerolog.Logger {
 }
 
 func (cli *Client) doRetry(
+	origCtx context.Context,
 	req *http.Request,
 	cause error,
 	retries int,
@@ -640,7 +669,7 @@ func (cli *Client) doRetry(
 			return nil, nil, req.Context().Err()
 		}
 	}
-	return cli.executeCompiledRequest(req, retries-1, backoff*2, responseJSON, handler, dontReadResponse, sizeLimit, client)
+	return cli.executeCompiledRequest(origCtx, req, retries-1, backoff*2, responseJSON, handler, dontReadResponse, sizeLimit, client)
 }
 
 func readResponseBody(req *http.Request, res *http.Response, limit int64) ([]byte, error) {
@@ -694,7 +723,7 @@ func streamResponse(req *http.Request, res *http.Response, responseJSON any, lim
 	} else if _, err = file.Seek(0, 0); err != nil {
 		return nil, fmt.Errorf("failed to seek to beginning of response file: %w", err)
 	} else if err = json.NewDecoder(file).Decode(responseJSON); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response body: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal response body to file: %w", err)
 	} else {
 		return nil, nil
 	}
@@ -737,7 +766,11 @@ func ParseErrorResponse(req *http.Request, res *http.Response) ([]byte, error) {
 	respErr := &RespError{
 		StatusCode: res.StatusCode,
 	}
-	if _ = json.Unmarshal(contents, respErr); respErr.ErrCode == "" {
+	_ = json.Unmarshal(contents, respErr)
+	if req.Context().Value(oauthReqContextKey) != nil {
+		respErr.mutateOAuthError()
+	}
+	if respErr.ErrCode == "" {
 		respErr = nil
 	}
 
@@ -748,10 +781,22 @@ func ParseErrorResponse(req *http.Request, res *http.Response) ([]byte, error) {
 	}
 }
 
-func (cli *Client) prepareRequestAttempt(req *http.Request) (*http.Request, func()) {
+func (cli *Client) prepareRequestAttempt(origCtx context.Context, req *http.Request) (*http.Request, func(), string, error) {
+	var token string
+	if origCtx.Value(oauthReqContextKey) == nil {
+		var err error
+		token, err = cli.refreshTokenIfNeeded(origCtx, false)
+		if err != nil {
+			return nil, nil, "", fmt.Errorf("%w: %w", ErrFailedToRefreshToken, err)
+		}
+		if len(token) > 0 {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+	}
+
 	// if there's no retry trigger, nothing to do
 	if cli.RequestRetryTrigger == nil {
-		return req, nil
+		return req, nil, "", nil
 	}
 
 	attemptCtx, cancel := context.WithCancelCause(req.Context())
@@ -770,7 +815,7 @@ func (cli *Client) prepareRequestAttempt(req *http.Request) (*http.Request, func
 
 	return req.WithContext(attemptCtx), sync.OnceFunc(func() {
 		cancel(context.Canceled)
-	})
+	}), token, nil
 }
 
 type cleanupReadCloser struct {
@@ -820,6 +865,7 @@ func maybeWrapRespBody(rc io.ReadCloser, cleanup func()) io.ReadCloser {
 }
 
 func (cli *Client) executeCompiledRequest(
+	origCtx context.Context,
 	req *http.Request,
 	retries int,
 	backoff time.Duration,
@@ -829,7 +875,10 @@ func (cli *Client) executeCompiledRequest(
 	sizeLimit int64,
 	client *http.Client,
 ) ([]byte, *http.Response, error) {
-	attemptReq, cleanup := cli.prepareRequestAttempt(req)
+	attemptReq, cleanup, token, err := cli.prepareRequestAttempt(origCtx, req)
+	if err != nil {
+		return nil, nil, err
+	}
 	cli.RequestStart(attemptReq)
 	startTime := time.Now()
 	res, err := client.Do(attemptReq)
@@ -857,7 +906,7 @@ func (cli *Client) executeCompiledRequest(
 			errors.Is(attemptCause, ErrContextCancelRetry)
 		if retries > 0 && canRetry {
 			return cli.doRetry(
-				req, retryCause, retries, backoff, responseJSON, handler, dontReadResponse, sizeLimit, client,
+				origCtx, req, retryCause, retries, backoff, responseJSON, handler, dontReadResponse, sizeLimit, client,
 			)
 		}
 		err = HTTPError{
@@ -871,16 +920,19 @@ func (cli *Client) executeCompiledRequest(
 		return nil, res, err
 	}
 
+	var body []byte
 	if retries > 0 && retryafter.Should(res.StatusCode, !cli.IgnoreRateLimit) {
 		backoff = retryafter.Parse(res.Header.Get("Retry-After"), backoff)
 		return cli.doRetry(
-			req, fmt.Errorf("HTTP %d", res.StatusCode), retries, backoff, responseJSON, handler, dontReadResponse, sizeLimit, client,
+			origCtx, req, fmt.Errorf("HTTP %d", res.StatusCode), retries, backoff, responseJSON, handler, dontReadResponse, sizeLimit, client,
 		)
-	}
-
-	var body []byte
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
+	} else if res.StatusCode < 200 || res.StatusCode >= 300 {
 		body, err = ParseErrorResponse(attemptReq, res)
+		if errors.Is(err, MUnknownToken) && cli.shouldRetryWithRefreshedToken(origCtx, token) {
+			return cli.doRetry(
+				origCtx, req, err, retries, backoff, responseJSON, handler, dontReadResponse, sizeLimit, client,
+			)
+		}
 		cli.LogRequestDone(attemptReq, res, nil, nil, len(body), duration)
 	} else {
 		body, err = handler(attemptReq, res, responseJSON, sizeLimit)
@@ -1960,16 +2012,24 @@ func (cli *Client) UploadLink(ctx context.Context, link string) (*RespMediaUploa
 	return cli.Upload(ctx, res.Body, res.Header.Get("Content-Type"), res.ContentLength)
 }
 
-func (cli *Client) Download(ctx context.Context, mxcURL id.ContentURI) (*http.Response, error) {
+type DownloadExtra struct {
+	Query map[string]string
+}
+
+func (cli *Client) DownloadWithParams(ctx context.Context, mxcURL id.ContentURI, params DownloadExtra) (*http.Response, error) {
 	if mxcURL.IsEmpty() {
 		return nil, fmt.Errorf("empty mxc uri provided to Download")
 	}
 	_, resp, err := cli.MakeFullRequestWithResp(ctx, FullRequest{
 		Method:           http.MethodGet,
-		URL:              cli.BuildClientURL("v1", "media", "download", mxcURL.Homeserver, mxcURL.FileID),
+		URL:              cli.BuildURLWithQuery(ClientURLPath{"v1", "media", "download", mxcURL.Homeserver, mxcURL.FileID}, params.Query),
 		DontReadResponse: true,
 	})
 	return resp, err
+}
+
+func (cli *Client) Download(ctx context.Context, mxcURL id.ContentURI) (*http.Response, error) {
+	return cli.DownloadWithParams(ctx, mxcURL, DownloadExtra{})
 }
 
 type DownloadThumbnailExtra struct {
@@ -2529,6 +2589,19 @@ func (cli *Client) SetTags(ctx context.Context, roomID id.RoomID, tags event.Tag
 // See https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3voipturnserver
 func (cli *Client) TurnServer(ctx context.Context) (resp *RespTurnServer, err error) {
 	urlPath := cli.BuildClientURL("v3", "voip", "turnServer")
+	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	return
+}
+
+func (cli *Client) RTCTransports(ctx context.Context) (resp *RespRTCTransports, err error) {
+	var urlPath string
+	if cli.SpecVersions.Supports(FeatureUnstableMatrixRTC) {
+		urlPath = cli.BuildClientURL("unstable", "org.matrix.msc4143", "rtc", "transports")
+	} else if cli.SpecVersions.Supports(FeatureStableMatrixRTC) {
+		urlPath = cli.BuildClientURL("v1", "rtc", "transports")
+	} else {
+		return nil, fmt.Errorf("server does not advertise MatrixRTC support")
+	}
 	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
 	return
 }

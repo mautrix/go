@@ -14,16 +14,15 @@ import (
 	"go.mau.fi/util/dbutil"
 )
 
-var Table dbutil.UpgradeTable
-
 const VersionTableName = "crypto_version"
 
 //go:embed *.sql
 var fs embed.FS
 
-func init() {
-	Table.Register(-1, 3, 0, "Unsupported version", dbutil.TxnModeOff, func(ctx context.Context, database *dbutil.Database) error {
+var Table = dbutil.BuildUpgradeTable().
+	WithFS(fs).
+	WithRaw(-1, 3, 0, "Unsupported version", dbutil.TxnModeOff, func(ctx context.Context, database *dbutil.Database) error {
 		return fmt.Errorf("upgrading from versions 1 and 2 of the crypto store is no longer supported in mautrix-go v0.12+")
-	})
-	Table.RegisterFS(fs)
-}
+	}).
+	With(upgradeV20).
+	Finish()

@@ -120,10 +120,10 @@ func (et *Type) GuessClass() TypeClass {
 		return EphemeralEventType
 	case AccountDataDirectChats.Type, AccountDataPushRules.Type, AccountDataRoomTags.Type,
 		AccountDataFullyRead.Type, AccountDataIgnoredUserList.Type, AccountDataMarkedUnread.Type,
+		AccountDataPerMessageProfiles.Type, AccountDataBeeperMute.Type, AccountDataSpaceOrder.Type,
 		AccountDataSecretStorageKey.Type, AccountDataSecretStorageDefaultKey.Type,
 		AccountDataCrossSigningMaster.Type, AccountDataCrossSigningSelf.Type, AccountDataCrossSigningUser.Type,
-		AccountDataFullyRead.Type, AccountDataMegolmBackupKey.Type, AccountDataImagePackRooms.Type,
-		AccountDataUnstableImagePackRooms.Type:
+		AccountDataMegolmBackupKey.Type, AccountDataImagePackRooms.Type, AccountDataUnstableImagePackRooms.Type:
 		return AccountDataEventType
 	case EventRedaction.Type, EventMessage.Type, EventEncrypted.Type, EventReaction.Type, EventSticker.Type,
 		InRoomVerificationStart.Type, InRoomVerificationReady.Type, InRoomVerificationAccept.Type,
@@ -262,14 +262,15 @@ var (
 
 // Account data events
 var (
-	AccountDataDirectChats     = Type{"m.direct", AccountDataEventType}
-	AccountDataPushRules       = Type{"m.push_rules", AccountDataEventType}
-	AccountDataRoomTags        = Type{"m.tag", AccountDataEventType}
-	AccountDataFullyRead       = Type{"m.fully_read", AccountDataEventType}
-	AccountDataIgnoredUserList = Type{"m.ignored_user_list", AccountDataEventType}
-	AccountDataMarkedUnread    = Type{"m.marked_unread", AccountDataEventType}
-	AccountDataBeeperMute      = Type{"com.beeper.mute", AccountDataEventType}
-	AccountDataSpaceOrder      = Type{"org.matrix.msc3230.space_order", AccountDataEventType}
+	AccountDataDirectChats        = Type{"m.direct", AccountDataEventType}
+	AccountDataPushRules          = Type{"m.push_rules", AccountDataEventType}
+	AccountDataRoomTags           = Type{"m.tag", AccountDataEventType}
+	AccountDataFullyRead          = Type{"m.fully_read", AccountDataEventType}
+	AccountDataIgnoredUserList    = Type{"m.ignored_user_list", AccountDataEventType}
+	AccountDataMarkedUnread       = Type{"m.marked_unread", AccountDataEventType}
+	AccountDataBeeperMute         = Type{"com.beeper.mute", AccountDataEventType}
+	AccountDataSpaceOrder         = Type{"org.matrix.msc3230.space_order", AccountDataEventType}
+	AccountDataPerMessageProfiles = Type{"fi.mau.msc4461.per_message_profiles.v3", AccountDataEventType}
 
 	AccountDataImagePackRooms         = Type{"m.image_pack.rooms", AccountDataEventType}
 	AccountDataUnstableImagePackRooms = Type{"im.ponies.emote_rooms", AccountDataEventType}
@@ -287,6 +288,7 @@ var (
 	ToDeviceRoomKey          = Type{"m.room_key", ToDeviceEventType}
 	ToDeviceRoomKeyRequest   = Type{"m.room_key_request", ToDeviceEventType}
 	ToDeviceForwardedRoomKey = Type{"m.forwarded_room_key", ToDeviceEventType}
+	ToDeviceRoomKeyBundle    = Type{"m.room_key_bundle", ToDeviceEventType}
 	ToDeviceEncrypted        = Type{"m.room.encrypted", ToDeviceEventType}
 	ToDeviceRoomKeyWithheld  = Type{"m.room_key.withheld", ToDeviceEventType}
 	ToDeviceSecretRequest    = Type{"m.secret.request", ToDeviceEventType}

@@ -20,6 +20,9 @@ type Signing struct {
 
 // NewSigningFromSeed constructs a new Signing based on a seed.
 func NewSigningFromSeed(seed []byte) (*Signing, error) {
+	if len(seed) != 32 {
+		return nil, fmt.Errorf("invalid signing key seed length %d", len(seed))
+	}
 	s := &Signing{}
 	s.seed = seed
 	s.keyPair = crypto.Ed25519GenerateFromSeed(seed)

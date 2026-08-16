@@ -381,7 +381,7 @@ func (portal *Portal) compileBatchMessage(ctx context.Context, source *UserLogin
 		return
 	}
 	replyTo, threadRoot, prevThreadEvent := portal.getRelationMeta(
-		ctx, msg.ID, msg.ConvertedMessage, true,
+		ctx, source, msg.ID, msg.ConvertedMessage, true,
 	)
 	if threadRoot != nil && out.PrevThreadEvents[*msg.ThreadRoot] != "" {
 		prevThreadEvent.MXID = out.PrevThreadEvents[*msg.ThreadRoot]
@@ -589,7 +589,7 @@ func (portal *Portal) sendLegacyBackfill(ctx context.Context, source *UserLogin,
 		if !ok {
 			continue
 		}
-		dbMessages, res := portal.sendConvertedMessage(ctx, msg.ID, intent, msg.Sender.Sender, msg.ConvertedMessage, msg.Timestamp, msg.StreamOrder, func(z *zerolog.Event) *zerolog.Event {
+		dbMessages, res := portal.sendConvertedMessage(ctx, source, msg.ID, intent, msg.Sender.Sender, msg.ConvertedMessage, msg.Timestamp, msg.StreamOrder, func(z *zerolog.Event) *zerolog.Event {
 			return z.
 				Str("message_id", string(msg.ID)).
 				Any("sender_id", msg.Sender).

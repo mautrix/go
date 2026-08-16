@@ -32,6 +32,7 @@ import (
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/bridgev2/status"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -352,6 +353,9 @@ func (br *Bridge) GetExistingPortalByKey(ctx context.Context, key networkid.Port
 
 func (portal *Portal) queueEvent(ctx context.Context, evt portalEvent) EventHandlingResult {
 	if portal.backgroundCtx.Err() != nil {
+		if portal.Bridge.BackgroundCtx.Err() != nil {
+			return EventHandlingResultFailed.WithError(fmt.Errorf("bridge shutting down: %w", portal.Bridge.BackgroundCtx.Err()))
+		}
 		return EventHandlingResultIgnored
 	}
 	if PortalEventBuffer == 0 {
@@ -421,7 +425,9 @@ func (portal *Portal) handleSingleEventWithDelayLogging(idx int, rawEvt any) (ou
 	// Note: this will assume success if the handler times out
 	outerRes = EventHandlingResult{Queued: true, Success: true, Error: ErrHandlerBackgrounded}
 	go portal.handleSingleEvent(ctx, rawEvt, func(res EventHandlingResult) {
-		if res.Error != nil && portal.backgroundCtx.Err() != nil {
+		// If the portal was deleted, ignore errors.
+		// The bridge background ctx check distinguishes bridge stops from portal deletions.
+		if res.Error != nil && portal.backgroundCtx.Err() != nil && portal.Bridge.BackgroundCtx.Err() == nil {
 			res = EventHandlingResultIgnored
 		}
 		outerRes = res
@@ -437,7 +443,7 @@ func (portal *Portal) handleSingleEventWithDelayLogging(idx int, rawEvt any) (ou
 	tick := time.NewTicker(30 * time.Second)
 	_, isCreate := rawEvt.(*portalCreateEvent)
 	defer tick.Stop()
-	for i := 0; i < EventHandlingTimeoutTicks; i++ {
+	for i := 0; i < EventHandlingTimeoutTicks || isCreate; i++ {
 		select {
 		case <-doneCh:
 			if i > 0 {
@@ -451,10 +457,6 @@ func (portal *Portal) handleSingleEventWithDelayLogging(idx int, rawEvt any) (ou
 			log.Warn().
 				Time("started_at", start).
 				Msg("Event handling is taking long")
-			if isCreate {
-				// Never background portal creation events
-				i = 1
-			}
 		}
 	}
 	backgrounded.Store(true)
@@ -560,8 +562,9 @@ func (portal *Portal) handleSingleEvent(ctx context.Context, rawEvt any, doneCal
 				logEvt = logEvt.Any(zerolog.ErrorFieldName, err)
 				errorString = fmt.Sprintf("%v", err)
 			}
+			stack := debug.Stack()
 			logEvt.
-				Bytes("stack", debug.Stack()).
+				Bytes("stack", stack).
 				Msg("Event handling panicked")
 			switch evt := rawEvt.(type) {
 			case *portalMatrixEvent:
@@ -572,7 +575,9 @@ func (portal *Portal) handleSingleEvent(ctx context.Context, rawEvt any, doneCal
 				evt.cb(fmt.Errorf("portal creation panicked"))
 			}
 			portal.Bridge.TrackAnalytics("", "Bridge Event Handler Panic", map[string]any{
-				"error": errorString,
+				"error":        errorString,
+				"stack":        string(stack),
+				"handler_type": fmt.Sprintf("%T", rawEvt),
 			})
 		}
 	}()
@@ -586,6 +591,9 @@ func (portal *Portal) handleSingleEvent(ctx context.Context, rawEvt any, doneCal
 			}
 		}
 		res = portal.handleMatrixEvent(ctx, evt.sender, evt.evt, isStateRequest)
+		if portal.backgroundCtx.Err() != nil {
+			return
+		}
 		if res.SendMSS {
 			if res.Error != nil {
 				portal.sendErrorStatus(ctx, evt.evt, res.Error)
@@ -654,12 +662,12 @@ func (portal *Portal) FindPreferredLogin(ctx context.Context, user *User, allowR
 		if login == nil {
 			return nil, nil, fmt.Errorf("%w (receiver login is nil)", ErrNotLoggedIn)
 		} else if !login.Client.IsLoggedIn() {
-			return nil, nil, fmt.Errorf("%w (receiver login is not logged in)", ErrNotLoggedIn)
+			return login, nil, fmt.Errorf("%w (receiver login is not logged in)", ErrNotLoggedIn)
 		} else if login.UserMXID != user.MXID {
 			if allowRelay && portal.Relay != nil {
 				return nil, nil, nil
 			}
-			return nil, nil, fmt.Errorf("%w (relay not set and receiver login is owned by %s, not %s)", ErrNotLoggedIn, login.UserMXID, user.MXID)
+			return login, nil, fmt.Errorf("%w (relay not set and receiver login is owned by %s, not %s)", ErrNotLoggedIn, login.UserMXID, user.MXID)
 		}
 		up, err := portal.Bridge.DB.UserPortal.Get(ctx, login.UserLogin, portal.PortalKey)
 		return login, up, err
@@ -699,7 +707,7 @@ func (portal *Portal) FindPreferredLogin(ctx context.Context, user *User, allowR
 			Msg("No usable user portal rows found, returning random login")
 		return firstLogin, nil, nil
 	} else {
-		return nil, nil, fmt.Errorf("%w (no usable logins found)", ErrNotLoggedIn)
+		return firstLogin, nil, fmt.Errorf("%w (no usable logins found)", ErrNotLoggedIn)
 	}
 }
 
@@ -768,8 +776,14 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 		log.Err(err).Msg("Failed to get user login to handle Matrix event")
 		if errors.Is(err, ErrNotLoggedIn) {
 			shouldSendNotice := evt.Type == event.EventMessage && evt.Content.AsMessage().MsgType != event.MsgNotice
+			msg := fmt.Sprintf("You're %s", err)
+			if login != nil && login.UserMXID == sender.MXID {
+				if prevState := login.BridgeState.GetPrev(); prevState.StateEvent == status.StateBadCredentials && prevState.Message != "" {
+					msg = prevState.Message
+				}
+			}
 			return EventHandlingResultFailed.WithMSSError(WrapErrorInStatus(err).
-				WithMessage(fmt.Sprintf("You're %s", err)).
+				WithMessage(msg).
 				WithIsCertain(true).
 				WithSendNotice(shouldSendNotice))
 		} else {
@@ -785,8 +799,9 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 		}
 		login = portal.Relay
 		origSender = &OrigSender{
-			User:   sender,
-			UserID: sender.MXID,
+			User:          sender,
+			UserID:        sender.MXID,
+			Distinguisher: portal.Bridge.Config.Relay.GetUserDistinguisher(sender.MXID),
 		}
 		log.UpdateContext(func(c zerolog.Context) zerolog.Context {
 			return c.Bool("is_relay", true)
@@ -1462,6 +1477,11 @@ func (portal *Portal) pendingMessageTimeoutLoop(ctx context.Context, cfg *Outgoi
 }
 
 func (portal *Portal) checkPendingMessages(ctx context.Context, cfg *OutgoingTimeoutConfig) {
+	if login := portal.Bridge.GetCachedUserLoginByID(portal.Receiver); login != nil {
+		if suppressor, ok := login.Client.(OutgoingTimeoutSuppressingNetworkAPI); ok && suppressor.SuppressOutgoingTimeouts() {
+			return
+		}
+	}
 	portal.outgoingMessagesLock.Lock()
 	defer portal.outgoingMessagesLock.Unlock()
 	for _, msg := range portal.outgoingMessages {
@@ -2745,6 +2765,7 @@ func (portal *Portal) GetIntentFor(ctx context.Context, sender EventSender, sour
 
 func (portal *Portal) getRelationMeta(
 	ctx context.Context,
+	source *UserLogin,
 	currentMsgID networkid.MessageID,
 	currentMsg *ConvertedMessage,
 	isBatchSend bool,
@@ -2752,13 +2773,20 @@ func (portal *Portal) getRelationMeta(
 	log := zerolog.Ctx(ctx)
 	var err error
 	if currentMsg.ReplyTo != nil {
-		replyTo, err = portal.Bridge.DB.Message.GetFirstOrSpecificPartByID(ctx, portal.Receiver, *currentMsg.ReplyTo)
+		replyTo, err = getTargetMessageWithAltID[database.Message](ctx, source, currentMsg.ReplyTo.MessageID, nil, func(targetMsg networkid.MessageID) (*database.Message, error) {
+			return portal.Bridge.DB.Message.GetFirstOrSpecificPartByID(ctx, portal.Receiver, networkid.MessageOptionalPartID{
+				MessageID: targetMsg,
+				PartID:    currentMsg.ReplyTo.PartID,
+			})
+		})
 		if err != nil {
 			log.Err(err).Msg("Failed to get reply target message from database")
 		} else if replyTo == nil {
 			if isBatchSend || portal.Bridge.Config.OutgoingMessageReID {
 				// This is somewhat evil
 				replyTo = &database.Message{
+					ID:       currentMsg.ReplyTo.MessageID,
+					PartID:   ptr.Val(currentMsg.ReplyTo.PartID),
 					MXID:     portal.Bridge.Matrix.GenerateDeterministicEventID(portal.MXID, portal.PortalKey, currentMsg.ReplyTo.MessageID, ptr.Val(currentMsg.ReplyTo.PartID)),
 					Room:     currentMsg.ReplyToRoom,
 					SenderID: currentMsg.ReplyToUser,
@@ -2841,6 +2869,7 @@ func (portal *Portal) applyRelationMeta(ctx context.Context, content *event.Mess
 
 func (portal *Portal) sendConvertedMessage(
 	ctx context.Context,
+	source *UserLogin,
 	id networkid.MessageID,
 	intent MatrixAPI,
 	senderID networkid.UserID,
@@ -2856,7 +2885,7 @@ func (portal *Portal) sendConvertedMessage(
 	}
 	log := zerolog.Ctx(ctx)
 	replyTo, threadRoot, prevThreadEvent := portal.getRelationMeta(
-		ctx, id, converted, false,
+		ctx, source, id, converted, false,
 	)
 	output := make([]*database.Message, 0, len(converted.Parts))
 	var errorList []error
@@ -3074,7 +3103,7 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 			return EventHandlingResultFailed.WithError(err)
 		}
 	}
-	_, res = portal.sendConvertedMessage(ctx, evt.GetID(), intent, evt.GetSender().Sender, converted, ts, getStreamOrder(evt), nil)
+	_, res = portal.sendConvertedMessage(ctx, source, evt.GetID(), intent, evt.GetSender().Sender, converted, ts, getStreamOrder(evt), nil)
 	if portal.currentlyTypingGhosts.Pop(intent.GetMXID()) {
 		err = intent.MarkTyping(ctx, portal.MXID, TypingTypeText, 0)
 		if err != nil {
@@ -3111,9 +3140,8 @@ func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, e
 		existing = bundledEvt.GetTargetDBMessage()
 	}
 	if existing == nil {
-		targetID := evt.GetTargetMessage()
 		var err error
-		existing, err = portal.Bridge.DB.Message.GetAllPartsByID(ctx, portal.Receiver, targetID)
+		existing, err = portal.getAllTargetMessageParts(ctx, source, evt)
 		if err != nil {
 			log.Err(err).Msg("Failed to get edit target message")
 			return EventHandlingResultFailed.WithError(err)
@@ -3123,15 +3151,29 @@ func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, e
 		log.Warn().Msg("Edit target message not found")
 		return EventHandlingResultIgnored
 	}
-	intent, ok := portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventEdit)
-	if !ok {
-		return EventHandlingResultFailed.WithError(ErrFailedToGetIntent)
-	} else if intent.GetMXID() != existing[0].SenderMXID {
-		log.Warn().
-			Stringer("edit_sender_mxid", intent.GetMXID()).
-			Stringer("original_sender_mxid", existing[0].SenderMXID).
-			Msg("Not bridging edit: sender doesn't match original message sender")
-		return EventHandlingResultIgnored
+	var intent MatrixAPI
+	if evt.GetSender().ForceEditOrigSender {
+		var err error
+		intent, err = portal.getIntentForMXID(ctx, existing[0].SenderMXID)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to get intent for edit message sender")
+			return EventHandlingResultFailed.WithError(ErrFailedToGetIntent)
+		} else if intent == nil {
+			zerolog.Ctx(ctx).Debug().Msg("Intent not found for edit message")
+			return EventHandlingResultFailed.WithError(ErrFailedToGetIntent)
+		}
+	} else {
+		var ok bool
+		intent, ok = portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventEdit)
+		if !ok {
+			return EventHandlingResultFailed.WithError(ErrFailedToGetIntent)
+		} else if intent.GetMXID() != existing[0].SenderMXID {
+			log.Warn().
+				Stringer("edit_sender_mxid", intent.GetMXID()).
+				Stringer("original_sender_mxid", existing[0].SenderMXID).
+				Msg("Not bridging edit: sender doesn't match original message sender")
+			return EventHandlingResultIgnored
+		}
 	}
 	ts := getEventTS(evt)
 	converted, err := evt.ConvertEdit(ctx, portal, intent, existing)
@@ -3143,7 +3185,7 @@ func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, e
 		portal.sendRemoteErrorNotice(ctx, intent, err, ts, "edit")
 		return EventHandlingResultFailed.WithError(err)
 	}
-	res := portal.sendConvertedEdit(ctx, existing[0].ID, evt.GetSender().Sender, converted, intent, ts, getStreamOrder(evt))
+	res := portal.sendConvertedEdit(ctx, source, existing[0].ID, evt.GetSender().Sender, converted, intent, ts, getStreamOrder(evt))
 	if portal.currentlyTypingGhosts.Pop(intent.GetMXID()) {
 		err = intent.MarkTyping(ctx, portal.MXID, TypingTypeText, 0)
 		if err != nil {
@@ -3155,6 +3197,7 @@ func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, e
 
 func (portal *Portal) sendConvertedEdit(
 	ctx context.Context,
+	source *UserLogin,
 	targetID networkid.MessageID,
 	senderID networkid.UserID,
 	converted *ConvertedEdit,
@@ -3243,7 +3286,7 @@ func (portal *Portal) sendConvertedEdit(
 		}
 	}
 	if converted.AddedParts != nil {
-		_, res := portal.sendConvertedMessage(ctx, targetID, intent, senderID, converted.AddedParts, ts, streamOrder, nil)
+		_, res := portal.sendConvertedMessage(ctx, source, targetID, intent, senderID, converted.AddedParts, ts, streamOrder, nil)
 		if !res.Success {
 			errorList = append(errorList, res.Error)
 		}
@@ -3254,20 +3297,62 @@ func (portal *Portal) sendConvertedEdit(
 	return EventHandlingResultSuccess
 }
 
-func (portal *Portal) getTargetMessagePart(ctx context.Context, evt RemoteEventWithTargetMessage) (*database.Message, error) {
-	if partTargeter, ok := evt.(RemoteEventWithTargetPart); ok {
-		return portal.Bridge.DB.Message.GetPartByID(ctx, portal.Receiver, evt.GetTargetMessage(), partTargeter.GetTargetMessagePart())
-	} else {
-		return portal.Bridge.DB.Message.GetFirstPartByID(ctx, portal.Receiver, evt.GetTargetMessage())
+func getTargetMessageWithAltID[V any, T *V | []*V](
+	ctx context.Context,
+	source *UserLogin,
+	targetMsg networkid.MessageID,
+	evt RemoteEventWithTargetMessage,
+	getter func(targetMsg networkid.MessageID) (T, error),
+) (T, error) {
+	if targetMsg == "" {
+		targetMsg = evt.GetTargetMessage()
 	}
+	res, err := getter(targetMsg)
+	if err != nil || res != nil {
+		return res, err
+	}
+	af, ok := source.Client.(AltTargetFindingNetworkAPI)
+	if !ok {
+		return nil, nil
+	}
+	alts, err := af.FindAltTargetMessage(ctx, targetMsg, evt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get alt target message IDs: %w", err)
+	}
+	for _, alt := range alts {
+		res, err = getter(alt)
+		if err != nil {
+			return nil, err
+		} else if res != nil {
+			zerolog.Ctx(ctx).Debug().Str("alt_target_message_id", string(alt)).Msg("Found target message with alternate ID")
+			return res, nil
+		}
+	}
+	return nil, nil
 }
 
-func (portal *Portal) getTargetReaction(ctx context.Context, evt RemoteReactionRemove) (*database.Reaction, error) {
-	if partTargeter, ok := evt.(RemoteEventWithTargetPart); ok {
-		return portal.Bridge.DB.Reaction.GetByID(ctx, portal.Receiver, evt.GetTargetMessage(), partTargeter.GetTargetMessagePart(), evt.GetSender().Sender, evt.GetRemovedEmojiID())
-	} else {
-		return portal.Bridge.DB.Reaction.GetByIDWithoutMessagePart(ctx, portal.Receiver, evt.GetTargetMessage(), evt.GetSender().Sender, evt.GetRemovedEmojiID())
-	}
+func (portal *Portal) getTargetMessagePart(ctx context.Context, source *UserLogin, evt RemoteEventWithTargetMessage) (*database.Message, error) {
+	return getTargetMessageWithAltID[database.Message](ctx, source, "", evt, func(targetMsg networkid.MessageID) (*database.Message, error) {
+		if partTargeter, ok := evt.(RemoteEventWithTargetPart); ok {
+			return portal.Bridge.DB.Message.GetPartByID(ctx, portal.Receiver, targetMsg, partTargeter.GetTargetMessagePart())
+		}
+		return portal.Bridge.DB.Message.GetFirstPartByID(ctx, portal.Receiver, targetMsg)
+	})
+}
+
+func (portal *Portal) getAllTargetMessageParts(ctx context.Context, source *UserLogin, evt RemoteEventWithTargetMessage) ([]*database.Message, error) {
+	return getTargetMessageWithAltID[database.Message](ctx, source, "", evt, func(targetMsg networkid.MessageID) ([]*database.Message, error) {
+		return portal.Bridge.DB.Message.GetAllPartsByID(ctx, portal.Receiver, targetMsg)
+	})
+}
+
+func (portal *Portal) getTargetReaction(ctx context.Context, source *UserLogin, evt RemoteReactionRemove) (*database.Reaction, error) {
+	return getTargetMessageWithAltID[database.Reaction](ctx, source, "", evt, func(targetMsg networkid.MessageID) (*database.Reaction, error) {
+		if partTargeter, ok := evt.(RemoteEventWithTargetPart); ok {
+			return portal.Bridge.DB.Reaction.GetByID(ctx, portal.Receiver, targetMsg, partTargeter.GetTargetMessagePart(), evt.GetSender().Sender, evt.GetRemovedEmojiID())
+		}
+		return portal.Bridge.DB.Reaction.GetByIDWithoutMessagePart(ctx, portal.Receiver, targetMsg, evt.GetSender().Sender, evt.GetRemovedEmojiID())
+	})
 }
 
 func getEventTS(evt RemoteEvent) time.Time {
@@ -3287,7 +3372,7 @@ func getStreamOrder(evt RemoteEvent) int64 {
 func (portal *Portal) handleRemoteReactionSync(ctx context.Context, source *UserLogin, evt RemoteReactionSync) EventHandlingResult {
 	log := zerolog.Ctx(ctx)
 	eventTS := getEventTS(evt)
-	targetMessage, err := portal.getTargetMessagePart(ctx, evt)
+	targetMessage, err := portal.getTargetMessagePart(ctx, source, evt)
 	if err != nil {
 		log.Err(err).Msg("Failed to get target message for reaction")
 		return EventHandlingResultFailed.WithError(err)
@@ -3297,10 +3382,10 @@ func (portal *Portal) handleRemoteReactionSync(ctx context.Context, source *User
 		return EventHandlingResultIgnored
 	}
 	var existingReactions []*database.Reaction
-	if partTargeter, ok := evt.(RemoteEventWithTargetPart); ok {
-		existingReactions, err = portal.Bridge.DB.Reaction.GetAllToMessagePart(ctx, portal.Receiver, evt.GetTargetMessage(), partTargeter.GetTargetMessagePart())
+	if _, ok := evt.(RemoteEventWithTargetPart); ok {
+		existingReactions, err = portal.Bridge.DB.Reaction.GetAllToMessagePart(ctx, portal.Receiver, targetMessage.ID, targetMessage.PartID)
 	} else {
-		existingReactions, err = portal.Bridge.DB.Reaction.GetAllToMessage(ctx, portal.Receiver, evt.GetTargetMessage())
+		existingReactions, err = portal.Bridge.DB.Reaction.GetAllToMessage(ctx, portal.Receiver, targetMessage.ID)
 	}
 	if err != nil {
 		log.Err(err).Msg("Failed to get existing reactions for reaction sync")
@@ -3423,7 +3508,7 @@ func (portal *Portal) handleRemoteReactionSync(ctx context.Context, source *User
 
 func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogin, evt RemoteReaction) EventHandlingResult {
 	log := zerolog.Ctx(ctx)
-	targetMessage, err := portal.getTargetMessagePart(ctx, evt)
+	targetMessage, err := portal.getTargetMessagePart(ctx, source, evt)
 	if err != nil {
 		log.Err(err).Msg("Failed to get target message for reaction")
 		return EventHandlingResultFailed.WithError(err)
@@ -3523,6 +3608,8 @@ func (portal *Portal) sendConvertedReaction(
 func (portal *Portal) getIntentForMXID(ctx context.Context, userID id.UserID) (MatrixAPI, error) {
 	if userID == "" {
 		return nil, nil
+	} else if userID == portal.Bridge.Bot.GetMXID() {
+		return portal.Bridge.Bot, nil
 	} else if ghost, err := portal.Bridge.GetGhostByMXID(ctx, userID); err != nil {
 		return nil, fmt.Errorf("failed to get ghost: %w", err)
 	} else if ghost != nil {
@@ -3538,7 +3625,7 @@ func (portal *Portal) getIntentForMXID(ctx context.Context, userID id.UserID) (M
 
 func (portal *Portal) handleRemoteReactionRemove(ctx context.Context, source *UserLogin, evt RemoteReactionRemove) EventHandlingResult {
 	log := zerolog.Ctx(ctx)
-	targetReaction, err := portal.getTargetReaction(ctx, evt)
+	targetReaction, err := portal.getTargetReaction(ctx, source, evt)
 	if err != nil {
 		log.Err(err).Msg("Failed to get target reaction for removal")
 		return EventHandlingResultFailed.WithError(err)
@@ -3576,7 +3663,7 @@ func (portal *Portal) handleRemoteReactionRemove(ctx context.Context, source *Us
 
 func (portal *Portal) handleRemoteMessageRemove(ctx context.Context, source *UserLogin, evt RemoteMessageRemove) EventHandlingResult {
 	log := zerolog.Ctx(ctx)
-	targetParts, err := portal.Bridge.DB.Message.GetAllPartsByID(ctx, portal.Receiver, evt.GetTargetMessage())
+	targetParts, err := portal.getAllTargetMessageParts(ctx, source, evt)
 	if err != nil {
 		log.Err(err).Msg("Failed to get target message for removal")
 		return EventHandlingResultFailed.WithError(err)
@@ -3612,7 +3699,7 @@ func (portal *Portal) handleRemoteMessageRemove(ctx context.Context, source *Use
 	dontRenderPlaceholderProvider, ok := evt.(RemoteMessageRemoveWithoutPlaceholder)
 	dontRenderPlaceholder := ok && dontRenderPlaceholderProvider.DontRenderPlaceholder()
 	res := portal.redactMessageParts(ctx, targetParts, intent, getEventTS(evt), "", dontRenderPlaceholder)
-	err = portal.Bridge.DB.Message.DeleteAllParts(ctx, portal.Receiver, evt.GetTargetMessage())
+	err = portal.Bridge.DB.Message.DeleteAllParts(ctx, portal.Receiver, targetParts[0].ID)
 	if err != nil {
 		log.Err(err).Msg("Failed to delete target message from database")
 	}
@@ -4308,6 +4395,9 @@ func (portal *Portal) getBridgeInfo() (string, event.BridgeEventContent) {
 	}
 	parent := portal.GetTopLevelParent()
 	if parent != nil {
+		if portal.Parent != nil && portal.Parent != parent && portal.Bridge.Network.GetCapabilities().NetworkIsImmediateParent {
+			parent = portal.Parent
+		}
 		bridgeInfo.Network = &event.BridgeInfoSection{
 			ID:          string(parent.ID),
 			DisplayName: parent.Name,
@@ -4925,7 +5015,7 @@ func (portal *Portal) UpdateDisappearingSetting(
 
 func (portal *Portal) updateParent(ctx context.Context, newParentID networkid.PortalID, source *UserLogin) bool {
 	newParent := networkid.PortalKey{ID: newParentID}
-	if portal.Bridge.Config.SplitPortals {
+	if portal.Bridge.Config.SplitPortals && newParentID != "" {
 		newParent.Receiver = portal.Receiver
 	}
 	if portal.ParentKey == newParent {
@@ -4933,7 +5023,7 @@ func (portal *Portal) updateParent(ctx context.Context, newParentID networkid.Po
 	}
 	var err error
 	if portal.MXID != "" && portal.InSpace && portal.Parent != nil && portal.Parent.MXID != "" {
-		err = portal.toggleSpace(ctx, portal.Parent.MXID, false, true)
+		err = portal.toggleSpace(ctx, portal.Parent.MXID, true, true)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Stringer("old_space_mxid", portal.Parent.MXID).Msg("Failed to remove portal from old space")
 		}

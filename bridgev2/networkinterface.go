@@ -77,6 +77,9 @@ type EventSender struct {
 	// This only applies in DM rooms where [database.Portal.OtherUserID] is set and is ignored if IsFromMe is true.
 	// A warning will be logged if the sender is overridden due to this flag.
 	ForceDMUser bool
+
+	// Force using the original message sender to send the edit
+	ForceEditOrigSender bool
 }
 
 func (es EventSender) MarshalZerologObject(evt *zerolog.Event) {
@@ -352,6 +355,15 @@ type OutgoingTimeoutConfig struct {
 	NoAckMessage  string
 }
 
+// OutgoingTimeoutSuppressingNetworkAPI is an optional interface that network connectors can implement to
+// pause the timeouts in [OutgoingTimeoutConfig] while the remote network is known to be deferring updates.
+type OutgoingTimeoutSuppressingNetworkAPI interface {
+	NetworkAPI
+	// SuppressOutgoingTimeouts is called before checking pending outgoing messages in a portal.
+	// If it returns true, no messages are timed out until the next check.
+	SuppressOutgoingTimeouts() bool
+}
+
 type NetworkGeneralCapabilities struct {
 	// Does the network connector support disappearing messages?
 	// This flag enables the message disappearing loop in the bridge.
@@ -369,6 +381,9 @@ type NetworkGeneralCapabilities struct {
 	OutgoingMessageTimeouts *OutgoingTimeoutConfig
 	// Capabilities related to the provisioning API.
 	Provisioning ProvisioningCapabilities
+	// When a portal has a parent space which has its own parent, should the `network` field
+	// in `m.bridge` events be set to the top-level space or the immediate parent?
+	NetworkIsImmediateParent bool
 }
 
 // NetworkAPI is an interface representing a remote network client for a single user login.
@@ -829,6 +844,16 @@ type PersonalFilteringCustomizingNetworkAPI interface {
 	CustomizePersonalFilteringSpace(req *mautrix.ReqCreateRoom)
 }
 
+// AltTargetFindingNetworkAPI can be used by network connectors that are in the middle of a migration
+// to a new identifier format. If the target message for an edit, deletion, reaction or reply isn't
+// found, the bridge will call this method to find alternative IDs.
+//
+// Note that the third event parameter is not set for replies.
+type AltTargetFindingNetworkAPI interface {
+	NetworkAPI
+	FindAltTargetMessage(context.Context, networkid.MessageID, RemoteEventWithTargetMessage) ([]networkid.MessageID, error)
+}
+
 type ProvisioningCapabilities struct {
 	ResolveIdentifier ResolveIdentifierCapabilities    `json:"resolve_identifier"`
 	GroupCreation     map[string]GroupTypeCapabilities `json:"group_creation"`
@@ -1159,6 +1184,11 @@ type RemoteEventWithUncertainPortalReceiver interface {
 	PortalReceiverIsUncertain() bool
 }
 
+type RemoteEventWithUncertainPortalReceiverFetcher interface {
+	RemoteEventWithUncertainPortalReceiver
+	FetchCertainPortalKey(context.Context) networkid.PortalKey
+}
+
 type RemotePreHandler interface {
 	RemoteEvent
 	PreHandle(ctx context.Context, portal *Portal)
@@ -1373,6 +1403,7 @@ type OrigSender struct {
 	User   *User
 	UserID id.UserID
 
+	Distinguisher          string
 	RequiresDisambiguation bool
 	DisambiguatedName      string
 	FormattedName          string

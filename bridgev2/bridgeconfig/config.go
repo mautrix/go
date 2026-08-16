@@ -73,6 +73,7 @@ type BridgeConfig struct {
 	ResendBridgeInfo              bool               `yaml:"resend_bridge_info"`
 	NoBridgeInfoStateKey          bool               `yaml:"no_bridge_info_state_key"`
 	BridgeStatusNotices           string             `yaml:"bridge_status_notices"`
+	TransientStateDebounce        time.Duration      `yaml:"transient_state_debounce"`
 	UnknownErrorAutoReconnect     time.Duration      `yaml:"unknown_error_auto_reconnect"`
 	UnknownErrorMaxAutoReconnects int                `yaml:"unknown_error_max_auto_reconnects"`
 	BridgeMatrixLeave             bool               `yaml:"bridge_matrix_leave"`
@@ -112,8 +113,10 @@ type AnalyticsConfig struct {
 
 type ProvisioningConfig struct {
 	SharedSecret           string `yaml:"shared_secret"`
+	AllowMatrixAuth        bool   `yaml:"allow_matrix_auth"`
 	DebugEndpoints         bool   `yaml:"debug_endpoints"`
 	EnableSessionTransfers bool   `yaml:"enable_session_transfers"`
+	FailOnWebAuthn         bool   `yaml:"fail_on_webauthn"`
 }
 
 type DirectMediaConfig struct {

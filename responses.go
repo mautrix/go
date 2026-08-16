@@ -477,6 +477,22 @@ type RespTurnServer struct {
 	URIs     []string `json:"uris"`
 }
 
+type RespRTCTransports struct {
+	RTCTransports []*RTCTransport `json:"rtc_transports"`
+}
+
+type RTCTransportType string
+
+const (
+	RTCTransportTypeLivekit RTCTransportType = "livekit"
+)
+
+type RTCTransport struct {
+	Type RTCTransportType `json:"type"`
+
+	LivekitServiceURL string `json:"livekit_service_url,omitempty"`
+}
+
 type RespAliasCreate struct{}
 type RespAliasDelete struct{}
 type RespAliasResolve struct {

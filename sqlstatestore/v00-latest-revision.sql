@@ -1,4 +1,4 @@
--- v0 -> v10 (compatible with v3+): Latest revision
+-- v0 -> v11 (compatible with v3+): Latest revision
 
 CREATE TABLE mx_registrations (
 	user_id TEXT PRIMARY KEY
@@ -23,10 +23,11 @@ CREATE INDEX mx_user_profile_membership_idx ON mx_user_profile (room_id, members
 CREATE INDEX mx_user_profile_name_skeleton_idx ON mx_user_profile (room_id, name_skeleton);
 
 CREATE TABLE mx_room_state (
-	room_id         TEXT PRIMARY KEY,
-	power_levels    jsonb,
-	encryption      jsonb,
-	create_event    jsonb,
-	join_rules      jsonb,
-	members_fetched BOOLEAN NOT NULL DEFAULT false
+	room_id            TEXT PRIMARY KEY,
+	power_levels       jsonb,
+	encryption         jsonb,
+	create_event       jsonb,
+	join_rules         jsonb,
+	history_visibility jsonb,
+	members_fetched    BOOLEAN NOT NULL DEFAULT false
 );

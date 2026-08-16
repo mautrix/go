@@ -26,6 +26,9 @@ bridge:
     # These contain the same data that can be posted to an external HTTP server using homeserver -> status_endpoint.
     # Allowed values: none, errors, all
     bridge_status_notices: errors
+    # How long should TRANSIENT_DISCONNECT and CONNECTING states be held back before being reported?
+    # If another state update occurs while waiting, the previous state won't be reported at all.
+    transient_state_debounce: 0s
     # How long after an unknown error should the bridge attempt a full reconnect?
     # Must be at least 1 minute. The bridge will add an extra ±20% jitter to this value.
     unknown_error_auto_reconnect: null
@@ -103,10 +106,15 @@ bridge:
         allow_bridge: true
         # List of user login IDs which anyone can set as a relay, as long as the relay user is in the room.
         default_relays: []
+        # An array of possible values for the .Sender.Distinguisher variable in message formats.
+        # Each user gets one of the values here, based on a hash of their Matrix user ID.
+        # If the array is empty, .Sender.Distinguisher will also be empty.
+        user_distinguishers: ["🟦", "🟣", "🟩", "⭕️", "🔶", "⬛️", "🔵", "🟢"]
         # The formats to use when sending messages via the relaybot.
         # Available variables:
         #   .Sender.UserID - The Matrix user ID of the sender.
         #   .Sender.Displayname - The display name of the sender (if set).
+        #   .Sender.Distinguisher - The stable distinguisher selected from user_distinguishers.
         #   .Sender.RequiresDisambiguation - Whether the sender's name may be confused with the name of another user in the room.
         #   .Sender.DisambiguatedName - The disambiguated name of the sender. This will be the displayname if set,
         #                               plus the user ID in parentheses if the displayname is not unique.
@@ -297,6 +305,9 @@ provisioning:
     # Enable session transfers between bridges. Note that this only validates Matrix or shared secret
     # auth before passing live network client credentials down in the response.
     enable_session_transfers: false
+    # Should the provisioning API fail immediately if a webauthn step is returned?
+    # This is mostly useful for clients that don't yet support it and want a trackable error instead.
+    fail_on_webauthn: false
 
 # Some networks require publicly accessible media download links (e.g. for user avatars when using Discord webhooks).
 # These settings control whether the bridge will provide such public media access.

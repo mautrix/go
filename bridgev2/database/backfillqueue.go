@@ -84,7 +84,7 @@ const (
 	`
 	markBackfillTaskNotDoneQuery = `
 		UPDATE backfill_task
-		SET is_done = false
+		SET is_done = false, queue_done = false
 		WHERE bridge_id = $1 AND portal_id = $2 AND portal_receiver = $3 AND user_login_id = $4
 	`
 	getNextBackfillQuery = `

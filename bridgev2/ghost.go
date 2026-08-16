@@ -325,8 +325,9 @@ func (ghost *Ghost) updateDMPortals(ctx context.Context) {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to get DM portals to update info")
 		return
 	}
+	log := zerolog.Ctx(ctx)
 	for _, portal := range dmPortals {
-		go portal.lockedUpdateInfoFromGhost(ctx, ghost)
+		go portal.lockedUpdateInfoFromGhost(log.WithContext(portal.backgroundCtx), ghost)
 	}
 }
 

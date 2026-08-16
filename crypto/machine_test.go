@@ -30,6 +30,12 @@ func (mockStateStore) GetEncryptionEvent(context.Context, id.RoomID) (*event.Enc
 	}, nil
 }
 
+func (mockStateStore) GetHistoryVisibility(context.Context, id.RoomID) (*event.HistoryVisibilityEventContent, error) {
+	return &event.HistoryVisibilityEventContent{
+		HistoryVisibility: event.HistoryVisibilityShared,
+	}, nil
+}
+
 func (mockStateStore) FindSharedRooms(context.Context, id.UserID) ([]id.RoomID, error) {
 	return []id.RoomID{"room1"}, nil
 }
@@ -118,7 +124,7 @@ func TestOlmMachineOlmMegolmSessions(t *testing.T) {
 
 		// store room key in new inbound group session
 		roomKeyEvt := decrypted.Content.AsRoomKey()
-		igs, err := NewInboundGroupSession(senderKey, signingKey, "room1", roomKeyEvt.SessionKey, 0, 0, false)
+		igs, err := NewInboundGroupSession(senderKey, signingKey, "room1", roomKeyEvt.SessionKey, 0, 0, nil, false)
 		require.NoError(t, err, "Error creating inbound group session")
 		err = machineIn.CryptoStore.PutGroupSession(context.TODO(), igs)
 		require.NoError(t, err, "Error storing inbound group session")

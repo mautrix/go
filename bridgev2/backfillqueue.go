@@ -171,6 +171,7 @@ func (mt *ManualBackfill) Do(ctx context.Context) {
 	} else if completed, err = mt.Portal.doBackfillTask(ctx, mt.Source, task, mt.Data); err != nil {
 		log.Err(err).Msg("Failed to do backwards backfill from event")
 		updateTask = errors.Is(err, errNoMessagesLeftAfterCutoff)
+		completed = true
 	} else {
 		log.Debug().Bool("completed", completed).Msg("Finished backfill from event")
 		updateTask = true

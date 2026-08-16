@@ -103,6 +103,7 @@ func (prov *ProvisioningAPI) Init() {
 	prov.Router.HandleFunc("GET /v3/login/flows", prov.GetLoginFlows)
 	prov.Router.HandleFunc("POST /v3/login/start/{flowID}", prov.PostLoginStart)
 	prov.Router.HandleFunc("POST /v3/login/step/{loginProcessID}/{stepID}/{stepType}", prov.PostLoginStep)
+	prov.Router.HandleFunc("POST /v3/login/client_http/{loginProcessID}/{txnID}/{reqID}", prov.PostLoginClientHTTP)
 	prov.Router.HandleFunc("POST /v3/login/cancel/{loginProcessID}", prov.PostLoginCancel)
 	prov.Router.HandleFunc("POST /v3/logout/{loginID}", prov.PostLogout)
 	prov.Router.HandleFunc("GET /v3/logins", prov.GetLogins)
@@ -237,7 +238,9 @@ func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {
 		}
 		if !exstrings.ConstantTimeEqual(auth, secret) {
 			var err error
-			if strings.HasPrefix(auth, "openid:") {
+			if !prov.br.Config.Provisioning.AllowMatrixAuth {
+				err = errors.New("matrix auth is disabled")
+			} else if strings.HasPrefix(auth, "openid:") {
 				err = prov.checkFederatedMatrixAuth(r.Context(), userID, strings.TrimPrefix(auth, "openid:"))
 			} else {
 				err = prov.checkMatrixAuth(r.Context(), userID, auth)

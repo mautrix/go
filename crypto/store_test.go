@@ -171,7 +171,7 @@ func TestStoreOutboundMegolmSession(t *testing.T) {
 			require.NoError(t, err, "Error retrieving outbound session")
 			require.Nil(t, sess, "Got outbound session before inserting")
 
-			outbound, err := NewOutboundGroupSession("room1", nil)
+			outbound, err := NewOutboundGroupSession("room1", nil, nil)
 			require.NoError(t, err)
 			err = store.AddOutboundGroupSession(context.TODO(), outbound)
 			require.NoError(t, err, "Error inserting outbound session")

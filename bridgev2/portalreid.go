@@ -28,6 +28,25 @@ const (
 	ReIDResultSourceTombstonedIntoTarget
 )
 
+func (rir ReIDResult) String() string {
+	switch rir {
+	case ReIDResultError:
+		return "error"
+	case ReIDResultNoOp:
+		return "no-op"
+	case ReIDResultSourceDeleted:
+		return "source deleted"
+	case ReIDResultSourceReIDd:
+		return "source re-ID'd"
+	case ReIDResultTargetDeletedAndSourceReIDd:
+		return "target deleted and source re-ID'd"
+	case ReIDResultSourceTombstonedIntoTarget:
+		return "source tombstoned into target"
+	default:
+		return fmt.Sprintf("unknown (%d)", rir)
+	}
+}
+
 func (br *Bridge) ReIDPortal(ctx context.Context, source, target networkid.PortalKey) (ReIDResult, *Portal, error) {
 	if source == target {
 		return ReIDResultError, nil, fmt.Errorf("illegal re-ID call: source and target are the same")
