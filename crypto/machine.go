@@ -684,7 +684,7 @@ func (mach *OlmMachine) StoreGroupSession(ctx context.Context, igs *InboundGroup
 func (mach *OlmMachine) storeGroupSessionInner(ctx context.Context, igs *InboundGroupSession) error {
 	origSource := igs.KeySource
 	existing, err := mach.CryptoStore.GetGroupSession(ctx, igs.RoomID, igs.ID())
-	if err != nil {
+	if err != nil && !errors.Is(err, ErrGroupSessionWithheld) {
 		return fmt.Errorf("failed to check for existing group session: %w", err)
 	} else if existing != nil {
 		if existing.Internal.FirstKnownIndex() <= igs.Internal.FirstKnownIndex() {
