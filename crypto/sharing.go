@@ -8,6 +8,7 @@ package crypto
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"go.mau.fi/util/ptr"
@@ -187,4 +188,103 @@ func (mach *OlmMachine) receiveSecret(ctx context.Context, evt *DecryptedOlmEven
 	case secretChan <- content.Secret:
 	default:
 	}
+}
+
+func (mach *OlmMachine) receiveSecretPush(ctx context.Context, evt *DecryptedOlmEvent, content *event.SecretPushEventContent) {
+	log := mach.machOrContextLog(ctx).With().
+		Str("action", "secret_push").
+		Stringer("sender", evt.Sender).
+		Stringer("sender_device", ptr.Val(evt.SenderDevice).DeviceID).
+		Stringer("secret_name", content.Name).
+		Logger()
+
+	log.Trace().Msg("Handling secret push")
+
+	if evt.Sender != mach.Client.UserID {
+		log.Warn().Msg("Secret push was not from our own user, ignoring")
+		return
+	} else if content.Name == "" || content.Secret == "" {
+		log.Warn().Msg("Ignoring secret push with empty name or value")
+		return
+	} else if evt.SenderDevice == nil {
+		log.Warn().Msg("Ignoring secret push from unknown device")
+		return
+	}
+
+	// https://github.com/matrix-org/matrix-spec-proposals/pull/4385
+	// "`m.secret.push` events MUST only be accepted from cross-signed devices belonging to the same user."
+	trust, err := mach.resolveTrustRefreshingKeys(ctx, evt.SenderDevice)
+	if err != nil {
+		log.Err(err).Msg("Failed to resolve trust of device pushing secret")
+		return
+	} else if trust < id.TrustStateCrossSignedVerified {
+		log.Warn().Stringer("trust_state", trust).Msg("Ignoring secret push from unverified device")
+		return
+	}
+
+	if mach.SecretPushReceiver == nil {
+		log.Debug().Msg("No secret push receiver configured, dropping pushed secret")
+		return
+	}
+	mach.SecretPushReceiver(ctx, evt, content)
+}
+
+// resolveTrustRefreshingKeys resolves device trust, re-fetching the user's device keys once if
+// the device doesn't resolve as cross-signed (its signature may be newer than our cached
+// device list, e.g. right after the device verified itself).
+func (mach *OlmMachine) resolveTrustRefreshingKeys(ctx context.Context, device *id.Device) (id.TrustState, error) {
+	trust, err := mach.ResolveTrustContext(ctx, device)
+	if err != nil || trust >= id.TrustStateCrossSignedVerified {
+		return trust, err
+	}
+	if _, err = mach.FetchKeys(ctx, []id.UserID{device.UserID}, true); err != nil {
+		return trust, err
+	}
+	return mach.ResolveTrustContext(ctx, device)
+}
+
+// PushSecret shares a stored secret with all other cross-signed devices of our own user via
+// MSC4385 secret push events.
+func (mach *OlmMachine) PushSecret(ctx context.Context, name id.Secret) error {
+	log := mach.machOrContextLog(ctx).With().
+		Str("action", "secret_push").
+		Stringer("secret_name", name).
+		Logger()
+
+	secret, err := mach.CryptoStore.GetSecret(ctx, name)
+	if err != nil {
+		return fmt.Errorf("failed to get secret from store: %w", err)
+	} else if secret == "" {
+		return fmt.Errorf("no stored secret named %s", name)
+	}
+
+	// Refresh the device list so recently cross-signed devices resolve as trusted
+	devices, err := mach.FetchKeys(ctx, []id.UserID{mach.Client.UserID}, true)
+	if err != nil {
+		return fmt.Errorf("failed to fetch own devices: %w", err)
+	}
+
+	content := event.Content{Parsed: event.SecretPushEventContent{
+		Name:   name,
+		Secret: secret,
+	}}
+	for deviceID, device := range devices[mach.Client.UserID] {
+		if deviceID == mach.Client.DeviceID {
+			continue
+		}
+		trust, err := mach.ResolveTrustContext(ctx, device)
+		if err != nil {
+			log.Err(err).Stringer("device_id", deviceID).Msg("Failed to resolve trust of device, not pushing secret to it")
+			continue
+		} else if trust < id.TrustStateCrossSignedVerified {
+			log.Debug().Stringer("device_id", deviceID).Stringer("trust_state", trust).Msg("Not pushing secret to unverified device")
+			continue
+		}
+		if err := mach.SendEncryptedToDevice(ctx, device, event.ToDeviceSecretPush, content); err != nil {
+			log.Err(err).Stringer("device_id", deviceID).Msg("Failed to push secret to device")
+		} else {
+			log.Debug().Stringer("device_id", deviceID).Msg("Pushed secret to device")
+		}
+	}
+	return nil
 }

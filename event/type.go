@@ -293,6 +293,7 @@ var (
 	ToDeviceRoomKeyWithheld  = Type{"m.room_key.withheld", ToDeviceEventType}
 	ToDeviceSecretRequest    = Type{"m.secret.request", ToDeviceEventType}
 	ToDeviceSecretSend       = Type{"m.secret.send", ToDeviceEventType}
+	ToDeviceSecretPush       = Type{"io.element.msc4385.secret.push", ToDeviceEventType}
 	ToDeviceDummy            = Type{"m.dummy", ToDeviceEventType}
 
 	ToDeviceVerificationRequest = Type{"m.key.verification.request", ToDeviceEventType}

@@ -214,4 +214,9 @@ type SecretSendEventContent struct {
 	Secret    string `json:"secret"`
 }
 
+type SecretPushEventContent struct {
+	Name   id.Secret `json:"name"`
+	Secret string    `json:"secret"`
+}
+
 type DummyEventContent struct{}
