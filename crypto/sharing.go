@@ -14,6 +14,7 @@ import (
 	"go.mau.fi/util/ptr"
 	"go.mau.fi/util/random"
 
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -264,10 +265,11 @@ func (mach *OlmMachine) PushSecret(ctx context.Context, name id.Secret) error {
 		return fmt.Errorf("failed to fetch own devices: %w", err)
 	}
 
-	content := event.Content{Parsed: event.SecretPushEventContent{
+	content := &event.Content{Parsed: event.SecretPushEventContent{
 		Name:   name,
 		Secret: secret,
 	}}
+	messages := make(map[id.DeviceID]*event.Content)
 	for deviceID, device := range devices[mach.Client.UserID] {
 		if deviceID == mach.Client.DeviceID {
 			continue
@@ -280,11 +282,21 @@ func (mach *OlmMachine) PushSecret(ctx context.Context, name id.Secret) error {
 			log.Debug().Stringer("device_id", deviceID).Stringer("trust_state", trust).Msg("Not pushing secret to unverified device")
 			continue
 		}
-		if err := mach.SendEncryptedToDevice(ctx, device, event.ToDeviceSecretPush, content); err != nil {
-			log.Err(err).Stringer("device_id", deviceID).Msg("Failed to push secret to device")
-		} else {
-			log.Debug().Stringer("device_id", deviceID).Msg("Pushed secret to device")
-		}
+		messages[deviceID] = content
 	}
+	if len(messages) == 0 {
+		log.Debug().Msg("No cross-signed devices to push secret to")
+		return nil
+	}
+	req, err := mach.EncryptToDevices(ctx, event.ToDeviceSecretPush, &mautrix.ReqSendToDevice{
+		Messages: map[id.UserID]map[id.DeviceID]*event.Content{mach.Client.UserID: messages},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to encrypt secret push: %w", err)
+	}
+	if _, err = mach.Client.SendToDevice(ctx, event.ToDeviceEncrypted, req); err != nil {
+		return fmt.Errorf("failed to send secret push: %w", err)
+	}
+	log.Debug().Int("device_count", len(messages)).Msg("Pushed secret to devices")
 	return nil
 }
