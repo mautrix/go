@@ -111,9 +111,10 @@ func (portal *Portal) CleanupOrphanedDM(ctx context.Context, userMXID id.UserID)
 			Msg("Inviter is not in old portal, deleting room")
 	}
 
+	oldRoomID := portal.MXID
 	if err = portal.RemoveMXID(ctx); err != nil {
 		log.Err(err).Msg("Failed to delete old portal mxid")
-	} else if err = portal.Bridge.Bot.DeleteRoom(ctx, portal.MXID, true); err != nil {
+	} else if err = portal.Bridge.Bot.DeleteRoom(ctx, oldRoomID, true); err != nil {
 		log.Err(err).Msg("Failed to clean up old portal room")
 	}
 }
