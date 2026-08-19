@@ -2948,6 +2948,24 @@ func (cli *Client) ReportRoom(ctx context.Context, roomID id.RoomID, reason stri
 	return err
 }
 
+func (cli *Client) SetPusher(ctx context.Context, req *Pusher) error {
+	urlPath := cli.BuildClientURL("v3", "pushers", "set")
+	_, err := cli.MakeRequest(ctx, http.MethodPost, urlPath, req, nil)
+	return err
+}
+
+func (cli *Client) GetPushers(ctx context.Context) (resp *RespPushers, err error) {
+	urlPath := cli.BuildClientURL("v3", "pushers")
+	_, err = cli.MakeRequest(ctx, http.MethodPost, urlPath, nil, &resp)
+	return
+}
+
+func (cli *Client) AckWebPusher(ctx context.Context, req *ReqAckWebPusher) error {
+	urlPath := cli.BuildClientURL("unstable", "org.matrix.msc4174", "pushers", "ack")
+	_, err := cli.MakeRequest(ctx, http.MethodPost, urlPath, req, nil)
+	return err
+}
+
 // AdminWhoIs fetches session information belonging to a specific user. Typically requires being a server admin.
 //
 // https://spec.matrix.org/v1.15/client-server-api/#get_matrixclientv3adminwhoisuserid

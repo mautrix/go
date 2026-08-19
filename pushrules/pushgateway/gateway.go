@@ -19,6 +19,24 @@ import (
 	"maunium.net/go/mautrix/pushrules"
 )
 
+type (
+	PushFormat  = mautrix.PushFormat
+	PusherData  = mautrix.PusherData
+	PusherKind  = mautrix.PusherKind
+	PusherAppID = mautrix.PusherAppID
+	Pusher      = mautrix.Pusher
+	RespPushers = mautrix.RespPushers
+)
+
+const (
+	PushFormatDefault     = mautrix.PushFormatDefault
+	PushFormatEventIDOnly = mautrix.PushFormatEventIDOnly
+	PusherKindHTTP        = mautrix.PusherKindHTTP
+	PusherKindEmail       = mautrix.PusherKindEmail
+	PusherKindWebPush     = mautrix.PusherKindWebPush
+	PusherAppEmail        = mautrix.PusherAppEmail
+)
+
 type NotificationCounts struct {
 	MissedCalls int `json:"missed_calls,omitempty"`
 	Unread      int `json:"unread,omitempty"`
@@ -33,64 +51,6 @@ const (
 	PushPriorityHigh PushPriority = "high"
 	PushPriorityLow  PushPriority = "low"
 )
-
-type PushFormat string
-
-const (
-	PushFormatDefault     PushFormat = ""
-	PushFormatEventIDOnly PushFormat = "event_id_only"
-)
-
-type PusherData map[string]any
-
-func (pd PusherData) Format() PushFormat {
-	val, _ := pd["format"].(string)
-	return PushFormat(val)
-}
-
-func (pd PusherData) URL() string {
-	val, _ := pd["url"].(string)
-	return val
-}
-
-// ConvertToNotificationData returns a copy of the map with the url and format fields removed.
-func (pd PusherData) ConvertToNotificationData() PusherData {
-	pdCopy := make(PusherData, len(pd)-2)
-	for key, value := range pd {
-		if key != "format" && key != "url" {
-			pdCopy[key] = value
-		}
-	}
-	return pdCopy
-}
-
-type PusherKind string
-
-const (
-	PusherKindHTTP  PusherKind = "http"
-	PusherKindEmail PusherKind = "email"
-)
-
-type PusherAppID string
-
-const (
-	PusherAppEmail PusherAppID = "m.email"
-)
-
-type Pusher struct {
-	AppDisplayName    string      `json:"app_display_name"`
-	AppID             PusherAppID `json:"app_id"`
-	Data              PusherData  `json:"data"`
-	DeviceDisplayName string      `json:"device_display_name"`
-	Kind              *PusherKind `json:"kind"`
-	Language          string      `json:"lang"`
-	ProfileTag        string      `json:"profile_tag,omitempty"`
-	PushKey           string      `json:"pushkey"`
-}
-
-type RespPushers struct {
-	Pushers []Pusher `json:"pushers"`
-}
 
 type BaseDevice struct {
 	AppID     PusherAppID `json:"app_id"`
