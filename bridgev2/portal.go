@@ -2258,12 +2258,13 @@ func (portal *Portal) handleMatrixTombstone(ctx context.Context, evt *event.Even
 		Logger()
 	if content.ReplacementRoom == "" {
 		log.Info().Msg("Received tombstone with no replacement room, cleaning up portal")
+		oldRoomID := portal.MXID
 		err := portal.RemoveMXID(ctx)
 		if err != nil {
 			log.Err(err).Msg("Failed to remove portal MXID")
 			return EventHandlingResultFailed.WithMSSError(err)
 		}
-		err = portal.Bridge.Bot.DeleteRoom(ctx, portal.MXID, true)
+		err = portal.Bridge.Bot.DeleteRoom(ctx, oldRoomID, true)
 		if err != nil {
 			log.Err(err).Msg("Failed to clean up Matrix room")
 			return EventHandlingResultFailed.WithError(err)
