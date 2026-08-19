@@ -212,36 +212,11 @@ func (mach *OlmMachine) receiveSecretPush(ctx context.Context, evt *DecryptedOlm
 		return
 	}
 
-	// https://github.com/matrix-org/matrix-spec-proposals/pull/4385
-	// "`m.secret.push` events MUST only be accepted from cross-signed devices belonging to the same user."
-	trust, err := mach.resolveTrustRefreshingKeys(ctx, evt.SenderDevice)
-	if err != nil {
-		log.Err(err).Msg("Failed to resolve trust of device pushing secret")
-		return
-	} else if trust < id.TrustStateCrossSignedVerified {
-		log.Warn().Stringer("trust_state", trust).Msg("Ignoring secret push from unverified device")
-		return
-	}
-
 	if mach.SecretPushReceiver == nil {
 		log.Debug().Msg("No secret push receiver configured, dropping pushed secret")
 		return
 	}
 	mach.SecretPushReceiver(ctx, evt, content)
-}
-
-// resolveTrustRefreshingKeys resolves device trust, re-fetching the user's device keys once if
-// the device doesn't resolve as cross-signed (its signature may be newer than our cached
-// device list, e.g. right after the device verified itself).
-func (mach *OlmMachine) resolveTrustRefreshingKeys(ctx context.Context, device *id.Device) (id.TrustState, error) {
-	trust, err := mach.ResolveTrustContext(ctx, device)
-	if err != nil || trust >= id.TrustStateCrossSignedVerified {
-		return trust, err
-	}
-	if _, err = mach.FetchKeys(ctx, []id.UserID{device.UserID}, true); err != nil {
-		return trust, err
-	}
-	return mach.ResolveTrustContext(ctx, device)
 }
 
 // PushSecret shares a stored secret with all other cross-signed devices of our own user via
