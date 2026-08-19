@@ -42,14 +42,15 @@ func (mt MessageType) IsMedia() bool {
 
 // Msgtypes
 const (
-	MsgText     MessageType = "m.text"
-	MsgEmote    MessageType = "m.emote"
-	MsgNotice   MessageType = "m.notice"
-	MsgImage    MessageType = "m.image"
-	MsgLocation MessageType = "m.location"
-	MsgVideo    MessageType = "m.video"
-	MsgAudio    MessageType = "m.audio"
-	MsgFile     MessageType = "m.file"
+	MsgText            MessageType = "m.text"
+	MsgEmote           MessageType = "m.emote"
+	MsgNotice          MessageType = "m.notice"
+	MsgImage           MessageType = "m.image"
+	MsgLocation        MessageType = "m.location"
+	MsgVideo           MessageType = "m.video"
+	MsgAudio           MessageType = "m.audio"
+	MsgFile            MessageType = "m.file"
+	MsgUnstableGallery MessageType = "dm.filament.gallery"
 
 	MsgVerificationRequest MessageType = "m.key.verification.request"
 
@@ -150,6 +151,8 @@ type MessageEventContent struct {
 	MSC3245Voice *MSC3245Voice `json:"org.matrix.msc3245.voice,omitempty"`
 
 	MSC4391BotCommand *MSC4391BotCommandInput `json:"org.matrix.msc4391.command,omitempty"`
+
+	MSC4274InlineMedia []*MessageEventContent `json:"dm.filament.gallery,omitempty"`
 }
 
 func (content *MessageEventContent) GetCapMsgType() CapabilityMsgType {
