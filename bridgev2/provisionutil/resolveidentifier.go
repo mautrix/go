@@ -14,17 +14,19 @@ import (
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
+	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/id"
 )
 
 type RespResolveIdentifier struct {
-	ID          networkid.UserID    `json:"id"`
-	Name        string              `json:"name,omitempty"`
-	AvatarURL   id.ContentURIString `json:"avatar_url,omitempty"`
-	Identifiers []string            `json:"identifiers,omitempty"`
-	MXID        id.UserID           `json:"mxid,omitempty"`
-	DMRoomID    id.RoomID           `json:"dm_room_mxid,omitempty"`
+	ID           networkid.UserID      `json:"id"`
+	Name         string                `json:"name,omitempty"`
+	AvatarURL    id.ContentURIString   `json:"avatar_url,omitempty"`
+	Identifiers  []string              `json:"identifiers,omitempty"`
+	MXID         id.UserID             `json:"mxid,omitempty"`
+	DMRoomID     id.RoomID             `json:"dm_room_mxid,omitempty"`
+	ExtraProfile database.ExtraProfile `json:"extra_profile,omitempty"`
 
 	Portal      *bridgev2.Portal `json:"-"`
 	Ghost       *bridgev2.Ghost  `json:"-"`
@@ -94,8 +96,12 @@ func ResolveIdentifier(
 		apiResp.AvatarURL = resp.Ghost.AvatarMXC
 		apiResp.Identifiers = resp.Ghost.Identifiers
 		apiResp.MXID = resp.Ghost.Intent.GetMXID()
-	} else if resp.UserInfo != nil && resp.UserInfo.Name != nil {
-		apiResp.Name = *resp.UserInfo.Name
+		apiResp.ExtraProfile = resp.Ghost.ExtraProfile
+	} else if resp.UserInfo != nil {
+		if resp.UserInfo.Name != nil {
+			apiResp.Name = *resp.UserInfo.Name
+		}
+		apiResp.ExtraProfile = resp.UserInfo.ExtraProfile
 	}
 	if resp.Chat != nil {
 		if resp.Chat.PortalKey.IsEmpty() {
