@@ -371,26 +371,14 @@ func DeleteManyPortals(ctx context.Context, portals []*Portal, errorCallback fun
 		return cmp.Compare(getDepth(b), getDepth(a))
 	})
 	for _, portal := range portals {
-		err := portal.Delete(ctx)
+		err := portal.DeleteWithRoom(ctx, false)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).
 				Stringer("portal_mxid", portal.MXID).
 				Object("portal_key", portal.PortalKey).
-				Msg("Failed to delete portal row from database")
+				Msg("Failed to delete portal")
 			if errorCallback != nil {
 				errorCallback(portal, false, err)
-			}
-			continue
-		}
-		if portal.MXID != "" {
-			err = portal.Bridge.Bot.DeleteRoom(ctx, portal.MXID, false)
-			if err != nil {
-				zerolog.Ctx(ctx).Err(err).
-					Stringer("portal_mxid", portal.MXID).
-					Msg("Failed to clean up portal room")
-				if errorCallback != nil {
-					errorCallback(portal, true, err)
-				}
 			}
 		}
 	}

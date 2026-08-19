@@ -50,6 +50,7 @@ type Bridge struct {
 	ghostsByID     map[networkid.UserID]*Ghost
 	cacheLock      sync.Mutex
 
+	deletingPortals map[networkid.PortalKey]struct{}
 	didSplitPortals bool
 
 	Background          bool
@@ -87,6 +88,8 @@ func NewBridge(
 		portalsByKey:   make(map[networkid.PortalKey]*Portal),
 		portalsByMXID:  make(map[id.RoomID]*Portal),
 		ghostsByID:     make(map[networkid.UserID]*Ghost),
+
+		deletingPortals: make(map[networkid.PortalKey]struct{}),
 
 		wakeupBackfillQueue: make(chan struct{}),
 		manualBackfills:     make(chan *ManualBackfill, 64),

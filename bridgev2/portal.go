@@ -115,6 +115,19 @@ func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, que
 	if queryErr != nil {
 		return nil, fmt.Errorf("failed to query db: %w", queryErr)
 	}
+	if key != nil {
+		if _, isDeleting := br.deletingPortals[*key]; isDeleting {
+			return nil, ErrPortalIsBeingDeleted
+		}
+	}
+	if dbPortal != nil {
+		if _, isDeleting := br.deletingPortals[dbPortal.PortalKey]; isDeleting {
+			if key == nil {
+				return nil, nil
+			}
+			return nil, ErrPortalIsBeingDeleted
+		}
+	}
 	if dbPortal == nil {
 		if key == nil {
 			return nil, nil
@@ -1983,16 +1996,9 @@ func (portal *Portal) handleMatrixDeleteChat(
 			return EventHandlingResultSuccess
 		}
 	}
-	err = portal.Delete(ctx)
+	err = portal.DeleteWithRoom(ctx, false)
 	if err != nil {
-		log.Err(err).Msg("Failed to delete portal from database")
-		return EventHandlingResultFailed.WithMSSError(err)
-	}
-	// The event context has likely been canceled by delete, so use a background context for the delete call
-	noCancelCtx := log.WithContext(portal.Bridge.BackgroundCtx)
-	err = portal.Bridge.Bot.DeleteRoom(noCancelCtx, portal.MXID, false)
-	if err != nil {
-		log.Err(err).Msg("Failed to delete Matrix room")
+		log.Err(err).Msg("Failed to delete portal")
 		return EventHandlingResultFailed.WithMSSError(err)
 	}
 	// No MSS here as the portal was deleted
@@ -4028,21 +4034,13 @@ func (portal *Portal) handleRemoteChatDelete(ctx context.Context, source *UserLo
 		wg.Wait()
 		log.Debug().Msg("Finished deleting child portals")
 	}
-	err := portal.Delete(ctx)
+	err := portal.DeleteWithRoom(ctx, false)
 	if err != nil {
-		log.Err(err).Msg("Failed to delete portal from database")
+		log.Err(err).Msg("Failed to delete portal")
 		return EventHandlingResultFailed.WithError(err)
 	}
-	// The event context has likely been canceled by delete, so use a background context for the delete call
-	noCancelCtx := log.WithContext(portal.Bridge.BackgroundCtx)
-	err = portal.Bridge.Bot.DeleteRoom(noCancelCtx, portal.MXID, false)
-	if err != nil {
-		log.Err(err).Msg("Failed to delete Matrix room")
-		return EventHandlingResultFailed.WithError(err)
-	} else {
-		log.Info().Msg("Deleted room after remote chat delete event")
-		return EventHandlingResultSuccess
-	}
+	log.Info().Msg("Deleted room after remote chat delete event")
+	return EventHandlingResultSuccess
 }
 
 func (portal *Portal) HandleRemoteBackfill(ctx context.Context, source *UserLogin, backfill RemoteBackfill) EventHandlingResult {
@@ -5497,18 +5495,37 @@ func (portal *Portal) addToUserSpaces(ctx context.Context) {
 }
 
 func (portal *Portal) Delete(ctx context.Context) error {
+	return portal.delete(ctx, false, false)
+}
+
+func (portal *Portal) DeleteWithRoom(ctx context.Context, puppetsOnly bool) error {
+	return portal.delete(ctx, true, puppetsOnly)
+}
+
+func (portal *Portal) delete(ctx context.Context, deleteRoom, puppetsOnly bool) error {
+	portal.Bridge.cacheLock.Lock()
 	if portal.backgroundCtx.Err() != nil {
+		portal.Bridge.cacheLock.Unlock()
 		return nil
 	}
-	portal.removeInPortalCache(ctx)
-	err := portal.safeDBDelete(ctx)
-	if err != nil {
-		return err
-	}
-	portal.Bridge.cacheLock.Lock()
-	defer portal.Bridge.cacheLock.Unlock()
+	portal.Bridge.deletingPortals[portal.PortalKey] = struct{}{}
 	portal.unlockedDeleteCache()
-	return nil
+	portal.Bridge.cacheLock.Unlock()
+	defer func() {
+		portal.Bridge.cacheLock.Lock()
+		delete(portal.Bridge.deletingPortals, portal.PortalKey)
+		portal.Bridge.cacheLock.Unlock()
+	}()
+	// Deleting the cache cancels the portal background context which the input context may be based on
+	ctx = zerolog.Ctx(ctx).WithContext(portal.Bridge.BackgroundCtx)
+	portal.removeInPortalCache(ctx)
+	if deleteRoom && portal.MXID != "" {
+		err := portal.Bridge.Bot.DeleteRoom(ctx, portal.MXID, puppetsOnly)
+		if err != nil {
+			return fmt.Errorf("%w: %w", ErrDeleteRoomFailed, err)
+		}
+	}
+	return portal.safeDBDelete(ctx)
 }
 
 func (portal *Portal) safeDBDelete(ctx context.Context) error {

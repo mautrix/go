@@ -13,14 +13,10 @@ import (
 var CommandDeletePortal = &FullHandler{
 	Func: func(ce *Event) {
 		// TODO clean up child portals?
-		err := ce.Portal.Delete(ce.Ctx)
+		err := ce.Portal.DeleteWithRoom(ce.Ctx, false)
 		if err != nil {
 			ce.Reply("Failed to delete portal: %v", err)
 			return
-		}
-		err = ce.Bot.DeleteRoom(ce.Ctx, ce.Portal.MXID, false)
-		if err != nil {
-			ce.Reply("Failed to clean up room: %v", err)
 		}
 		ce.MessageStatus.DisableMSS = true
 	},
