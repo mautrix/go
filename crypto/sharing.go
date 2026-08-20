@@ -199,10 +199,8 @@ func (mach *OlmMachine) receiveSecretPush(ctx context.Context, evt *DecryptedOlm
 		Stringer("secret_name", content.Name).
 		Logger()
 
-	log.Trace().Msg("Handling secret push")
-
 	if evt.Sender != mach.Client.UserID {
-		log.Warn().Msg("Secret push was not from our own user, ignoring")
+		log.Debug().Msg("Ignoring secret push from another user")
 		return
 	} else if content.Name == "" || content.Secret == "" {
 		log.Warn().Msg("Ignoring secret push with empty name or value")
@@ -225,6 +223,7 @@ func (mach *OlmMachine) receiveSecretPush(ctx context.Context, evt *DecryptedOlm
 		log.Debug().Msg("No secret push receiver configured, dropping pushed secret")
 		return
 	}
+	log.Trace().Msg("Successfully validated secret push, sending to callback")
 	mach.SecretPushReceiver(ctx, evt, content)
 }
 
