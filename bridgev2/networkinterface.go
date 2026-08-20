@@ -1103,6 +1103,17 @@ type StickerImportingNetworkAPI interface {
 	ListImagePacks(ctx context.Context) ([]*event.ImagePackMetadata, error)
 }
 
+type ResolvedMedia struct {
+	Edit *ConvertedEditPart
+	// TODO field for raw event response
+}
+
+type MediaResolvingNetworkAPI interface {
+	NetworkAPI
+
+	ResolveMedia(ctx context.Context, portal *Portal, msg *database.Message, unresolvedMedia json.RawMessage) (*ResolvedMedia, error)
+}
+
 type RemoteEventType int
 
 func (ret RemoteEventType) String() string {

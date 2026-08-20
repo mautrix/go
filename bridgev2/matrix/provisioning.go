@@ -141,6 +141,7 @@ func (prov *ProvisioningAPI) Init() {
 	prov.Router.HandleFunc("GET /v3/image_pack/import", prov.ImportImagePack)
 	prov.Router.HandleFunc("POST /v3/image_pack/import", prov.ImportImagePack)
 	prov.Router.HandleFunc("GET /v3/image_pack/list", prov.ListImagePacks)
+	prov.Router.HandleFunc("POST /v3/resolve_media/{eventID}", prov.PostResolveMedia)
 
 	if prov.br.Config.Provisioning.EnableSessionTransfers {
 		prov.log.Debug().Msg("Enabling session transfer API")
@@ -646,6 +647,26 @@ func (prov *ProvisioningAPI) ListImagePacks(w http.ResponseWriter, r *http.Reque
 	resp, err := provisionutil.ListImagePacks(r.Context(), login)
 	if err != nil {
 		RespondWithError(w, err, "Internal error listing image packs")
+		return
+	}
+	exhttp.WriteJSONResponse(w, http.StatusOK, resp)
+}
+
+func (prov *ProvisioningAPI) PostResolveMedia(w http.ResponseWriter, r *http.Request) {
+	login := prov.GetLoginForRequest(w, r)
+	if login == nil {
+		return
+	}
+	var params provisionutil.ReqResolveMedia
+	err := json.NewDecoder(r.Body).Decode(&params)
+	if err != nil {
+		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to decode request body")
+		mautrix.MNotJSON.WithMessage("Failed to decode request body").Write(w)
+		return
+	}
+	resp, err := provisionutil.ResolveMedia(r.Context(), login, id.EventID(r.PathValue("eventID")), &params)
+	if err != nil {
+		RespondWithError(w, err, "Internal error resolving media")
 		return
 	}
 	exhttp.WriteJSONResponse(w, http.StatusOK, resp)
