@@ -11,6 +11,8 @@ import (
 	"context"
 	"fmt"
 
+	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/crypto/signatures"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -24,6 +26,10 @@ func (mach *OlmMachine) ResolveTrust(device *id.Device) id.TrustState {
 
 // ResolveTrustContext resolves the trust state of the device from cross-signing.
 func (mach *OlmMachine) ResolveTrustContext(ctx context.Context, device *id.Device) (id.TrustState, error) {
+	return mach.ResolveTrustContextWithKeys(ctx, device, nil)
+}
+
+func (mach *OlmMachine) ResolveTrustContextWithKeys(ctx context.Context, device *id.Device, keys *mautrix.DeviceKeys) (id.TrustState, error) {
 	if device.Trust == id.TrustStateVerified || device.Trust == id.TrustStateBlacklisted {
 		return device.Trust, nil
 	}
@@ -85,6 +91,9 @@ func (mach *OlmMachine) ResolveTrustContext(ctx context.Context, device *id.Devi
 			Str("device_key", device.SigningKey.String()).
 			Msg("Error retrieving cross-signing signatures for device from database")
 		return id.TrustStateUnset, err
+	}
+	if !deviceSigExists && keys != nil {
+		deviceSigExists, _ = signatures.VerifySignatureJSON(keys, device.UserID, theirSSK.Key.String(), theirSSK.Key)
 	}
 	if deviceSigExists {
 		if trusted, err := mach.IsUserTrusted(ctx, device.UserID); trusted {

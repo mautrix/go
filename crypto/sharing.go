@@ -8,11 +8,13 @@ package crypto
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"go.mau.fi/util/ptr"
 	"go.mau.fi/util/random"
 
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -187,4 +189,97 @@ func (mach *OlmMachine) receiveSecret(ctx context.Context, evt *DecryptedOlmEven
 	case secretChan <- content.Secret:
 	default:
 	}
+}
+
+func (mach *OlmMachine) receiveSecretPush(ctx context.Context, evt *DecryptedOlmEvent, content *event.SecretPushEventContent) {
+	log := mach.machOrContextLog(ctx).With().
+		Str("action", "secret_push").
+		Stringer("sender", evt.Sender).
+		Stringer("sender_device", ptr.Val(evt.SenderDevice).DeviceID).
+		Stringer("secret_name", content.Name).
+		Logger()
+
+	if evt.Sender != mach.Client.UserID {
+		log.Debug().Msg("Ignoring secret push from another user")
+		return
+	} else if content.Name == "" || content.Secret == "" {
+		log.Warn().Msg("Ignoring secret push with empty name or value")
+		return
+	} else if evt.SenderDevice == nil {
+		log.Warn().Msg("Ignoring secret push from unknown device")
+		return
+	}
+
+	trust, err := mach.ResolveTrustContextWithKeys(ctx, evt.SenderDevice, evt.SenderDeviceKeys)
+	if err != nil {
+		log.Err(err).Msg("Failed to resolve trust of device pushing secret")
+		return
+	} else if trust < id.TrustStateCrossSignedVerified {
+		log.Warn().Stringer("trust_state", trust).Msg("Ignoring secret push from unverified device")
+		return
+	}
+
+	if mach.SecretPushReceiver == nil {
+		log.Debug().Msg("No secret push receiver configured, dropping pushed secret")
+		return
+	}
+	log.Trace().Msg("Successfully validated secret push, sending to callback")
+	mach.SecretPushReceiver(ctx, evt, content)
+}
+
+// PushSecret shares a stored secret with all other cross-signed devices of our own user via
+// MSC4385 secret push events.
+func (mach *OlmMachine) PushSecret(ctx context.Context, name id.Secret) error {
+	log := mach.machOrContextLog(ctx).With().
+		Str("action", "secret_push").
+		Stringer("secret_name", name).
+		Logger()
+
+	secret, err := mach.CryptoStore.GetSecret(ctx, name)
+	if err != nil {
+		return fmt.Errorf("failed to get secret from store: %w", err)
+	} else if secret == "" {
+		return fmt.Errorf("no stored secret named %s", name)
+	}
+
+	// Refresh the device list so recently cross-signed devices resolve as trusted
+	devices, err := mach.FetchKeys(ctx, []id.UserID{mach.Client.UserID}, true)
+	if err != nil {
+		return fmt.Errorf("failed to fetch own devices: %w", err)
+	}
+
+	content := &event.Content{Parsed: event.SecretPushEventContent{
+		Name:   name,
+		Secret: secret,
+	}}
+	messages := make(map[id.DeviceID]*event.Content)
+	for deviceID, device := range devices[mach.Client.UserID] {
+		if deviceID == mach.Client.DeviceID {
+			continue
+		}
+		trust, err := mach.ResolveTrustContext(ctx, device)
+		if err != nil {
+			log.Err(err).Stringer("device_id", deviceID).Msg("Failed to resolve trust of device, not pushing secret to it")
+			continue
+		} else if trust < id.TrustStateCrossSignedVerified {
+			log.Debug().Stringer("device_id", deviceID).Stringer("trust_state", trust).Msg("Not pushing secret to unverified device")
+			continue
+		}
+		messages[deviceID] = content
+	}
+	if len(messages) == 0 {
+		log.Debug().Msg("No cross-signed devices to push secret to")
+		return nil
+	}
+	req, err := mach.EncryptToDevices(ctx, event.ToDeviceSecretPush, &mautrix.ReqSendToDevice{
+		Messages: map[id.UserID]map[id.DeviceID]*event.Content{mach.Client.UserID: messages},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to encrypt secret push: %w", err)
+	}
+	if _, err = mach.Client.SendToDevice(ctx, event.ToDeviceEncrypted, req); err != nil {
+		return fmt.Errorf("failed to send secret push: %w", err)
+	}
+	log.Debug().Int("device_count", len(messages)).Msg("Pushed secret to devices")
+	return nil
 }

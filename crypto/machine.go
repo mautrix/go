@@ -68,6 +68,8 @@ type OlmMachine struct {
 	SessionReceived func(context.Context, id.RoomID, id.SessionID, uint32)
 	AllowKeyShare   func(context.Context, *id.Device, event.RequestedKeyInfo) *KeyShareRejection
 	OnRoomKeyBundle func(context.Context, *event.RoomKeyBundleEventContent)
+	// Callback for MSC4385 secret pushes from other devices of our own user. Secret pushes are ignored if unset.
+	SecretPushReceiver func(context.Context, *DecryptedOlmEvent, *event.SecretPushEventContent)
 
 	devicesToUnwedge     map[id.IdentityKey]bool
 	devicesToUnwedgeLock sync.Mutex
@@ -480,6 +482,9 @@ func (mach *OlmMachine) HandleEncryptedEvent(ctx context.Context, evt *event.Eve
 	case *event.SecretSendEventContent:
 		mach.receiveSecret(ctx, decryptedEvt, decryptedContent)
 		log.Trace().Msg("Handled secret send event")
+	case *event.SecretPushEventContent:
+		mach.receiveSecretPush(ctx, decryptedEvt, decryptedContent)
+		log.Trace().Msg("Handled secret push event")
 	default:
 		log.Debug().Msg("Unhandled encrypted to-device event")
 		return decryptedEvt
