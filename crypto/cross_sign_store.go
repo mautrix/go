@@ -9,6 +9,7 @@ package crypto
 
 import (
 	"context"
+	"slices"
 
 	"go.mau.fi/util/exzerolog"
 
@@ -29,19 +30,16 @@ func (mach *OlmMachine) storeCrossSigningKeys(ctx context.Context, crossSigningK
 		for curKeyUsage, curKey := range currentKeys {
 			log := log.With().Stringer("old_key", curKey.Key).Str("old_key_usage", string(curKeyUsage)).Logger()
 			// got a new key with the same usage as an existing key
-			for _, newKeyUsage := range userKeys.Usage {
-				if newKeyUsage == curKeyUsage {
-					if _, ok := userKeys.Keys[id.NewKeyID(id.KeyAlgorithmEd25519, curKey.Key.String())]; !ok {
-						// old key is not in the new key map, so we drop signatures made by it
-						if count, err := mach.CryptoStore.DropSignaturesByKey(ctx, userID, curKey.Key); err != nil {
-							log.Error().Err(err).Msg("Error deleting old signatures made by user")
-						} else {
-							log.Debug().
-								Int64("signature_count", count).
-								Msg("Dropped signatures made by old key as it has been replaced")
-						}
+			if slices.Contains(userKeys.Usage, curKeyUsage) {
+				if _, ok := userKeys.Keys[id.NewKeyID(id.KeyAlgorithmEd25519, curKey.Key.String())]; !ok {
+					// old key is not in the new key map, so we drop signatures made by it
+					if count, err := mach.CryptoStore.DropSignaturesByKey(ctx, userID, curKey.Key); err != nil {
+						log.Error().Err(err).Msg("Error deleting old signatures made by user")
+					} else {
+						log.Debug().
+							Int64("signature_count", count).
+							Msg("Dropped signatures made by old key as it has been replaced")
 					}
-					break
 				}
 			}
 		}
