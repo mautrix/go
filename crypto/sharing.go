@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/rs/zerolog"
 	"go.mau.fi/util/ptr"
 	"go.mau.fi/util/random"
 
@@ -152,34 +153,20 @@ func (mach *OlmMachine) receiveSecret(ctx context.Context, evt *DecryptedOlmEven
 		Stringer("sender_device", ptr.Val(evt.SenderDevice).DeviceID).
 		Str("request_id", content.RequestID).
 		Logger()
+	ctx = log.WithContext(ctx)
 
-	log.Trace().Msg("Handling secret send request")
-
-	// immediately ignore secrets from other users
-	if evt.Sender != mach.Client.UserID {
-		log.Warn().Msg("Secret send was not from our own device")
+	if content.Secret == "" {
+		log.Warn().Msg("Ignoring secret with empty value")
 		return
-	} else if content.Secret == "" {
-		log.Warn().Msg("We were sent an empty secret")
-		return
-	} else if evt.SenderDevice == nil {
-		log.Warn().Msg("We were sent a secret from an unknown device")
-		return
-	}
-
-	// https://spec.matrix.org/v1.10/client-server-api/#msecretsend
-	// "The recipient must ensure... that the device is a verified device owned by the recipient"
-	if !mach.IsDeviceTrusted(ctx, evt.SenderDevice) {
-		log.Warn().Msg("Sender device is not verified, rejecting secret")
+	} else if !mach.allowReceiveSecret(ctx, evt) {
 		return
 	}
 
 	mach.secretLock.Lock()
 	secretChan := mach.secretListeners[content.RequestID]
 	mach.secretLock.Unlock()
-
 	if secretChan == nil {
-		log.Warn().Msg("We were sent a secret we didn't request")
+		log.Warn().Msg("Ignoring secret with unknown request ID")
 		return
 	}
 
@@ -191,6 +178,22 @@ func (mach *OlmMachine) receiveSecret(ctx context.Context, evt *DecryptedOlmEven
 	}
 }
 
+func (mach *OlmMachine) allowReceiveSecret(ctx context.Context, evt *DecryptedOlmEvent) bool {
+	log := zerolog.Ctx(ctx)
+	if evt.Sender != mach.Client.UserID {
+		log.Debug().Msg("Ignoring secret from another user")
+	} else if evt.SenderDevice == nil {
+		log.Warn().Msg("Ignoring secret from unknown device")
+	} else if trust, err := mach.ResolveTrustContextWithKeys(ctx, evt.SenderDevice, evt.SenderDeviceKeys); err != nil {
+		log.Err(err).Msg("Failed to resolve trust of device sending secret")
+	} else if trust < id.TrustStateCrossSignedVerified {
+		log.Warn().Stringer("trust_state", trust).Msg("Ignoring secret from unverified device")
+	} else {
+		return true
+	}
+	return false
+}
+
 func (mach *OlmMachine) receiveSecretPush(ctx context.Context, evt *DecryptedOlmEvent, content *event.SecretPushEventContent) {
 	log := mach.machOrContextLog(ctx).With().
 		Str("action", "secret_push").
@@ -198,33 +201,18 @@ func (mach *OlmMachine) receiveSecretPush(ctx context.Context, evt *DecryptedOlm
 		Stringer("sender_device", ptr.Val(evt.SenderDevice).DeviceID).
 		Stringer("secret_name", content.Name).
 		Logger()
+	ctx = log.WithContext(ctx)
 
-	if evt.Sender != mach.Client.UserID {
-		log.Debug().Msg("Ignoring secret push from another user")
-		return
-	} else if content.Name == "" || content.Secret == "" {
+	if content.Name == "" || content.Secret == "" {
 		log.Warn().Msg("Ignoring secret push with empty name or value")
-		return
-	} else if evt.SenderDevice == nil {
-		log.Warn().Msg("Ignoring secret push from unknown device")
-		return
+	} else if !mach.allowReceiveSecret(ctx, evt) {
+		// This was already logged
+	} else if mach.SecretPushReceiver == nil {
+		log.Debug().Msg("No push callback set, ignoring received secret")
+	} else {
+		log.Trace().Msg("Successfully validated secret push, sending to callback")
+		mach.SecretPushReceiver(ctx, evt, content)
 	}
-
-	trust, err := mach.ResolveTrustContextWithKeys(ctx, evt.SenderDevice, evt.SenderDeviceKeys)
-	if err != nil {
-		log.Err(err).Msg("Failed to resolve trust of device pushing secret")
-		return
-	} else if trust < id.TrustStateCrossSignedVerified {
-		log.Warn().Stringer("trust_state", trust).Msg("Ignoring secret push from unverified device")
-		return
-	}
-
-	if mach.SecretPushReceiver == nil {
-		log.Debug().Msg("No secret push receiver configured, dropping pushed secret")
-		return
-	}
-	log.Trace().Msg("Successfully validated secret push, sending to callback")
-	mach.SecretPushReceiver(ctx, evt, content)
 }
 
 // PushSecret shares a stored secret with all other cross-signed devices of our own user via
