@@ -131,9 +131,7 @@ func (p *ProvLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 			return nil, fmt.Errorf("failed to read request body: %w", err)
 		}
 	}
-	if !p.HTTPLock.TryLock() {
-		return nil, fmt.Errorf("illegal client HTTP request: another request already in progress")
-	}
+	p.HTTPLock.Lock()
 	defer p.HTTPLock.Unlock()
 	ch := make(chan *bridgev2.LoginClientHTTPResponse, 1)
 	err := p.step.WithLock(func(sm *stepManager) error {
