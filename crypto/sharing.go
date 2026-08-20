@@ -212,6 +212,15 @@ func (mach *OlmMachine) receiveSecretPush(ctx context.Context, evt *DecryptedOlm
 		return
 	}
 
+	trust, err := mach.ResolveTrustContextWithKeys(ctx, evt.SenderDevice, evt.SenderDeviceKeys)
+	if err != nil {
+		log.Err(err).Msg("Failed to resolve trust of device pushing secret")
+		return
+	} else if trust < id.TrustStateCrossSignedVerified {
+		log.Warn().Stringer("trust_state", trust).Msg("Ignoring secret push from unverified device")
+		return
+	}
+
 	if mach.SecretPushReceiver == nil {
 		log.Debug().Msg("No secret push receiver configured, dropping pushed secret")
 		return

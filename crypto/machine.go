@@ -68,11 +68,7 @@ type OlmMachine struct {
 	SessionReceived func(context.Context, id.RoomID, id.SessionID, uint32)
 	AllowKeyShare   func(context.Context, *id.Device, event.RequestedKeyInfo) *KeyShareRejection
 	OnRoomKeyBundle func(context.Context, *event.RoomKeyBundleEventContent)
-	// Optional callback which is called for MSC4385 secret pushes from other devices of our own
-	// user; pushes are dropped when it's unset. It is responsible for validating and storing the
-	// secret. In particular, the sender device's trust is NOT checked before calling it: per the
-	// MSC, the callback must verify the sender device is cross-signed (e.g. via
-	// ResolveTrustContext on evt.SenderDevice) before accepting the secret.
+	// Callback for MSC4385 secret pushes from other devices of our own user. Secret pushes are ignored if unset.
 	SecretPushReceiver func(context.Context, *DecryptedOlmEvent, *event.SecretPushEventContent)
 
 	devicesToUnwedge     map[id.IdentityKey]bool
