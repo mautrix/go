@@ -104,7 +104,7 @@ type ServerMetadata struct {
 	AccountManagementURI              string                    `json:"account_management_uri,omitempty"`
 	AccountManagementActionsSupported []AccountManagementAction `json:"account_management_actions_supported,omitempty"`
 
-	Unrecognized map[string]any `json:",unknown"`
+	Unrecognized map[string]any `json:",embed,unknown"`
 }
 
 type ApplicationType string
@@ -132,7 +132,7 @@ type ClientMetadata struct {
 
 	TokenEndpointAuthMethod AuthMethod `json:"token_endpoint_auth_method,omitempty"`
 
-	Extra map[string]any `json:",unknown"`
+	Extra map[string]any `json:",embed,unknown"`
 }
 
 type ScopeGroup string

@@ -169,9 +169,9 @@ func (mach *OlmMachine) EncryptMegolmEventWithStateKey(ctx context.Context, room
 		MegolmCiphertext: ciphertext,
 		RelatesTo:        getRelatesTo(content, plaintext),
 
-		// These are deprecated
-		SenderKey: mach.account.IdentityKey(),
+		//lint:ignore SA1019 we should still send deprecated fields
 		DeviceID:  mach.Client.DeviceID,
+		SenderKey: mach.account.IdentityKey(),
 	}
 	if mach.MSC4392Relations && encrypted.RelatesTo != nil {
 		// When MSC4392 mode is enabled, reply and reaction metadata is stripped from the unencrypted content.

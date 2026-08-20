@@ -4,7 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//go:build goexperiment.jsonv2
+//go:build goexperiment.jsonv2 || go1.27
 
 package pdu_test
 
@@ -74,6 +74,8 @@ var matrixOrg = serverDetails{
 		},
 	},
 }
+
+//lint:ignore U1000 -
 var continuwuityOrg = serverDetails{
 	serverName: "continuwuity.org",
 	keys: map[id.KeyID]serverKey{

@@ -4,7 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//go:build goexperiment.jsonv2
+//go:build goexperiment.jsonv2 || go1.27
 
 package canonicaljson_test
 
@@ -13,7 +13,6 @@ import (
 	"encoding/json/v2"
 	"math"
 	"os/exec"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -323,12 +322,12 @@ func TestMarshal_Roundtrip_Error(t *testing.T) {
 
 type unknownMap struct {
 	Foo     string         `json:"foo"`
-	Unknown map[string]any `json:",unknown"`
+	Unknown map[string]any `json:",embed,unknown"`
 }
 
 type unknownRaw struct {
 	Foo     string         `json:"foo"`
-	Unknown jsontext.Value `json:",unknown"`
+	Unknown jsontext.Value `json:",embed,unknown"`
 }
 
 func TestMarshal_Error(t *testing.T) {
@@ -352,11 +351,6 @@ func TestMarshal_Error(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			// Go 1.25 emitted NaN and infinities as strings
-			// TODO remove this check after dropping Go 1.25 support
-			if strings.HasPrefix(runtime.Version(), "go1.25") && (test.name == "NaN" || test.name == "+Inf" || test.name == "-Inf") {
-				t.SkipNow()
-			}
 			out, err := canonicaljson.Marshal(test.input)
 			assert.Error(t, err, "Expected error, got %s instead", out)
 		})

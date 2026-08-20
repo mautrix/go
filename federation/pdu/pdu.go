@@ -4,7 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//go:build goexperiment.jsonv2
+//go:build goexperiment.jsonv2 || go1.27
 
 package pdu
 
@@ -54,7 +54,7 @@ var (
 type InternalMeta struct {
 	EventID  id.EventID     `json:"event_id,omitempty"`
 	Rejected bool           `json:"rejected,omitempty"`
-	Extra    map[string]any `json:",unknown"`
+	Extra    map[string]any `json:",embed,unknown"`
 }
 
 type PDU struct {
@@ -74,7 +74,7 @@ type PDU struct {
 	Unsigned       jsontext.Value                 `json:"unsigned,omitzero"`
 	InternalMeta   InternalMeta                   `json:"-"`
 
-	Unknown jsontext.Value `json:",unknown"`
+	Unknown jsontext.Value `json:",embed,unknown"`
 
 	// Deprecated legacy fields
 	DeprecatedPrevState  jsontext.Value `json:"prev_state,omitzero"`
@@ -87,7 +87,7 @@ var ErrPDUIsNil = errors.New("PDU is nil")
 type Hashes struct {
 	SHA256 jsonbytes.UnpaddedBytes `json:"sha256"`
 
-	Unknown jsontext.Value `json:",unknown"`
+	Unknown jsontext.Value `json:",embed,unknown"`
 }
 
 func (pdu *PDU) ToClientEvent(roomVersion id.RoomVersion) (*event.Event, error) {

@@ -10,12 +10,12 @@ jobs:
     runs-on: ubuntu-latest
     name: Lint (latest)
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
-          go-version: "1.26"
+          go-version: "1.27"
           cache: true
 
       - name: Install libolm
@@ -35,14 +35,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        go-version: ["1.25", "1.26"]
-    name: Build (${{ matrix.go-version == '1.26' && 'latest' || 'old' }}, libolm)
+        go-version: ["1.26", "1.27"]
+    name: Build (${{ matrix.go-version == '1.27' && 'latest' || 'old' }}, libolm)
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Go ${{ matrix.go-version }}
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version: ${{ matrix.go-version }}
           cache: true
@@ -59,7 +59,7 @@ jobs:
         run: go build -v ./...
 
       - name: Test
-        run: go test -json -v ./... 2>&1 | gotestfmt
+        run: go test -vet=off -json -v ./... 2>&1 | gotestfmt
 
       - name: Build (jsonv2)
         env:
@@ -69,21 +69,21 @@ jobs:
       - name: Test (jsonv2)
         env:
           GOEXPERIMENT: jsonv2
-        run: go test -json -v ./... 2>&1 | gotestfmt
+        run: go test -vet=off -json -v ./... 2>&1 | gotestfmt
 
   build-goolm:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        go-version: ["1.25", "1.26"]
-    name: Build (${{ matrix.go-version == '1.26' && 'latest' || 'old' }}, goolm)
+        go-version: ["1.26", "1.27"]
+    name: Build (${{ matrix.go-version == '1.27' && 'latest' || 'old' }}, goolm)
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Go ${{ matrix.go-version }}
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version: ${{ matrix.go-version }}
           cache: true
@@ -99,4 +99,4 @@ jobs:
           go build -tags=goolm -v ./...
 
       - name: Test
-        run: go test -tags=goolm -json -v ./... 2>&1 | gotestfmt
+        run: go test -vet=off -tags=goolm -json -v ./... 2>&1 | gotestfmt

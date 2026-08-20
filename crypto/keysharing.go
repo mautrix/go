@@ -114,8 +114,9 @@ func (mach *OlmMachine) SendRoomKeyRequest(ctx context.Context, roomID id.RoomID
 			Body: event.RequestedKeyInfo{
 				Algorithm: id.AlgorithmMegolmV1,
 				RoomID:    roomID,
-				SenderKey: senderKey,
 				SessionID: sessionID,
+				//lint:ignore SA1019 we should still send deprecated fields
+				SenderKey: senderKey,
 			},
 			RequestID:          requestID,
 			RequestingDeviceID: mach.Client.DeviceID,

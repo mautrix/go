@@ -4,7 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//go:build goexperiment.jsonv2
+//go:build goexperiment.jsonv2 || go1.27
 
 package pdu
 
@@ -74,7 +74,7 @@ type RoomV1PDU struct {
 	Type           string                         `json:"type"`
 	Unsigned       jsontext.Value                 `json:"unsigned,omitzero"`
 
-	Unknown jsontext.Value `json:",unknown"`
+	Unknown jsontext.Value `json:",embed,unknown"`
 
 	// Deprecated legacy fields
 	DeprecatedPrevState  jsontext.Value `json:"prev_state,omitzero"`
