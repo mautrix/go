@@ -37,6 +37,8 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
+var ErrBridgeBackfillTimeout = mautrix.RespError{ErrCode: "FI.MAU.BRIDGE_BACKFILL_TIMEOUT", StatusCode: http.StatusGatewayTimeout}
+
 type matrixAuthCacheEntry struct {
 	Expires time.Time
 	UserID  id.UserID
@@ -613,7 +615,7 @@ func (prov *ProvisioningAPI) PostPaginate(w http.ResponseWriter, r *http.Request
 			}
 		case <-time.After(25 * time.Second):
 			log.Warn().Msg("Backfill did not complete within 25 seconds, returning timeout")
-			mautrix.MUnknown.WithMessage("Backfill did not complete within 25 seconds").Write(w)
+			ErrBridgeBackfillTimeout.WithMessage("Backfill did not complete within 25 seconds").Write(w)
 		case <-r.Context().Done():
 			log.Warn().Msg("Request cancelled while waiting for backfill to complete")
 		}
