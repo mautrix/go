@@ -90,6 +90,7 @@ type VerificationTransaction struct {
 	EphemeralPublicKeyShared bool                                 `json:"ephemeral_public_key_shared,omitempty"` // Whether this device's ephemeral public key has been shared
 	OtherPublicKey           *ECDHPublicKey                       `json:"other_public_key,omitempty"`            // The other device's ephemeral public key
 	ReceivedTheirMAC         bool                                 `json:"received_their_mac,omitempty"`          // Whether we have received their MAC
+	TheirMasterKey           string                               `json:"their_master_key,omitempty"`            // The other user's master key from their MAC event
 	SentOurMAC               bool                                 `json:"sent_our_mac,omitempty"`                // Whether we have sent our MAC
 	ReceivedTheirDone        bool                                 `json:"received_their_done,omitempty"`         // Whether we have received their done event
 	SentOurDone              bool                                 `json:"sent_our_done,omitempty"`               // Whether we have sent our done event
