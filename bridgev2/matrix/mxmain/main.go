@@ -117,7 +117,11 @@ func (br *BridgeMain) Run() {
 	br.PreInit()
 	br.Init()
 	br.Start()
+	sdNotifyReady(br.Log)
+	stopWatchdog := startSdWatchdog(br.Log)
 	exitCode := br.WaitForInterrupt()
+	sdNotifyStopping(br.Log)
+	stopWatchdog()
 	br.Stop()
 	os.Exit(exitCode)
 }
