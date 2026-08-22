@@ -37,7 +37,7 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-var MBridgeBackfillTimeout = mautrix.RespError{ErrCode: "M_BRIDGE_BACKFILL_TIMEOUT", StatusCode: http.StatusGatewayTimeout}
+var ErrBridgeBackfillTimeout = mautrix.RespError{ErrCode: "FI.MAU.BRIDGE_BACKFILL_TIMEOUT", StatusCode: http.StatusGatewayTimeout}
 
 type matrixAuthCacheEntry struct {
 	Expires time.Time
