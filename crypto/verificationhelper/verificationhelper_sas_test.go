@@ -358,3 +358,76 @@ func TestVerification_SAS_BothCallStart(t *testing.T) {
 	assert.True(t, sendingCallbacks.IsVerificationDone(txnID))
 	assert.True(t, receivingCallbacks.IsVerificationDone(txnID))
 }
+
+func TestCrossSignVerification_SAS(t *testing.T) {
+	ctx := log.Logger.WithContext(t.Context())
+
+	testCases := []struct {
+		sendingConfirmsFirst bool
+	}{
+		{true},
+		{false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("sendingConfirmsFirst=%t", tc.sendingConfirmsFirst), func(t *testing.T) {
+			ts, sendingClient, receivingClient, _, _, sendingMachine, receivingMachine := initServerAndLoginAliceBob(t, ctx)
+			sendingCallbacks, receivingCallbacks, sendingHelper, receivingHelper := initDefaultCallbacks(t, ctx, sendingClient, receivingClient, sendingMachine, receivingMachine)
+			var err error
+
+			_, _, err = sendingMachine.GenerateAndUploadCrossSigningKeys(ctx, nil, "")
+			require.NoError(t, err)
+			_, _, err = receivingMachine.GenerateAndUploadCrossSigningKeys(ctx, nil, "")
+			require.NoError(t, err)
+
+			_, err = sendingMachine.FetchKeys(ctx, []id.UserID{bobUserID}, true)
+			require.NoError(t, err)
+			_, err = receivingMachine.FetchKeys(ctx, []id.UserID{aliceUserID}, true)
+			require.NoError(t, err)
+
+			txnID, err := sendingHelper.StartVerification(ctx, bobUserID)
+			require.NoError(t, err)
+			ts.DispatchToDevice(t, ctx, receivingClient)
+			err = receivingHelper.AcceptVerification(ctx, txnID)
+			require.NoError(t, err)
+			ts.DispatchToDevice(t, ctx, sendingClient)
+
+			err = sendingHelper.StartSAS(ctx, txnID)
+			require.NoError(t, err)
+
+			ts.DispatchToDevice(t, ctx, receivingClient)
+			ts.DispatchToDevice(t, ctx, sendingClient)
+			ts.DispatchToDevice(t, ctx, receivingClient)
+			ts.DispatchToDevice(t, ctx, sendingClient)
+
+			assert.Equal(t, sendingCallbacks.GetDecimalsShown(txnID), receivingCallbacks.GetDecimalsShown(txnID))
+
+			if tc.sendingConfirmsFirst {
+				err = sendingHelper.ConfirmSAS(ctx, txnID)
+				require.NoError(t, err)
+
+				ts.DispatchToDevice(t, ctx, receivingClient)
+
+				err = receivingHelper.ConfirmSAS(ctx, txnID)
+				require.NoError(t, err)
+
+				ts.DispatchToDevice(t, ctx, sendingClient)
+				ts.DispatchToDevice(t, ctx, receivingClient)
+			} else {
+				err = receivingHelper.ConfirmSAS(ctx, txnID)
+				require.NoError(t, err)
+
+				ts.DispatchToDevice(t, ctx, sendingClient)
+
+				err = sendingHelper.ConfirmSAS(ctx, txnID)
+				require.NoError(t, err)
+
+				ts.DispatchToDevice(t, ctx, receivingClient)
+				ts.DispatchToDevice(t, ctx, sendingClient)
+			}
+
+			assert.True(t, sendingCallbacks.IsVerificationDone(txnID))
+			assert.True(t, receivingCallbacks.IsVerificationDone(txnID))
+		})
+	}
+}

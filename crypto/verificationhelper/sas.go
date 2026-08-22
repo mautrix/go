@@ -157,7 +157,7 @@ func (vh *VerificationHelper) ConfirmSAS(ctx context.Context, txnID id.Verificat
 	if txn.ReceivedTheirMAC {
 		txn.VerificationState = VerificationStateSASMACExchanged
 
-		if err := vh.trustKeysAfterMACCheck(ctx, txn, masterKey); err != nil {
+		if err := vh.trustKeysAfterMACCheck(ctx, txn, txn.TheirMasterKey); err != nil {
 			return fmt.Errorf("failed to trust keys: %w", err)
 		}
 
@@ -750,6 +750,7 @@ func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn Verific
 	log.Info().Msg("All MACs verified")
 
 	txn.ReceivedTheirMAC = true
+	txn.TheirMasterKey = masterKey
 	if txn.SentOurMAC {
 		txn.VerificationState = VerificationStateSASMACExchanged
 
