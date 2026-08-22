@@ -300,8 +300,17 @@ func (ms *MockServer) Login(t testing.TB, ctx context.Context, userID id.UserID,
 func (ms *MockServer) DispatchToDevice(t testing.TB, ctx context.Context, client *mautrix.Client) {
 	t.Helper()
 
-	for _, evt := range ms.DeviceInbox[client.UserID][client.DeviceID] {
-		client.Syncer.(*mautrix.DefaultSyncer).Dispatch(ctx, &evt)
-		ms.DeviceInbox[client.UserID][client.DeviceID] = ms.DeviceInbox[client.UserID][client.DeviceID][1:]
+	if ms.DeviceInbox == nil || ms.DeviceInbox[client.UserID] == nil {
+		return
+	}
+	events := ms.DeviceInbox[client.UserID][client.DeviceID]
+	ms.DeviceInbox[client.UserID][client.DeviceID] = nil
+	syncer, ok := client.Syncer.(*mautrix.DefaultSyncer)
+	require.True(t, ok)
+	for i := range events {
+		if cryptoHelper, ok := client.Crypto.(interface{ Machine() *crypto.OlmMachine }); ok && cryptoHelper.Machine() != nil {
+			cryptoHelper.Machine().HandleToDeviceEvent(ctx, &events[i])
+		}
+		syncer.Dispatch(ctx, &events[i])
 	}
 }

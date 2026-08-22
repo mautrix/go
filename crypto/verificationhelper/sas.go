@@ -14,6 +14,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -247,6 +248,18 @@ func (vh *VerificationHelper) onVerificationStartSAS(ctx context.Context, txn Ve
 	return vh.store.SaveVerificationTransaction(ctx, txn)
 }
 
+func canonicalMarshal(v any) ([]byte, error) {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal content: %w", err)
+	}
+	rawMsg := json.RawMessage(raw)
+	if err = canonicaljson.Canonicalize(&rawMsg); err != nil {
+		return nil, fmt.Errorf("failed to canonicalize json: %w", err)
+	}
+	return rawMsg, nil
+}
+
 func calculateCommitment(ephemeralPubKey *ecdh.PublicKey, txn VerificationTransaction) ([]byte, error) {
 	// The commitmentHashInput is the hash (encoded as unpadded base64) of the
 	// concatenation of the device's ephemeral public key (encoded as
@@ -257,7 +270,7 @@ func calculateCommitment(ephemeralPubKey *ecdh.PublicKey, txn VerificationTransa
 	// hashing it, but we are just stuck on that.
 	commitmentHashInput := sha256.New()
 	commitmentHashInput.Write([]byte(base64.RawStdEncoding.EncodeToString(ephemeralPubKey.Bytes())))
-	encodedStartEvt, err := canonicaljson.Marshal(txn.StartEventContent)
+	encodedStartEvt, err := canonicalMarshal(txn.StartEventContent)
 	if err != nil {
 		return nil, err
 	}
@@ -285,6 +298,10 @@ func (vh *VerificationHelper) onVerificationAccept(ctx context.Context, txn Veri
 
 	vh.activeTransactionsLock.Lock()
 	defer vh.activeTransactionsLock.Unlock()
+	if evt.RoomID != "" && !txn.StartedByUs {
+		log.Debug().Msg("Ignoring accept event when we did not start SAS")
+		return
+	}
 	if txn.VerificationState != VerificationStateSASStarted {
 		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnexpectedMessage,
 			"received accept event for a transaction that is not in the started state")
@@ -316,6 +333,75 @@ func (vh *VerificationHelper) onVerificationAccept(ctx context.Context, txn Veri
 	}
 }
 
+type commitmentVariant struct {
+	content *event.VerificationStartEventContent
+	name    string
+}
+
+func matchCommitment(pubKey *ecdh.PublicKey, txn *VerificationTransaction) (matched bool, matchType string) {
+	if txn.StartEventContent == nil {
+		return false, "missing start event content"
+	}
+	pubKeyBytes := pubKey.Bytes()
+	encodings := []struct {
+		key  string
+		name string
+	}{
+		{base64.RawStdEncoding.EncodeToString(pubKeyBytes), "raw_base64"},
+		{base64.StdEncoding.EncodeToString(pubKeyBytes), "std_base64"},
+	}
+
+	variants := []commitmentVariant{
+		{content: txn.StartEventContent, name: "as_is"},
+	}
+
+	noRel := *txn.StartEventContent
+	noRel.RelatesTo = nil
+	variants = append(variants, commitmentVariant{content: &noRel, name: "no_relates_to"})
+
+	if txn.TransactionID != "" {
+		withTxnID := noRel
+		withTxnID.TransactionID = txn.TransactionID
+		variants = append(variants, commitmentVariant{content: &withTxnID, name: "transaction_id_only"})
+
+		withBoth := *txn.StartEventContent
+		withBoth.TransactionID = txn.TransactionID
+		variants = append(variants, commitmentVariant{content: &withBoth, name: "both_relates_and_transaction_id"})
+	}
+
+	for _, enc := range encodings {
+		for i := range variants {
+			encoded, err := canonicalMarshal(variants[i].content)
+			if err != nil {
+				continue
+			}
+			h := sha256.New()
+			h.Write([]byte(enc.key))
+			h.Write(encoded)
+			calculated := h.Sum(nil)
+			if bytes.Equal(calculated, txn.Commitment) {
+				return true, enc.name + "+" + variants[i].name
+			}
+		}
+	}
+
+	for i := range variants {
+		encoded, err := canonicalMarshal(variants[i].content)
+		if err != nil {
+			continue
+		}
+		h := sha256.New()
+		h.Write(pubKeyBytes)
+		h.Write(encoded)
+		calculated := h.Sum(nil)
+		if bytes.Equal(calculated, txn.Commitment) {
+			return true, "raw_bytes+" + variants[i].name
+		}
+	}
+
+	return false, ""
+}
+
 func (vh *VerificationHelper) onVerificationKey(ctx context.Context, txn VerificationTransaction, evt *event.Event) {
 	log := vh.getLog(ctx).With().
 		Str("verification_action", "key").
@@ -324,6 +410,11 @@ func (vh *VerificationHelper) onVerificationKey(ctx context.Context, txn Verific
 	keyEvt := evt.Content.AsVerificationKey()
 	vh.activeTransactionsLock.Lock()
 	defer vh.activeTransactionsLock.Unlock()
+
+	if evt.RoomID != "" && txn.EphemeralKey != nil && bytes.Equal(keyEvt.Key, txn.EphemeralKey.PublicKey().Bytes()) {
+		log.Debug().Msg("Ignoring key event with our own ephemeral key")
+		return
+	}
 
 	if txn.VerificationState != VerificationStateSASAccepted {
 		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnexpectedMessage,
@@ -341,12 +432,14 @@ func (vh *VerificationHelper) onVerificationKey(ctx context.Context, txn Verific
 
 	if txn.EphemeralPublicKeyShared {
 		// Verify that the commitment hash is correct
-		commitment, err := calculateCommitment(publicKey, txn)
-		if err != nil {
-			log.Err(err).Msg("Failed to calculate commitment")
-			return
-		}
-		if !bytes.Equal(commitment, txn.Commitment) {
+		matched, matchType := matchCommitment(publicKey, &txn)
+		if matched {
+			log.Info().Str("match_type", matchType).Msg("Successfully matched SAS commitment")
+		} else {
+			log.Warn().
+				Str("received_commitment", base64.RawStdEncoding.EncodeToString(txn.Commitment)).
+				Str("pubkey", base64.RawStdEncoding.EncodeToString(publicKey.Bytes())).
+				Msg("Failed to match SAS commitment with any candidate")
 			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeKeyMismatch, "The key was not the one we expected")
 			return
 		}

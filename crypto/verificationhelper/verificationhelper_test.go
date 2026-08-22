@@ -3,7 +3,10 @@ package verificationhelper_test
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"testing"
 	"time"
@@ -12,6 +15,7 @@ import (
 	"github.com/rs/zerolog/log" // zerolog-allow-global-log
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.mau.fi/util/exhttp"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto"
@@ -514,4 +518,113 @@ func TestVerification_CancelOnDoubleStart(t *testing.T) {
 	ts.DispatchToDevice(t, ctx, sendingClient) // Process the m.key.verification.cancel events
 	assert.NotNil(t, sendingCallbacks.GetVerificationCancellation(txnID1))
 	assert.NotNil(t, sendingCallbacks.GetVerificationCancellation(txnID2))
+}
+
+func dispatchEvent(ctx context.Context, t *testing.T, client *mautrix.Client, evt *event.Event) {
+	t.Helper()
+	syncer, ok := client.Syncer.(*mautrix.DefaultSyncer)
+	require.True(t, ok)
+	syncer.Dispatch(ctx, evt)
+}
+
+func TestInRoomVerification_EventEncryptionAndType(t *testing.T) {
+	ctx := log.Logger.WithContext(t.Context())
+	ts, sendingClient, receivingClient, _, _, sendingMachine, receivingMachine := initServerAndLoginAliceBob(t, ctx)
+	sendingCallbacks, receivingCallbacks, sendingHelper, receivingHelper := initDefaultCallbacks(t, ctx, sendingClient, receivingClient, sendingMachine, receivingMachine)
+
+	roomID := id.RoomID("!encrypted_room:example.org")
+	for _, mach := range []*crypto.OlmMachine{sendingMachine, receivingMachine} {
+		stateStore, ok := mach.StateStore.(*mautrix.MemoryStateStore)
+		require.True(t, ok)
+		require.NoError(t, stateStore.SetMembership(ctx, roomID, aliceUserID, event.MembershipJoin))
+		require.NoError(t, stateStore.SetMembership(ctx, roomID, bobUserID, event.MembershipJoin))
+		require.NoError(t, stateStore.SetEncryptionEvent(ctx, roomID, &event.EncryptionEventContent{
+			Algorithm: id.AlgorithmMegolmV1,
+		}))
+	}
+	_, err := sendingMachine.FetchKeys(ctx, []id.UserID{bobUserID}, true)
+	require.NoError(t, err)
+	_, err = receivingMachine.FetchKeys(ctx, []id.UserID{aliceUserID}, true)
+	require.NoError(t, err)
+
+	var sentRoomEventTypes []string
+	var sentRoomEventBodies []json.RawMessage
+	ts.Router.HandleFunc("PUT /_matrix/client/v3/rooms/{roomID}/send/{type}/{txn}", func(w http.ResponseWriter, r *http.Request) {
+		body, readErr := io.ReadAll(r.Body)
+		require.NoError(t, readErr)
+		sentRoomEventTypes = append(sentRoomEventTypes, r.PathValue("type"))
+		sentRoomEventBodies = append(sentRoomEventBodies, json.RawMessage(body))
+		exhttp.WriteJSONResponse(w, http.StatusOK, &mautrix.RespSendEvent{
+			EventID: id.EventID("$request_event_id"),
+		})
+	})
+
+	txnID, err := sendingHelper.StartInRoomVerification(ctx, roomID, bobUserID)
+	require.NoError(t, err)
+	require.Equal(t, id.VerificationTransactionID("$request_event_id"), txnID)
+	ts.DispatchToDevice(t, ctx, receivingClient)
+
+	require.Len(t, sentRoomEventTypes, 1)
+	assert.Equal(t, event.EventEncrypted.Type, sentRoomEventTypes[0])
+
+	var encContent event.EncryptedEventContent
+	err = json.Unmarshal(sentRoomEventBodies[0], &encContent)
+	require.NoError(t, err)
+	assert.Equal(t, id.AlgorithmMegolmV1, encContent.Algorithm)
+	assert.NotEmpty(t, encContent.Ciphertext)
+
+	reqEvt := &event.Event{
+		ID:        id.EventID(txnID),
+		RoomID:    roomID,
+		Sender:    aliceUserID,
+		Type:      event.EventMessage,
+		Timestamp: time.Now().UnixMilli(),
+		Content: event.Content{
+			Parsed: &event.MessageEventContent{
+				MsgType:    event.MsgVerificationRequest,
+				FromDevice: sendingDeviceID,
+				Methods:    []event.VerificationMethod{event.VerificationMethodSAS},
+				To:         bobUserID,
+			},
+		},
+	}
+	dispatchEvent(ctx, t, receivingClient, reqEvt)
+
+	require.Contains(t, receivingCallbacks.GetRequestedVerifications()[aliceUserID], txnID)
+
+	err = receivingHelper.AcceptVerification(ctx, txnID)
+	require.NoError(t, err)
+	ts.DispatchToDevice(t, ctx, sendingClient)
+
+	require.Len(t, sentRoomEventTypes, 2)
+	assert.Equal(t, event.EventEncrypted.Type, sentRoomEventTypes[1])
+
+	readyEvt := &event.Event{
+		ID:        id.EventID("$ready_event_id"),
+		RoomID:    roomID,
+		Sender:    bobUserID,
+		Type:      event.InRoomVerificationReady,
+		Timestamp: time.Now().UnixMilli(),
+		Content: event.Content{
+			Parsed: &event.VerificationReadyEventContent{
+				InRoomVerificationEvent: event.InRoomVerificationEvent{
+					RelatesTo: &event.RelatesTo{
+						Type:    event.RelReference,
+						EventID: id.EventID(txnID),
+					},
+				},
+				FromDevice: receivingDeviceID,
+				Methods:    []event.VerificationMethod{event.VerificationMethodSAS},
+			},
+		},
+	}
+	dispatchEvent(ctx, t, sendingClient, readyEvt)
+
+	require.Contains(t, sendingCallbacks.GetVerificationsReadyTransactions(), txnID)
+
+	err = sendingHelper.StartSAS(ctx, txnID)
+	require.NoError(t, err)
+
+	require.Len(t, sentRoomEventTypes, 3)
+	assert.Equal(t, event.EventEncrypted.Type, sentRoomEventTypes[2])
 }
