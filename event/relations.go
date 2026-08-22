@@ -28,7 +28,7 @@ type RelatesTo struct {
 	Key     string       `json:"key,omitempty"`
 
 	InReplyTo     *InReplyTo `json:"m.in_reply_to,omitempty"`
-	IsFallingBack bool       `json:"is_falling_back,omitempty"`
+	IsFallingBack bool       `json:"is_falling_back,omitzero,omitempty"`
 }
 
 type InReplyTo struct {

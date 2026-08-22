@@ -175,15 +175,15 @@ func (vh *VerificationHelper) Init(ctx context.Context) error {
 			ctx = log.WithContext(ctx)
 
 			var transactionID id.VerificationTransactionID
-			if evt.ID != "" {
+			if relatable, ok := evt.Content.Parsed.(event.Relatable); ok && relatable.OptionalGetRelatesTo() != nil && relatable.OptionalGetRelatesTo().EventID != "" {
+				transactionID = id.VerificationTransactionID(relatable.OptionalGetRelatesTo().EventID)
+			} else if evt.ID != "" {
 				transactionID = id.VerificationTransactionID(evt.ID)
+			} else if txnID, ok := evt.Content.Parsed.(event.VerificationTransactionable); ok {
+				transactionID = txnID.GetTransactionID()
 			} else {
-				if txnID, ok := evt.Content.Parsed.(event.VerificationTransactionable); !ok {
-					log.Warn().Msg("Ignoring verification event without a transaction ID")
-					return
-				} else {
-					transactionID = txnID.GetTransactionID()
-				}
+				log.Warn().Msg("Ignoring verification event without a transaction ID")
+				return
 			}
 			log = log.With().Stringer("transaction_id", transactionID).Logger()
 
@@ -226,6 +226,25 @@ func (vh *VerificationHelper) Init(ctx context.Context) error {
 				return
 			} else {
 				vh.activeTransactionsLock.Unlock()
+			}
+
+			if evt.RoomID != "" {
+				if evt.Mautrix.TrustSource != nil && evt.Mautrix.TrustSource.DeviceID == vh.client.DeviceID {
+					log.Debug().Msg("Ignoring room verification event from our own device")
+					return
+				}
+				if fromDevice, ok := evt.Content.Raw["from_device"].(string); ok && id.DeviceID(fromDevice) == vh.client.DeviceID {
+					log.Debug().Msg("Ignoring room verification event with our own device ID")
+					return
+				}
+				if txn.TheirUserID != "" && txn.TheirUserID != vh.client.UserID && evt.Sender == vh.client.UserID {
+					log.Debug().Msg("Ignoring room verification event sent by our own user")
+					return
+				}
+				if txn.TheirUserID != "" && evt.Sender != txn.TheirUserID {
+					log.Debug().Msg("Ignoring room verification event sent by unexpected user")
+					return
+				}
 			}
 
 			logCtx := log.With().
@@ -351,11 +370,17 @@ func (vh *VerificationHelper) StartInRoomVerification(ctx context.Context, roomI
 		Methods:    vh.supportedMethods,
 		To:         to,
 	}
-	encryptedContent, err := vh.client.Crypto.Encrypt(ctx, roomID, event.EventMessage, &content)
-	if err != nil {
-		return "", fmt.Errorf("failed to encrypt verification request: %w", err)
+	var evtContent any = &content
+	evtType := event.EventMessage
+	if vh.client.Crypto != nil {
+		var err error
+		evtContent, err = vh.client.Crypto.Encrypt(ctx, roomID, event.EventMessage, &content)
+		if err != nil {
+			return "", fmt.Errorf("failed to encrypt verification request: %w", err)
+		}
+		evtType = event.EventEncrypted
 	}
-	resp, err := vh.client.SendMessageEvent(ctx, roomID, event.EventMessage, encryptedContent)
+	resp, err := vh.client.SendMessageEvent(ctx, roomID, evtType, evtContent)
 	if err != nil {
 		return "", fmt.Errorf("failed to send verification request: %w", err)
 	}
@@ -518,9 +543,18 @@ func (vh *VerificationHelper) CancelVerification(ctx context.Context, txnID id.V
 func (vh *VerificationHelper) sendVerificationEvent(ctx context.Context, txn VerificationTransaction, evtType event.Type, content any) error {
 	if txn.RoomID != "" {
 		content.(event.Relatable).SetRelatesTo(&event.RelatesTo{Type: event.RelReference, EventID: id.EventID(txn.TransactionID)})
-		_, err := vh.client.SendMessageEvent(ctx, txn.RoomID, evtType, &event.Content{
+		var evtContent any = &event.Content{
 			Parsed: content,
-		})
+		}
+		if vh.client.Crypto != nil {
+			var err error
+			evtContent, err = vh.client.Crypto.Encrypt(ctx, txn.RoomID, evtType, content)
+			if err != nil {
+				return fmt.Errorf("failed to encrypt %s event to %s: %w", evtType.String(), txn.RoomID, err)
+			}
+			evtType = event.EventEncrypted
+		}
+		_, err := vh.client.SendMessageEvent(ctx, txn.RoomID, evtType, evtContent)
 		if err != nil {
 			return fmt.Errorf("failed to send %s event to %s: %w", evtType.String(), txn.RoomID, err)
 		}
