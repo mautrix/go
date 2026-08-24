@@ -601,7 +601,7 @@ func (portal *Portal) sendLegacyBackfill(ctx context.Context, source *UserLogin,
 				Str("message_id", string(msg.ID)).
 				Any("sender_id", msg.Sender).
 				Time("message_ts", msg.Timestamp)
-		})
+		}, true)
 		if !res.Success {
 			return res.Error
 		}

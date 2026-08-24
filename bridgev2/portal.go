@@ -2875,6 +2875,7 @@ func (portal *Portal) sendConvertedMessage(
 	ts time.Time,
 	streamOrder int64,
 	logContext func(*zerolog.Event) *zerolog.Event,
+	save bool,
 ) ([]*database.Message, EventHandlingResult) {
 	if logContext == nil {
 		logContext = func(e *zerolog.Event) *zerolog.Event {
@@ -2933,10 +2934,12 @@ func (portal *Portal) sendConvertedMessage(
 				Msg("Sent message part to Matrix")
 			dbMessage.MXID = resp.EventID
 		}
-		err := portal.Bridge.DB.Message.Insert(ctx, dbMessage)
-		if err != nil {
-			logContext(log.Err(err)).Str("part_id", string(part.ID)).Msg("Failed to save message part to database")
-			errorList = append(errorList, fmt.Errorf("%w: failed to save message part to database: %w", ErrDatabaseError, err))
+		if save {
+			err := portal.Bridge.DB.Message.Insert(ctx, dbMessage)
+			if err != nil {
+				logContext(log.Err(err)).Str("part_id", string(part.ID)).Msg("Failed to save message part to database")
+				errorList = append(errorList, fmt.Errorf("%w: failed to save message part to database: %w", ErrDatabaseError, err))
+			}
 		}
 		if converted.Disappear.Type != event.DisappearingTypeNone && !dbMessage.HasFakeMXID() {
 			if converted.Disappear.Type == event.DisappearingTypeAfterSend && converted.Disappear.DisappearAt.IsZero() {
@@ -3101,7 +3104,7 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 			return EventHandlingResultFailed.WithError(err)
 		}
 	}
-	_, res = portal.sendConvertedMessage(ctx, source, evt.GetID(), intent, evt.GetSender().Sender, converted, ts, getStreamOrder(evt), nil)
+	_, res = portal.sendConvertedMessage(ctx, source, evt.GetID(), intent, evt.GetSender().Sender, converted, ts, getStreamOrder(evt), nil, true)
 	if portal.currentlyTypingGhosts.Pop(intent.GetMXID()) {
 		err = intent.MarkTyping(ctx, portal.MXID, TypingTypeText, 0)
 		if err != nil {
@@ -3205,6 +3208,7 @@ func (portal *Portal) sendConvertedEdit(
 ) EventHandlingResult {
 	log := zerolog.Ctx(ctx)
 	var errorList []error
+	updatedParts := make([]*database.Message, 0, len(converted.ModifiedParts))
 	for i, part := range converted.ModifiedParts {
 		if part.Content.Mentions == nil {
 			part.Content.Mentions = &event.Mentions{}
@@ -3252,12 +3256,9 @@ func (portal *Portal) sendConvertedEdit(
 				}
 			}
 		}
-		err := portal.Bridge.DB.Message.Update(ctx, part.Part)
-		if err != nil {
-			log.Err(err).Int64("part_rowid", part.Part.RowID).Msg("Failed to update message part in database")
-			errorList = append(errorList, fmt.Errorf("%w: failed to update message part in database: %w", ErrDatabaseError, err))
-		}
+		updatedParts = append(updatedParts, part.Part)
 	}
+	deletedParts := make([]int64, 0, len(converted.DeletedParts))
 	for _, part := range converted.DeletedParts {
 		redactContent := &event.Content{
 			Parsed: &event.RedactionEventContent{
@@ -3277,17 +3278,39 @@ func (portal *Portal) sendConvertedEdit(
 				Str("part_id", string(part.ID)).
 				Msg("Sent redaction of message part to Matrix")
 		}
-		err = portal.Bridge.DB.Message.Delete(ctx, part.RowID)
-		if err != nil {
-			log.Err(err).Int64("part_rowid", part.RowID).Msg("Failed to delete message part from database")
-			errorList = append(errorList, fmt.Errorf("%w: failed to delete message part from database: %w", ErrDatabaseError, err))
-		}
+		deletedParts = append(deletedParts, part.RowID)
 	}
+	var addedParts []*database.Message
 	if converted.AddedParts != nil {
-		_, res := portal.sendConvertedMessage(ctx, source, targetID, intent, senderID, converted.AddedParts, ts, streamOrder, nil)
+		var res EventHandlingResult
+		addedParts, res = portal.sendConvertedMessage(ctx, source, targetID, intent, senderID, converted.AddedParts, ts, streamOrder, nil, false)
 		if !res.Success {
 			errorList = append(errorList, res.Error)
 		}
+	}
+	saveErr := portal.Bridge.DB.DoTxn(ctx, nil, func(ctx context.Context) error {
+		for _, part := range updatedParts {
+			err := portal.Bridge.DB.Message.Update(ctx, part)
+			if err != nil {
+				return fmt.Errorf("failed to update row %d (part %q) in database: %w", part.RowID, part.PartID, err)
+			}
+		}
+		for _, rowID := range deletedParts {
+			err := portal.Bridge.DB.Message.Delete(ctx, rowID)
+			if err != nil {
+				return fmt.Errorf("failed to delete row %d in database: %w", rowID, err)
+			}
+		}
+		for _, part := range addedParts {
+			err := portal.Bridge.DB.Message.Insert(ctx, part)
+			if err != nil {
+				return fmt.Errorf("failed to insert added part %q in database: %w", part.PartID, err)
+			}
+		}
+		return nil
+	})
+	if saveErr != nil {
+		errorList = append(errorList, fmt.Errorf("%w: %w", ErrDatabaseError, saveErr))
 	}
 	if len(errorList) > 0 {
 		return EventHandlingResultFailed.WithError(errors.Join(errorList...))
