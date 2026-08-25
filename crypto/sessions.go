@@ -114,6 +114,7 @@ type InboundGroupSession struct {
 	RatchetSafety    RatchetSafety
 
 	ReceivedAt       time.Time
+	CreationTS       time.Time
 	MaxAge           int64
 	MaxMessages      int
 	SharedHistory    *bool

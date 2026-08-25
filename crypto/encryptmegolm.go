@@ -211,7 +211,7 @@ func (mach *OlmMachine) newOutboundGroupSession(ctx context.Context, roomID id.R
 		signingKey, idKey := mach.account.Keys()
 		err = mach.createGroupSession(
 			ctx, mach.Client.UserID, idKey, signingKey, roomID, session.ID(), session.Internal.Key(),
-			session.MaxAge, session.MaxMessages, session.SharedHistory, false,
+			session.MaxAge, session.MaxMessages, session.SharedHistory, false, session.CreationTime,
 		)
 		if err != nil {
 			return nil, err

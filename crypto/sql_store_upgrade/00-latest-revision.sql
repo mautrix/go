@@ -1,4 +1,4 @@
--- v0 -> v21 (compatible with v20+): Latest revision
+-- v0 -> v22 (compatible with v20+): Latest revision
 CREATE TABLE crypto_account (
 	account_id         TEXT    PRIMARY KEY,
 	device_id          TEXT    NOT NULL,
@@ -73,6 +73,7 @@ CREATE TABLE crypto_megolm_inbound_session (
 	key_backup_version TEXT NOT NULL DEFAULT '',
 	key_source         TEXT NOT NULL DEFAULT '',
 	source_user        TEXT NOT NULL DEFAULT '',
+	session_creation_ts timestamp,
 	PRIMARY KEY (account_id, session_id)
 );
 -- Useful index to find keys that need backing up

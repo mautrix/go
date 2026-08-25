@@ -653,7 +653,7 @@ func (mach *OlmMachine) SendEncryptedToDevice(ctx context.Context, device *id.De
 
 func (mach *OlmMachine) createGroupSession(
 	ctx context.Context, sender id.UserID, senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionID id.SessionID,
-	sessionKey string, maxAge time.Duration, maxMessages int, sharedHistory *bool, isScheduled bool,
+	sessionKey string, maxAge time.Duration, maxMessages int, sharedHistory *bool, isScheduled bool, creationTS time.Time,
 ) error {
 	log := zerolog.Ctx(ctx)
 	igs, err := NewInboundGroupSession(senderKey, signingKey, roomID, sessionKey, maxAge, maxMessages, sharedHistory, isScheduled)
@@ -667,6 +667,7 @@ func (mach *OlmMachine) createGroupSession(
 		return fmt.Errorf("mismatched session ID while creating inbound group session")
 	}
 	igs.SourceUser = sender
+	igs.CreationTS = creationTS
 	err = mach.StoreGroupSession(ctx, igs)
 	if err != nil {
 		log.Err(err).Stringer("session_id", sessionID).Msg("Failed to store new inbound group session")
@@ -803,8 +804,10 @@ func (mach *OlmMachine) receiveRoomKey(ctx context.Context, evt *DecryptedOlmEve
 	}
 	// TODO(history sharing): fill shared history with current state if it's unset?
 	if mach.DeletePreviousKeysOnReceive && !content.IsScheduled {
-		log.Debug().Msg("Redacting previous megolm sessions from sender in room")
-		sessionIDs, err := mach.CryptoStore.RedactGroupSessions(ctx, content.RoomID, evt.SenderKey, "received new key from device")
+		// Only redact sessions the sender created before this one, in case they arrive out of order
+		before := content.CreationTS.Time
+		log.Debug().Time("before", before).Msg("Redacting previous megolm sessions from sender in room")
+		sessionIDs, err := mach.CryptoStore.RedactGroupSessions(ctx, content.RoomID, evt.SenderKey, "received new key from device", before)
 		if err != nil {
 			log.Err(err).Msg("Failed to redact previous megolm sessions")
 		} else {
@@ -815,7 +818,7 @@ func (mach *OlmMachine) receiveRoomKey(ctx context.Context, evt *DecryptedOlmEve
 	}
 	err = mach.createGroupSession(
 		ctx, evt.Sender, evt.SenderKey, evt.Keys.Ed25519, content.RoomID, content.SessionID, content.SessionKey,
-		maxAge, maxMessages, content.SharedHistory, content.IsScheduled,
+		maxAge, maxMessages, content.SharedHistory, content.IsScheduled, content.CreationTS.Time,
 	)
 	if err != nil {
 		log.Err(err).Msg("Failed to create inbound group session")
