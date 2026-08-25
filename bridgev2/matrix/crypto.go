@@ -148,7 +148,12 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 		} else if !ok {
 			return nil
 		}
+		err = helper.repairOTKsIfNeeded(ctx)
+		if err != nil {
+			return err
+		}
 	} else {
+		helper.bridge.Bridge.DB.KV.Delete(ctx, "otk_repair_needed")
 		err = helper.ShareKeys(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to share device keys: %w", err)
@@ -356,7 +361,7 @@ func (helper *CryptoHelper) verifyKeysAreOnServer(ctx context.Context) (bool, er
 	})
 	if err != nil {
 		helper.log.WithLevel(zerolog.FatalLevel).Err(err).Msg("Failed to query own keys to make sure device still exists")
-		return false, fmt.Errorf("%w: failed to query own keys to make sure device still exists:%w", ExitError{33}, err)
+		return false, fmt.Errorf("%w: failed to query own keys to make sure device still exists: %w", ExitError{33}, err)
 	}
 	device, ok := resp.DeviceKeys[helper.client.UserID][helper.client.DeviceID]
 	if ok && len(device.Keys) > 0 {
@@ -364,6 +369,18 @@ func (helper *CryptoHelper) verifyKeysAreOnServer(ctx context.Context) (bool, er
 	}
 	helper.log.Warn().Msg("Existing device doesn't have keys on server, resetting crypto")
 	return false, helper.Reset(ctx, false)
+}
+
+func (helper *CryptoHelper) repairOTKsIfNeeded(ctx context.Context) error {
+	if helper.bridge.Bridge.DB.KV.Get(ctx, "otk_repair_needed") != "true" {
+		return nil
+	}
+	err := helper.mach.RepairOneTimeKeys(ctx)
+	if err != nil {
+		return err
+	}
+	helper.bridge.Bridge.DB.KV.Set(ctx, "otk_repair_needed", "false")
+	return nil
 }
 
 func (helper *CryptoHelper) Start() {

@@ -22,6 +22,7 @@ import (
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/olm"
+	"maunium.net/go/mautrix/crypto/signatures"
 	"maunium.net/go/mautrix/crypto/ssss"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -86,6 +87,7 @@ type OlmMachine struct {
 	otkUploadLock       sync.Mutex
 	lastOTKUpload       time.Time
 	receivedOTKsForSelf atomic.Bool
+	repairingOTKs       atomic.Bool
 
 	CrossSigningKeys    *CrossSigningKeysCache
 	crossSigningPubkeys *CrossSigningPublicKeysCache
@@ -866,6 +868,9 @@ func (mach *OlmMachine) getKeysForOlmMessage(ctx context.Context) *mautrix.Devic
 // If currentOTKCount is less than half of the limit (100 / 2 = 50), enough one-time keys will be uploaded so exactly
 // half of the limit is filled.
 func (mach *OlmMachine) ShareKeys(ctx context.Context, currentOTKCount int) error {
+	if mach.repairingOTKs.Load() {
+		return nil
+	}
 	log := mach.machOrContextLog(ctx)
 	start := time.Now()
 	mach.otkUploadLock.Lock()
@@ -919,6 +924,77 @@ func (mach *OlmMachine) ShareKeys(ctx context.Context, currentOTKCount int) erro
 	mach.account.Internal.MarkKeysAsPublished()
 	mach.account.Shared = true
 	return mach.saveAccount(ctx)
+}
+
+func (mach *OlmMachine) RepairOneTimeKeys(ctx context.Context) error {
+	log := mach.Log.With().Str("action", "repair otks").Logger()
+	ctx = log.WithContext(ctx)
+	if mach.repairingOTKs.Swap(true) {
+		return fmt.Errorf("already repairing one-time keys")
+	}
+	onDone := sync.OnceFunc(func() {
+		mach.repairingOTKs.Store(false)
+		mach.otkUploadLock.Unlock()
+	})
+	mach.otkUploadLock.Lock()
+	defer onDone()
+	resp, err := mach.Client.UploadKeys(ctx, &mautrix.ReqUploadKeys{})
+	if err != nil {
+		return fmt.Errorf("failed to check current OTK counts: %w", err)
+	}
+	count := resp.OneTimeKeyCounts.SignedCurve25519
+	if count == 0 {
+		log.Debug().Msg("No one-time keys on server, no need to repair")
+		return nil
+	}
+	log.Debug().
+		Int("server_count", count).
+		Msg("Claiming potentially broken one-time keys on server")
+	claimedInvalidSig := 0
+	claimedOKSig := 0
+	errorCount := 0
+	for count > 0 {
+		claim, err := mach.Client.ClaimKeys(ctx, &mautrix.ReqClaimKeys{
+			OneTimeKeys: mautrix.OneTimeKeysRequest{
+				mach.Client.UserID: {mach.Client.DeviceID: id.KeyAlgorithmSignedCurve25519},
+			},
+		})
+		if err != nil {
+			errorCount++
+			if errorCount >= 20 {
+				return fmt.Errorf("failed to claim one-time keys for repair after %d attempts: %w", errorCount, err)
+			}
+			log.Err(err).Msg("Failed to claim one-time key for repair")
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(time.Duration(errorCount*2) * time.Second):
+			}
+			continue
+		} else if claimed, ok := claim.OneTimeKeys[mach.Client.UserID][mach.Client.DeviceID]; !ok {
+			log.Warn().Msg("Claim didn't return a key")
+			break
+		} else {
+			log.Debug().Any("claimed_keys", claimed).Msg("Claimed own key")
+			for keyID, key := range claimed {
+				if ok, err = signatures.VerifySignatureJSON(key.RawData, mach.Client.UserID, mach.Client.DeviceID.String(), mach.OwnIdentity().SigningKey); err != nil {
+					log.Warn().Err(err).Stringer("key_id", keyID).Msg("Failed to verify signature of claimed key")
+				} else if !ok {
+					claimedInvalidSig++
+				} else {
+					claimedOKSig++
+				}
+			}
+		}
+		errorCount = 0
+		count--
+	}
+	log.Info().
+		Int("invalid_signatures", claimedInvalidSig).
+		Int("valid_signatures", claimedOKSig).
+		Msg("Finished claiming potentially broken one-time keys")
+	onDone()
+	return mach.ShareKeys(ctx, -1)
 }
 
 func (mach *OlmMachine) ExpiredKeyDeleteLoop(ctx context.Context) {

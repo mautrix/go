@@ -37,6 +37,7 @@ const (
 		INSERT INTO kv_store (bridge_id, key, value) VALUES ($1, $2, $3)
 		ON CONFLICT (bridge_id, key) DO UPDATE SET value = $3
 	`
+	deleteKVQuery = `DELETE FROM kv_store WHERE bridge_id = $1 AND key = $2`
 )
 
 func (kvq *KVQuery) Get(ctx context.Context, key Key) string {
@@ -55,5 +56,14 @@ func (kvq *KVQuery) Set(ctx context.Context, key Key, value string) {
 			Str("key", string(key)).
 			Str("value", value).
 			Msg("Failed to set key in kvstore")
+	}
+}
+
+func (kvq *KVQuery) Delete(ctx context.Context, key Key) {
+	_, err := kvq.Exec(ctx, deleteKVQuery, kvq.BridgeID, key)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).
+			Str("key", string(key)).
+			Msg("Failed to delete key in kvstore")
 	}
 }
