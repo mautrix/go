@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/crypto/signatures"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -80,6 +81,9 @@ func TestOlmMachineOlmMegolmSessions(t *testing.T) {
 		break
 	}
 	machineIn.account.Internal.MarkKeysAsPublished()
+	ok, err := signatures.VerifySignatureJSON(otk, "user2", "device2", machineIn.OwnIdentity().SigningKey)
+	require.NoError(t, err)
+	require.True(t, ok, "OTK signature verification failed")
 
 	// create outbound olm session for sending machine using OTK
 	olmSession, err := machineOut.account.Internal.NewOutboundSession(machineIn.account.IdentityKey(), otk.Key)

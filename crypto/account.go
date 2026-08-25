@@ -118,10 +118,9 @@ func (account *OlmAccount) getOneTimeKeys(userID id.UserID, deviceID id.DeviceID
 		panic(err)
 	}
 	for keyID, key := range internalKeys {
-		key := mautrix.OneTimeKey{Key: key}
-		signature, _ := account.SignJSON(key)
+		key := mautrix.OneTimeKey{Key: key, IsSigned: true}
+		signature, _ := account.SignJSON(&key)
 		key.Signatures = signatures.NewSingleSignature(userID, id.KeyAlgorithmEd25519, deviceID.String(), signature)
-		key.IsSigned = true
 		oneTimeKeys[id.NewKeyID(id.KeyAlgorithmSignedCurve25519, keyID)] = key
 	}
 	return oneTimeKeys
