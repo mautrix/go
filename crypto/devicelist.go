@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exzerolog"
@@ -280,7 +281,7 @@ func (mach *OlmMachine) FetchKeys(ctx context.Context, users []id.UserID, includ
 						Str("identity_key", device.IdentityKey.String()).
 						Str("signing_key", device.SigningKey.String()).
 						Logger()
-					sessionIDs, err := mach.CryptoStore.RedactGroupSessions(ctx, "", device.IdentityKey, "device removed")
+					sessionIDs, err := mach.CryptoStore.RedactGroupSessions(ctx, "", device.IdentityKey, "device removed", time.Time{})
 					if err != nil {
 						log.Err(err).Msg("Failed to redact megolm sessions from deleted device")
 					} else {

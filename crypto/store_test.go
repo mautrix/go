@@ -11,6 +11,7 @@ import (
 	"database/sql"
 	"strconv"
 	"testing"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
@@ -159,6 +160,53 @@ func TestStoreMegolmSession(t *testing.T) {
 			pickled, err := retrieved.Internal.Pickle([]byte("test"))
 			require.NoError(t, err, "Error pickling inbound group session")
 			assert.EqualValues(t, pickled, groupSession, "Pickled inbound group session does not match original")
+		})
+	}
+}
+
+func TestRedactGroupSessionsGatedByCreationTS(t *testing.T) {
+	stores := getCryptoStores(t)
+	for storeName, store := range stores {
+		t.Run(storeName, func(t *testing.T) {
+			acc := NewOlmAccount()
+			senderKey := acc.IdentityKey()
+
+			mkSession := func(creationTS time.Time) *InboundGroupSession {
+				ogs, err := olm.NewOutboundGroupSession()
+				require.NoError(t, err)
+				internal, err := olm.NewInboundGroupSession([]byte(ogs.Key()))
+				require.NoError(t, err)
+				igs := &InboundGroupSession{
+					Internal:   internal,
+					SigningKey: acc.SigningKey(),
+					SenderKey:  senderKey,
+					RoomID:     "room1",
+					ReceivedAt: time.Now().UTC(),
+					CreationTS: creationTS,
+				}
+				require.NoError(t, store.PutGroupSession(context.TODO(), igs))
+				return igs
+			}
+
+			oldTS := time.UnixMilli(1000).UTC()
+			newTS := time.UnixMilli(2000).UTC()
+			oldSession := mkSession(oldTS)
+			newSession := mkSession(newTS)
+			untimestampedSession := mkSession(time.Time{})
+
+			// A share created at newTS arriving late must only redact sessions the sender created before it.
+			redacted, err := store.RedactGroupSessions(context.TODO(), "room1", senderKey, "received new key from device", newTS)
+			require.NoError(t, err)
+			assert.ElementsMatch(t, []id.SessionID{oldSession.ID()}, redacted)
+
+			survivor, err := store.GetGroupSession(context.TODO(), "room1", newSession.ID())
+			require.NoError(t, err)
+			require.NotNil(t, survivor, "newer session must survive a delayed older share")
+
+			// A zero cutoff (e.g. device removed) redacts everything that remains.
+			redacted, err = store.RedactGroupSessions(context.TODO(), "room1", senderKey, "device removed", time.Time{})
+			require.NoError(t, err)
+			assert.ElementsMatch(t, []id.SessionID{newSession.ID(), untimestampedSession.ID()}, redacted)
 		})
 	}
 }

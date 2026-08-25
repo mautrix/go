@@ -72,8 +72,9 @@ type Store interface {
 	GetGroupSession(context.Context, id.RoomID, id.SessionID) (*InboundGroupSession, error)
 	// RedactGroupSession removes the session data for the given inbound Megolm session from the store.
 	RedactGroupSession(context.Context, id.RoomID, id.SessionID, string) error
-	// RedactGroupSessions removes the session data for all inbound Megolm sessions from a specific device and/or in a specific room.
-	RedactGroupSessions(context.Context, id.RoomID, id.SenderKey, string) ([]id.SessionID, error)
+	// RedactGroupSessions removes session data for inbound Megolm sessions from a specific device and/or in a
+	// specific room. If before is set only sessions created before will be redacted.
+	RedactGroupSessions(ctx context.Context, roomID id.RoomID, senderKey id.SenderKey, reason string, before time.Time) ([]id.SessionID, error)
 	// RedactExpiredGroupSessions removes the session data for all inbound Megolm sessions that have expired.
 	RedactExpiredGroupSessions(context.Context) ([]id.SessionID, error)
 	// RedactOutdatedGroupSessions removes the session data for all inbound Megolm sessions that are lacking the expiration metadata.
@@ -350,14 +351,17 @@ func (gs *MemoryStore) RedactGroupSession(_ context.Context, roomID id.RoomID, s
 	return gs.save()
 }
 
-func (gs *MemoryStore) RedactGroupSessions(_ context.Context, roomID id.RoomID, senderKey id.SenderKey, reason string) ([]id.SessionID, error) {
+func (gs *MemoryStore) RedactGroupSessions(_ context.Context, roomID id.RoomID, senderKey id.SenderKey, reason string, before time.Time) ([]id.SessionID, error) {
 	gs.lock.Lock()
 	defer gs.lock.Unlock()
 	var sessionIDs []id.SessionID
+	olderThanCutoff := func(session *InboundGroupSession) bool {
+		return before.IsZero() || (!session.CreationTS.IsZero() && session.CreationTS.Before(before))
+	}
 	if roomID != "" && senderKey != "" {
 		sessions := gs.getGroupSessions(roomID)
 		for sessionID, session := range sessions {
-			if session.SenderKey == senderKey {
+			if session.SenderKey == senderKey && olderThanCutoff(session) {
 				sessionIDs = append(sessionIDs, sessionID)
 				delete(sessions, sessionID)
 			}
@@ -365,15 +369,19 @@ func (gs *MemoryStore) RedactGroupSessions(_ context.Context, roomID id.RoomID, 
 	} else if senderKey != "" {
 		for _, room := range gs.GroupSessions {
 			for sessionID, session := range room {
-				if session.SenderKey == senderKey {
+				if session.SenderKey == senderKey && olderThanCutoff(session) {
 					sessionIDs = append(sessionIDs, sessionID)
 					delete(room, sessionID)
 				}
 			}
 		}
 	} else if roomID != "" {
-		sessionIDs = maps.Keys(gs.GroupSessions[roomID])
-		delete(gs.GroupSessions, roomID)
+		for sessionID, session := range gs.GroupSessions[roomID] {
+			if olderThanCutoff(session) {
+				sessionIDs = append(sessionIDs, sessionID)
+				delete(gs.GroupSessions[roomID], sessionID)
+			}
+		}
 	} else {
 		return nil, fmt.Errorf("room ID or sender key must be provided for redacting sessions")
 	}

@@ -11,6 +11,7 @@ import (
 	"fmt"
 
 	"go.mau.fi/util/jsonbytes"
+	"go.mau.fi/util/jsontime"
 
 	"maunium.net/go/mautrix/id"
 )
@@ -108,9 +109,10 @@ type RoomKeyEventContent struct {
 	SessionKey    string       `json:"session_key"`
 	SharedHistory *bool        `json:"shared_history,omitempty"`
 
-	MaxAge      int64 `json:"com.beeper.max_age_ms,omitempty"`
-	MaxMessages int   `json:"com.beeper.max_messages,omitempty"`
-	IsScheduled bool  `json:"com.beeper.is_scheduled,omitempty"`
+	MaxAge      int64              `json:"com.beeper.max_age_ms,omitempty"`
+	MaxMessages int                `json:"com.beeper.max_messages,omitempty"`
+	IsScheduled bool               `json:"com.beeper.is_scheduled,omitempty"`
+	CreationTS  jsontime.UnixMilli `json:"com.beeper.session_creation_ts,omitzero"`
 }
 
 // ForwardedRoomKeyEventContent represents the content of a m.forwarded_room_key to_device event.
