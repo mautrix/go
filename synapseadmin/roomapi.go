@@ -115,9 +115,9 @@ func (cli *Client) RoomMessages(ctx context.Context, roomID id.RoomID, from, to 
 }
 
 type ReqDeleteRoom struct {
-	Purge         bool      `json:"purge,omitempty"`
-	ForcePurge    bool      `json:"force_purge,omitempty"`
-	Block         bool      `json:"block,omitempty"`
+	Purge         bool      `json:"purge,omitzero"`
+	ForcePurge    bool      `json:"force_purge,omitzero"`
+	Block         bool      `json:"block,omitzero"`
 	Message       string    `json:"message,omitempty"`
 	RoomName      string    `json:"room_name,omitempty"`
 	NewRoomUserID id.UserID `json:"new_room_user_id,omitempty"`

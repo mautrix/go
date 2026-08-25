@@ -24,13 +24,13 @@ const (
 // There is no tracking of sessions in an account.
 type Account struct {
 	IdKeys struct {
-		Ed25519    crypto.Ed25519KeyPair    `json:"ed25519,omitempty"`
-		Curve25519 crypto.Curve25519KeyPair `json:"curve25519,omitempty"`
+		Ed25519    crypto.Ed25519KeyPair    `json:"ed25519,omitzero"`
+		Curve25519 crypto.Curve25519KeyPair `json:"curve25519,omitzero"`
 	} `json:"identity_keys"`
 	OTKeys             []crypto.OneTimeKey `json:"one_time_keys"`
-	CurrentFallbackKey crypto.OneTimeKey   `json:"current_fallback_key,omitempty"`
-	PrevFallbackKey    crypto.OneTimeKey   `json:"prev_fallback_key,omitempty"`
-	NextOneTimeKeyID   uint32              `json:"next_one_time_key_id,omitempty"`
+	CurrentFallbackKey crypto.OneTimeKey   `json:"current_fallback_key,omitzero"`
+	PrevFallbackKey    crypto.OneTimeKey   `json:"prev_fallback_key,omitzero"`
+	NextOneTimeKeyID   uint32              `json:"next_one_time_key_id,omitzero"`
 	NumFallbackKeys    uint8               `json:"number_fallback_keys"`
 }
 

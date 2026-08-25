@@ -82,17 +82,17 @@ type VerificationTransaction struct {
 	// that we showed.
 	QRCodeSharedSecret []byte `json:"qr_code_shared_secret,omitempty"`
 
-	StartedByUs              bool                                 `json:"started_by_us,omitempty"`               // Whether the verification was started by us
-	StartEventContent        *event.VerificationStartEventContent `json:"start_event_content,omitempty"`         // The m.key.verification.start event content
-	Commitment               []byte                               `json:"committment,omitempty"`                 // The commitment from the m.key.verification.accept event
-	MACMethod                event.MACMethod                      `json:"mac_method,omitempty"`                  // The method used to calculate the MAC
-	EphemeralKey             *ECDHPrivateKey                      `json:"ephemeral_key,omitempty"`               // The ephemeral key
-	EphemeralPublicKeyShared bool                                 `json:"ephemeral_public_key_shared,omitempty"` // Whether this device's ephemeral public key has been shared
-	OtherPublicKey           *ECDHPublicKey                       `json:"other_public_key,omitempty"`            // The other device's ephemeral public key
-	ReceivedTheirMAC         bool                                 `json:"received_their_mac,omitempty"`          // Whether we have received their MAC
-	SentOurMAC               bool                                 `json:"sent_our_mac,omitempty"`                // Whether we have sent our MAC
-	ReceivedTheirDone        bool                                 `json:"received_their_done,omitempty"`         // Whether we have received their done event
-	SentOurDone              bool                                 `json:"sent_our_done,omitempty"`               // Whether we have sent our done event
+	StartedByUs              bool                                 `json:"started_by_us,omitzero"`               // Whether the verification was started by us
+	StartEventContent        *event.VerificationStartEventContent `json:"start_event_content,omitempty"`        // The m.key.verification.start event content
+	Commitment               []byte                               `json:"committment,omitempty"`                // The commitment from the m.key.verification.accept event
+	MACMethod                event.MACMethod                      `json:"mac_method,omitempty"`                 // The method used to calculate the MAC
+	EphemeralKey             *ECDHPrivateKey                      `json:"ephemeral_key,omitempty"`              // The ephemeral key
+	EphemeralPublicKeyShared bool                                 `json:"ephemeral_public_key_shared,omitzero"` // Whether this device's ephemeral public key has been shared
+	OtherPublicKey           *ECDHPublicKey                       `json:"other_public_key,omitempty"`           // The other device's ephemeral public key
+	ReceivedTheirMAC         bool                                 `json:"received_their_mac,omitzero"`          // Whether we have received their MAC
+	SentOurMAC               bool                                 `json:"sent_our_mac,omitzero"`                // Whether we have sent our MAC
+	ReceivedTheirDone        bool                                 `json:"received_their_done,omitzero"`         // Whether we have received their done event
+	SentOurDone              bool                                 `json:"sent_our_done,omitzero"`               // Whether we have sent our done event
 }
 
 type VerificationStore interface {

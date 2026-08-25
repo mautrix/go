@@ -161,8 +161,8 @@ type ReqGetMissingEvents struct {
 	RoomID         id.RoomID    `json:"-"`
 	EarliestEvents []id.EventID `json:"earliest_events"`
 	LatestEvents   []id.EventID `json:"latest_events"`
-	Limit          int          `json:"limit,omitempty"`
-	MinDepth       int          `json:"min_depth,omitempty"`
+	Limit          int          `json:"limit,omitzero"`
+	MinDepth       int          `json:"min_depth,omitzero"`
 }
 
 type RespGetMissingEvents struct {

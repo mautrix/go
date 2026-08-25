@@ -28,13 +28,13 @@ import (
 )
 
 type WebsocketRequest struct {
-	ReqID   int    `json:"id,omitempty"`
+	ReqID   int    `json:"id,omitzero"`
 	Command string `json:"command"`
 	Data    any    `json:"data"`
 }
 
 type WebsocketCommand struct {
-	ReqID   int             `json:"id,omitempty"`
+	ReqID   int             `json:"id,omitzero"`
 	Command string          `json:"command"`
 	Data    json.RawMessage `json:"data"`
 

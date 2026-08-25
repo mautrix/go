@@ -24,7 +24,7 @@ import (
 )
 
 type RoomFeatures struct {
-	ID string `json:"id,omitempty"`
+	ID string `json:"id,omitzero"`
 
 	// N.B. New fields need to be added to the Hash function to be included in the deduplication hash.
 
@@ -33,43 +33,43 @@ type RoomFeatures struct {
 	State         StateFeatureMap      `json:"state,omitempty"`
 	MemberActions MemberFeatureMap     `json:"member_actions,omitempty"`
 
-	MaxTextLength int `json:"max_text_length,omitempty"`
+	MaxTextLength int `json:"max_text_length,omitzero"`
 
-	LocationMessage CapabilitySupportLevel `json:"location_message,omitempty"`
+	LocationMessage CapabilitySupportLevel `json:"location_message,omitzero"`
 
-	Poll                 CapabilitySupportLevel `json:"poll,omitempty"`
-	PollEnd              CapabilitySupportLevel `json:"poll_end,omitempty"`
-	PollHiddenVotes      CapabilitySupportLevel `json:"poll_hidden_votes,omitempty"`
-	PollDuplicateOptions CapabilitySupportLevel `json:"poll_duplicate_options,omitempty"`
-	PollMaxOptions       int                    `json:"poll_max_options,omitempty"`
-	PollOptionMaxLength  int                    `json:"poll_option_max_length,omitempty"`
+	Poll                 CapabilitySupportLevel `json:"poll,omitzero"`
+	PollEnd              CapabilitySupportLevel `json:"poll_end,omitzero"`
+	PollHiddenVotes      CapabilitySupportLevel `json:"poll_hidden_votes,omitzero"`
+	PollDuplicateOptions CapabilitySupportLevel `json:"poll_duplicate_options,omitzero"`
+	PollMaxOptions       int                    `json:"poll_max_options,omitzero"`
+	PollOptionMaxLength  int                    `json:"poll_option_max_length,omitzero"`
 
-	Thread CapabilitySupportLevel `json:"thread,omitempty"`
-	Reply  CapabilitySupportLevel `json:"reply,omitempty"`
+	Thread CapabilitySupportLevel `json:"thread,omitzero"`
+	Reply  CapabilitySupportLevel `json:"reply,omitzero"`
 
-	Edit         CapabilitySupportLevel `json:"edit,omitempty"`
-	EditMaxCount int                    `json:"edit_max_count,omitempty"`
-	EditMaxAge   *jsontime.Seconds      `json:"edit_max_age,omitempty"`
-	Delete       CapabilitySupportLevel `json:"delete,omitempty"`
-	DeleteForMe  bool                   `json:"delete_for_me,omitempty"`
-	DeleteMaxAge *jsontime.Seconds      `json:"delete_max_age,omitempty"`
-	DeleteHide   bool                   `json:"delete_hide_placeholder,omitempty"`
+	Edit         CapabilitySupportLevel `json:"edit,omitzero"`
+	EditMaxCount int                    `json:"edit_max_count,omitzero"`
+	EditMaxAge   *jsontime.Seconds      `json:"edit_max_age,omitzero"`
+	Delete       CapabilitySupportLevel `json:"delete,omitzero"`
+	DeleteForMe  bool                   `json:"delete_for_me,omitzero"`
+	DeleteMaxAge *jsontime.Seconds      `json:"delete_max_age,omitzero"`
+	DeleteHide   bool                   `json:"delete_hide_placeholder,omitzero"`
 
-	DisappearingTimer *DisappearingTimerCapability `json:"disappearing_timer,omitempty"`
+	DisappearingTimer *DisappearingTimerCapability `json:"disappearing_timer,omitzero"`
 
-	Reaction             CapabilitySupportLevel `json:"reaction,omitempty"`
-	ReactionCount        int                    `json:"reaction_count,omitempty"`
+	Reaction             CapabilitySupportLevel `json:"reaction,omitzero"`
+	ReactionCount        int                    `json:"reaction_count,omitzero"`
 	AllowedReactions     []string               `json:"allowed_reactions,omitempty"`
-	CustomEmojiReactions bool                   `json:"custom_emoji_reactions,omitempty"`
+	CustomEmojiReactions bool                   `json:"custom_emoji_reactions,omitzero"`
 
-	ReadReceipts          bool `json:"read_receipts,omitempty"`
-	TypingNotifications   bool `json:"typing_notifications,omitempty"`
-	Archive               bool `json:"archive,omitempty"`
-	MarkAsUnread          bool `json:"mark_as_unread,omitempty"`
-	DeleteChat            bool `json:"delete_chat,omitempty"`
-	DeleteChatForEveryone bool `json:"delete_chat_for_everyone,omitempty"`
+	ReadReceipts          bool `json:"read_receipts,omitzero"`
+	TypingNotifications   bool `json:"typing_notifications,omitzero"`
+	Archive               bool `json:"archive,omitzero"`
+	MarkAsUnread          bool `json:"mark_as_unread,omitzero"`
+	DeleteChat            bool `json:"delete_chat,omitzero"`
+	DeleteChatForEveryone bool `json:"delete_chat_for_everyone,omitzero"`
 
-	MessageRequest *MessageRequestFeatures `json:"message_request,omitempty"`
+	MessageRequest *MessageRequestFeatures `json:"message_request,omitzero"`
 
 	PerMessageProfileRelay bool `json:"-"`
 }
@@ -156,7 +156,7 @@ type DisappearingTimerCapability struct {
 	Types  []DisappearingType      `json:"types"`
 	Timers []jsontime.Milliseconds `json:"timers,omitempty"`
 
-	OmitEmptyTimer bool `json:"omit_empty_timer,omitempty"`
+	OmitEmptyTimer bool `json:"omit_empty_timer,omitzero"`
 }
 
 func (dtc *DisappearingTimerCapability) Clone() *DisappearingTimerCapability {
@@ -265,15 +265,15 @@ type FileFeatures struct {
 
 	MimeTypes map[string]CapabilitySupportLevel `json:"mime_types"`
 
-	Caption          CapabilitySupportLevel `json:"caption,omitempty"`
-	MaxCaptionLength int                    `json:"max_caption_length,omitempty"`
+	Caption          CapabilitySupportLevel `json:"caption,omitzero"`
+	MaxCaptionLength int                    `json:"max_caption_length,omitzero"`
 
-	MaxSize     int64             `json:"max_size,omitempty"`
-	MaxWidth    int               `json:"max_width,omitempty"`
-	MaxHeight   int               `json:"max_height,omitempty"`
-	MaxDuration *jsontime.Seconds `json:"max_duration,omitempty"`
+	MaxSize     int64             `json:"max_size,omitzero"`
+	MaxWidth    int               `json:"max_width,omitzero"`
+	MaxHeight   int               `json:"max_height,omitzero"`
+	MaxDuration *jsontime.Seconds `json:"max_duration,omitzero"`
 
-	ViewOnce bool `json:"view_once,omitempty"`
+	ViewOnce bool `json:"view_once,omitzero"`
 }
 
 func (ff *FileFeatures) GetMimeSupport(inputType string) CapabilitySupportLevel {

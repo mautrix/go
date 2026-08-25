@@ -19,7 +19,7 @@ import (
 type Parameter struct {
 	Key          string                         `json:"key"`
 	Schema       *ParameterSchema               `json:"schema"`
-	Optional     bool                           `json:"optional,omitempty"`
+	Optional     bool                           `json:"optional,omitzero"`
 	Description  *event.ExtensibleTextContainer `json:"description,omitempty"`
 	DefaultValue any                            `json:"fi.mau.default_value,omitempty"`
 }

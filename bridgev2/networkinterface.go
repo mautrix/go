@@ -199,7 +199,7 @@ type BridgeName struct {
 	BeeperBridgeType string `json:"beeper_bridge_type"`
 	// The default appservice port to use in the example config, defaults to 8080 if unset
 	// Official mautrix bridges will use ports defined in https://mau.fi/ports
-	DefaultPort uint16 `json:"default_port,omitempty"`
+	DefaultPort uint16 `json:"default_port,omitzero"`
 	// The default command prefix to use in the example config, defaults to NetworkID if unset. Must include the ! prefix.
 	DefaultCommandPrefix string `json:"default_command_prefix,omitempty"`
 }
@@ -857,7 +857,7 @@ type AltTargetFindingNetworkAPI interface {
 type ProvisioningCapabilities struct {
 	ResolveIdentifier ResolveIdentifierCapabilities    `json:"resolve_identifier"`
 	GroupCreation     map[string]GroupTypeCapabilities `json:"group_creation"`
-	ImagePackImport   bool                             `json:"image_pack_import,omitempty"`
+	ImagePackImport   bool                             `json:"image_pack_import,omitzero"`
 }
 
 type ResolveIdentifierCapabilities struct {
@@ -895,11 +895,11 @@ type GroupFieldCapability struct {
 	// as the allowed flag can't be enforced properly when creating a group for an existing Matrix room.
 	Allowed bool `json:"allowed"`
 	// Is setting this field mandatory for the creation to succeed?
-	Required bool `json:"required,omitempty"`
+	Required bool `json:"required,omitzero"`
 	// The minimum/maximum length of the field, if applicable.
 	// For members, length means the number of members excluding the creator.
-	MinLength int `json:"min_length,omitempty"`
-	MaxLength int `json:"max_length,omitempty"`
+	MinLength int `json:"min_length,omitzero"`
+	MaxLength int `json:"max_length,omitzero"`
 
 	// Only for the disappear field: allowed disappearing settings
 	DisappearSettings *event.DisappearingTimerCapability `json:"settings,omitempty"`
@@ -1062,7 +1062,7 @@ type PushConfig struct {
 	APNs *APNsPushConfig `json:"apns,omitempty"`
 	// If Native is true, it means the network supports registering for pushes
 	// that are delivered directly to the app without the use of a push relay.
-	Native bool `json:"native,omitempty"`
+	Native bool `json:"native,omitzero"`
 }
 
 // PushableNetworkAPI is an optional interface that network connectors can implement

@@ -73,8 +73,8 @@ type ReqRegister[UIAType any] struct {
 	Password                 string      `json:"password,omitempty"`
 	DeviceID                 id.DeviceID `json:"device_id,omitempty"`
 	InitialDeviceDisplayName string      `json:"initial_device_display_name,omitempty"`
-	InhibitLogin             bool        `json:"inhibit_login,omitempty"`
-	RefreshToken             bool        `json:"refresh_token,omitempty"`
+	InhibitLogin             bool        `json:"inhibit_login,omitzero"`
+	RefreshToken             bool        `json:"refresh_token,omitzero"`
 	Auth                     UIAType     `json:"auth,omitempty"`
 
 	// Type for registration, only used for appservice user registrations
@@ -107,7 +107,7 @@ type ReqLogin struct {
 	Token                    string         `json:"token,omitempty"`
 	DeviceID                 id.DeviceID    `json:"device_id,omitempty"`
 	InitialDeviceDisplayName string         `json:"initial_device_display_name,omitempty"`
-	RefreshToken             bool           `json:"refresh_token,omitempty"`
+	RefreshToken             bool           `json:"refresh_token,omitzero"`
 
 	// Whether or not the returned credentials should be stored in the Client
 	StoreCredentials bool `json:"-"`
@@ -143,15 +143,15 @@ type ReqCreateRoom struct {
 	CreationContent map[string]interface{} `json:"creation_content,omitempty"`
 	InitialState    []*event.Event         `json:"initial_state,omitempty"`
 	Preset          string                 `json:"preset,omitempty"`
-	IsDirect        bool                   `json:"is_direct,omitempty"`
+	IsDirect        bool                   `json:"is_direct,omitzero"`
 	RoomVersion     id.RoomVersion         `json:"room_version,omitempty"`
 
 	PowerLevelOverride *event.PowerLevelsEventContent `json:"power_level_content_override,omitempty"`
 
 	MeowRoomID            id.RoomID   `json:"fi.mau.room_id,omitempty"`
-	MeowCreateTS          int64       `json:"fi.mau.origin_server_ts,omitempty"`
+	MeowCreateTS          int64       `json:"fi.mau.origin_server_ts,omitzero"`
 	BeeperInitialMembers  []id.UserID `json:"com.beeper.initial_members,omitempty"`
-	BeeperAutoJoinInvites bool        `json:"com.beeper.auto_join_invites,omitempty"`
+	BeeperAutoJoinInvites bool        `json:"com.beeper.auto_join_invites,omitzero"`
 	BeeperLocalRoomID     id.RoomID   `json:"com.beeper.local_room_id,omitempty"`
 	BeeperBridgeName      string      `json:"com.beeper.bridge_name,omitempty"`
 	BeeperBridgeAccountID string      `json:"com.beeper.bridge_account_id,omitempty"`
@@ -188,7 +188,7 @@ type ReqKnockRoom struct {
 
 type ReqSearchUserDirectory struct {
 	SearchTerm string `json:"search_term"`
-	Limit      int    `json:"limit,omitempty"`
+	Limit      int    `json:"limit,omitzero"`
 }
 
 type ReqMutualRooms struct {
@@ -224,7 +224,7 @@ type ReqBanUser struct {
 	Reason string    `json:"reason,omitempty"`
 	UserID id.UserID `json:"user_id"`
 
-	MSC4293RedactEvents bool `json:"org.matrix.msc4293.redact_events,omitempty"`
+	MSC4293RedactEvents bool `json:"org.matrix.msc4293.redact_events,omitzero"`
 }
 
 // ReqUnbanUser is the JSON request for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3roomsroomidunban
@@ -236,7 +236,7 @@ type ReqUnbanUser struct {
 // ReqTyping is the JSON request for https://spec.matrix.org/v1.2/client-server-api/#put_matrixclientv3roomsroomidtypinguserid
 type ReqTyping struct {
 	Typing  bool  `json:"typing"`
-	Timeout int64 `json:"timeout,omitempty"`
+	Timeout int64 `json:"timeout,omitzero"`
 }
 
 type ReqPresence struct {
@@ -250,7 +250,7 @@ type ReqAliasCreate struct {
 
 type OneTimeKey struct {
 	Key        id.Curve25519         `json:"key"`
-	Fallback   bool                  `json:"fallback,omitempty"`
+	Fallback   bool                  `json:"fallback,omitzero"`
 	Signatures signatures.Signatures `json:"signatures,omitempty"`
 	Unsigned   map[string]any        `json:"unsigned,omitempty"`
 	IsSigned   bool                  `json:"-"`
@@ -306,7 +306,7 @@ type DeviceKeys struct {
 	Algorithms []id.Algorithm        `json:"algorithms"`
 	Keys       KeyMap                `json:"keys"`
 	Signatures signatures.Signatures `json:"signatures"`
-	Dehydrated bool                  `json:"dehydrated,omitempty"`
+	Dehydrated bool                  `json:"dehydrated,omitzero"`
 	Unsigned   map[string]any        `json:"unsigned,omitempty"`
 	Extra      map[string]any        `json:"-"`
 }
@@ -383,7 +383,7 @@ func (km KeyMap) GetCurve25519(deviceID id.DeviceID) id.Curve25519 {
 
 type ReqQueryKeys struct {
 	DeviceKeys DeviceKeysRequest `json:"device_keys"`
-	Timeout    int64             `json:"timeout,omitempty"`
+	Timeout    int64             `json:"timeout,omitzero"`
 }
 
 type DeviceKeysRequest map[id.UserID]DeviceIDList
@@ -393,7 +393,7 @@ type DeviceIDList []id.DeviceID
 type ReqClaimKeys struct {
 	OneTimeKeys OneTimeKeysRequest `json:"one_time_keys"`
 
-	Timeout int64 `json:"timeout,omitempty"`
+	Timeout int64 `json:"timeout,omitzero"`
 }
 
 type OneTimeKeysRequest map[id.UserID]map[id.DeviceID]id.KeyAlgorithm
@@ -462,11 +462,11 @@ type ReqSetReadMarkers struct {
 	ReadPrivate id.EventID `json:"m.read.private,omitempty"`
 	FullyRead   id.EventID `json:"m.fully_read,omitempty"`
 	// Allow moving m.fully_read backwards via MSC4446.
-	AllowBackward bool `json:"com.beeper.allow_backward,omitempty"`
+	AllowBackward bool `json:"com.beeper.allow_backward,omitzero"`
 
-	BeeperReadExtra        interface{} `json:"com.beeper.read.extra,omitempty"`
-	BeeperReadPrivateExtra interface{} `json:"com.beeper.read.private.extra,omitempty"`
-	BeeperFullyReadExtra   interface{} `json:"com.beeper.fully_read.extra,omitempty"`
+	BeeperReadExtra        any `json:"com.beeper.read.extra,omitempty"`
+	BeeperReadPrivateExtra any `json:"com.beeper.read.private.extra,omitempty"`
+	BeeperFullyReadExtra   any `json:"com.beeper.fully_read.extra,omitempty"`
 }
 
 type BeeperInboxDone struct {
@@ -483,7 +483,7 @@ type ReqSetBeeperInboxState struct {
 type ReqSendReceipt struct {
 	ThreadID string `json:"thread_id,omitempty"`
 	// Allow moving m.fully_read backwards via MSC4446.
-	AllowBackward bool `json:"com.beeper.allow_backward,omitempty"`
+	AllowBackward bool `json:"com.beeper.allow_backward,omitzero"`
 }
 
 type ReqPublicRooms struct {
@@ -607,7 +607,6 @@ type ReqKeyBackupData struct {
 
 type ReqReport struct {
 	Reason string `json:"reason,omitempty"`
-	Score  int    `json:"score,omitempty"`
 }
 
 type ReqGetRelations struct {
@@ -676,7 +675,7 @@ type ReqSearch struct {
 	SearchTerm   string      `json:"search_term"`
 	Filter       *FilterPart `json:"filter,omitempty"`
 	Keys         []string    `json:"keys,omitempty"`
-	IncludeState bool        `json:"include_state,omitempty"`
+	IncludeState bool        `json:"include_state,omitzero"`
 	OrderBy      string      `json:"order_by,omitempty"`
 
 	EventContext SearchEventContext `json:"event_context,omitzero"`
@@ -692,9 +691,9 @@ func (rs *ReqSearch) Query() map[string]string {
 }
 
 type SearchEventContext struct {
-	BeforeLimit    int  `json:"before_limit,omitempty"`
-	AfterLimit     int  `json:"after_limit,omitempty"`
-	IncludeProfile bool `json:"include_profile,omitempty"`
+	BeforeLimit    int  `json:"before_limit,omitzero"`
+	AfterLimit     int  `json:"after_limit,omitzero"`
+	IncludeProfile bool `json:"include_profile,omitzero"`
 }
 
 func (sec SearchEventContext) IsZero() bool {
@@ -763,7 +762,7 @@ const (
 type Pusher struct {
 	AppDisplayName    string      `json:"app_display_name"`
 	AppID             PusherAppID `json:"app_id"`
-	Append            bool        `json:"append,omitempty"`
+	Append            bool        `json:"append,omitzero"`
 	Data              PusherData  `json:"data"`
 	DeviceDisplayName string      `json:"device_display_name"`
 	Kind              *PusherKind `json:"kind"`
@@ -772,7 +771,7 @@ type Pusher struct {
 	PushKey           string      `json:"pushkey"`
 
 	// Only present for web push pushers in the server response
-	Activated bool `json:"activated,omitempty"`
+	Activated bool `json:"activated,omitzero"`
 }
 
 type ReqAckWebPusher struct {

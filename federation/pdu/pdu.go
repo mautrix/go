@@ -53,7 +53,7 @@ var (
 
 type InternalMeta struct {
 	EventID  id.EventID     `json:"event_id,omitempty"`
-	Rejected bool           `json:"rejected,omitempty"`
+	Rejected bool           `json:"rejected,omitzero"`
 	Extra    map[string]any `json:",embed,unknown"`
 }
 

@@ -38,8 +38,8 @@ const (
 )
 
 type NotificationCounts struct {
-	MissedCalls int `json:"missed_calls,omitempty"`
-	Unread      int `json:"unread,omitempty"`
+	MissedCalls int `json:"missed_calls,omitzero"`
+	Unread      int `json:"unread,omitzero"`
 
 	BeeperServerType string `json:"com.beeper.server_type,omitempty"`
 	BeeperAsOfToken  string `json:"com.beeper.as_of_token,omitempty"`
@@ -55,7 +55,7 @@ const (
 type BaseDevice struct {
 	AppID     PusherAppID `json:"app_id"`
 	PushKey   string      `json:"pushkey"`
-	PushKeyTS int64       `json:"pushkey_ts,omitempty"`
+	PushKeyTS int64       `json:"pushkey_ts,omitzero"`
 	Data      PusherData  `json:"data,omitempty"`
 }
 
@@ -83,7 +83,7 @@ type PushNotification struct {
 	SenderDisplayName string          `json:"sender_display_name,omitempty"`
 	Type              string          `json:"type,omitempty"`
 	Content           json.RawMessage `json:"content,omitempty"`
-	UserIsTarget      bool            `json:"user_is_target,omitempty"`
+	UserIsTarget      bool            `json:"user_is_target,omitzero"`
 
 	BeeperTTL                 *int      `json:"com.beeper.ttl,omitempty"`
 	BeeperUserID              id.UserID `json:"com.beeper.user_id,omitempty"`

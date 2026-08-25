@@ -183,9 +183,9 @@ type ReqRedactUser struct {
 	Reason string `json:"reason,omitempty"`
 	// a limit on the number of the user’s events to search for ones that can be redacted (events are redacted newest to
 	// oldest) in each room, defaults to 1000 if not provided.
-	Limit int `json:"limit,omitempty"`
+	Limit int `json:"limit,omitzero"`
 	// If set to true, the admin user is used to issue the redactions, rather than puppeting the user
-	UseAdmin bool `json:"use_admin,omitempty"`
+	UseAdmin bool `json:"use_admin,omitzero"`
 }
 
 type RespRedactUser struct {

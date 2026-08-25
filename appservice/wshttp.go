@@ -19,7 +19,7 @@ type HTTPProxyRequest struct {
 	Headers http.Header     `json:"headers"`
 	Body    json.RawMessage `json:"body"`
 
-	EscapedPath bool `json:"escaped_path,omitempty"`
+	EscapedPath bool `json:"escaped_path,omitzero"`
 }
 
 type HTTPProxyResponse struct {

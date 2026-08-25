@@ -136,7 +136,7 @@ type LoginClientHTTPParams struct {
 }
 
 type LoginClientHTTPResponse struct {
-	StatusCode int         `json:"status_code,omitempty"`
+	StatusCode int         `json:"status_code,omitzero"`
 	FinalURL   string      `json:"final_url,omitempty"`
 	Headers    http.Header `json:"headers,omitempty"`
 	Body       []byte      `json:"body,omitempty"`
@@ -224,7 +224,7 @@ type LoginCookiesParams struct {
 	WaitForURLPattern string `json:"wait_for_url_pattern,omitempty"`
 	// If set, the client should load the URL and run ExtractJS in a webview that is not shown to the
 	// user.
-	Hidden bool `json:"hidden,omitempty"`
+	Hidden bool `json:"hidden,omitzero"`
 }
 
 type LoginInputFieldType string
@@ -346,9 +346,9 @@ type LoginUserInputAttachment struct {
 
 type LoginUserInputAttachmentInfo struct {
 	MimeType string `json:"mimetype,omitempty"`
-	Width    int    `json:"w,omitempty"`
-	Height   int    `json:"h,omitempty"`
-	Size     int    `json:"size,omitempty"`
+	Width    int    `json:"w,omitzero"`
+	Height   int    `json:"h,omitzero"`
+	Size     int    `json:"size,omitzero"`
 }
 
 type LoginCompleteParams struct {

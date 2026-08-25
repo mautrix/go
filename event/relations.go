@@ -28,7 +28,7 @@ type RelatesTo struct {
 	Key     string       `json:"key,omitempty"`
 
 	InReplyTo     *InReplyTo `json:"m.in_reply_to,omitempty"`
-	IsFallingBack bool       `json:"is_falling_back,omitempty"`
+	IsFallingBack bool       `json:"is_falling_back,omitzero"`
 }
 
 type InReplyTo struct {
@@ -132,7 +132,7 @@ type RelationChunkItem struct {
 	Type    RelationType `json:"type"`
 	EventID string       `json:"event_id,omitempty"`
 	Key     string       `json:"key,omitempty"`
-	Count   int          `json:"count,omitempty"`
+	Count   int          `json:"count,omitzero"`
 }
 
 type RelationChunk struct {

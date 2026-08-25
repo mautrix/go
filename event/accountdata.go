@@ -59,7 +59,7 @@ func (rt RoomTag) Name() string {
 type Tag = TagMetadata
 
 type TagMetadata struct {
-	Order json.Number `json:"order,omitempty"`
+	Order json.Number `json:"order,omitempty,omitzero"`
 
 	MauDoublePuppetSource string `json:"fi.mau.double_puppet_source,omitempty"`
 }
@@ -89,7 +89,7 @@ type MarkedUnreadEventContent struct {
 }
 
 type BeeperMuteEventContent struct {
-	MutedUntil int64 `json:"muted_until,omitempty"`
+	MutedUntil int64 `json:"muted_until,omitzero"`
 }
 
 func (bmec *BeeperMuteEventContent) IsMuted() bool {
@@ -122,7 +122,7 @@ func (bmec *BeeperMuteEventContent) GetMuteDuration() time.Duration {
 type StoredPerMessageProfileTrigger struct {
 	Prefix      string `json:"prefix,omitempty"`
 	Suffix      string `json:"suffix,omitempty"`
-	KeepTrigger bool   `json:"keep_trigger,omitempty"`
+	KeepTrigger bool   `json:"keep_trigger,omitzero"`
 }
 
 type StoredPerMessageProfile struct {

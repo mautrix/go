@@ -2938,13 +2938,13 @@ func (cli *Client) PutPushRuleActions(ctx context.Context, scope string, kind pu
 
 func (cli *Client) ReportEvent(ctx context.Context, roomID id.RoomID, eventID id.EventID, reason string) error {
 	urlPath := cli.BuildClientURL("v3", "rooms", roomID, "report", eventID)
-	_, err := cli.MakeRequest(ctx, http.MethodPost, urlPath, &ReqReport{Reason: reason, Score: -100}, nil)
+	_, err := cli.MakeRequest(ctx, http.MethodPost, urlPath, &ReqReport{Reason: reason}, nil)
 	return err
 }
 
 func (cli *Client) ReportRoom(ctx context.Context, roomID id.RoomID, reason string) error {
 	urlPath := cli.BuildClientURL("v3", "rooms", roomID, "report")
-	_, err := cli.MakeRequest(ctx, http.MethodPost, urlPath, &ReqReport{Reason: reason, Score: -100}, nil)
+	_, err := cli.MakeRequest(ctx, http.MethodPost, urlPath, &ReqReport{Reason: reason}, nil)
 	return err
 }
 

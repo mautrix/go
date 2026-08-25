@@ -40,7 +40,7 @@ type ReqSharedSecretRegister struct {
 	Admin bool `json:"admin"`
 	// Disable generating a new device along with the registration.
 	// If true, the access_token and device_id fields in the response will be empty.
-	InhibitLogin bool `json:"inhibit_login,omitempty"`
+	InhibitLogin bool `json:"inhibit_login,omitzero"`
 
 	// A single-use nonce from GetRegisterNonce. This is automatically filled by Client.SharedSecretRegister if left empty.
 	Nonce string `json:"nonce"`

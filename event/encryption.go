@@ -21,9 +21,9 @@ type EncryptionEventContent struct {
 	// The encryption algorithm to be used to encrypt messages sent in this room. Must be 'm.megolm.v1.aes-sha2'.
 	Algorithm id.Algorithm `json:"algorithm"`
 	// How long the session should be used before changing it. 604800000 (a week) is the recommended default.
-	RotationPeriodMillis int64 `json:"rotation_period_ms,omitempty"`
+	RotationPeriodMillis int64 `json:"rotation_period_ms,omitzero"`
 	// How many messages should be sent before changing the session. 100 is the recommended default.
-	RotationPeriodMessages int `json:"rotation_period_msgs,omitempty"`
+	RotationPeriodMessages int `json:"rotation_period_msgs,omitzero"`
 }
 
 // EncryptedEventContent represents the content of a m.room.encrypted message event.
@@ -108,9 +108,9 @@ type RoomKeyEventContent struct {
 	SessionKey    string       `json:"session_key"`
 	SharedHistory *bool        `json:"shared_history,omitempty"`
 
-	MaxAge      int64 `json:"com.beeper.max_age_ms,omitempty"`
-	MaxMessages int   `json:"com.beeper.max_messages,omitempty"`
-	IsScheduled bool  `json:"com.beeper.is_scheduled,omitempty"`
+	MaxAge      int64 `json:"com.beeper.max_age_ms,omitzero"`
+	MaxMessages int   `json:"com.beeper.max_messages,omitzero"`
+	IsScheduled bool  `json:"com.beeper.is_scheduled,omitzero"`
 }
 
 // ForwardedRoomKeyEventContent represents the content of a m.forwarded_room_key to_device event.

@@ -74,7 +74,7 @@ type RedactionEventContent struct {
 	// The event ID is here as of room v11. In old servers it may only be at the top level.
 	Redacts id.EventID `json:"redacts,omitempty"`
 
-	DontRenderPlaceholder bool `json:"com.beeper.dont_render_redacted_placeholder,omitempty"`
+	DontRenderPlaceholder bool `json:"com.beeper.dont_render_redacted_placeholder,omitzero"`
 }
 
 // ReactionEventContent represents the content of a m.reaction message event.
@@ -272,7 +272,7 @@ func (content *MessageEventContent) GetInfo() *FileInfo {
 
 type Mentions struct {
 	UserIDs []id.UserID `json:"user_ids,omitempty"`
-	Room    bool        `json:"room,omitempty"`
+	Room    bool        `json:"room,omitzero"`
 }
 
 func (m *Mentions) Add(userID id.UserID) {
@@ -340,13 +340,13 @@ type serializableFileInfo struct {
 	Blurhash     string `json:"blurhash,omitempty"`
 	AnoaBlurhash string `json:"xyz.amorgan.blurhash,omitempty"`
 
-	MauGIF     bool `json:"fi.mau.gif,omitempty"`
-	IsAnimated bool `json:"is_animated,omitempty"`
+	MauGIF     bool `json:"fi.mau.gif,omitzero"`
+	IsAnimated bool `json:"is_animated,omitzero"`
 
-	Width    json.Number `json:"w,omitempty"`
-	Height   json.Number `json:"h,omitempty"`
-	Duration json.Number `json:"duration,omitempty"`
-	Size     json.Number `json:"size,omitempty"`
+	Width    json.Number `json:"w,omitempty,omitzero"`
+	Height   json.Number `json:"h,omitempty,omitzero"`
+	Duration json.Number `json:"duration,omitempty,omitzero"`
+	Size     json.Number `json:"size,omitempty,omitzero"`
 
 	BridgedSticker *BridgedSticker `json:"fi.mau.bridged_sticker,omitempty"`
 }

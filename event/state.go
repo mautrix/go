@@ -251,7 +251,7 @@ type BridgeInfoSection struct {
 	ExternalURL string              `json:"external_url,omitempty"`
 
 	Receiver       string `json:"fi.mau.receiver,omitempty"`
-	MessageRequest bool   `json:"com.beeper.message_request,omitempty"`
+	MessageRequest bool   `json:"com.beeper.message_request,omitzero"`
 }
 
 // BridgeEventContent represents the content of a m.bridge state event.
@@ -266,8 +266,8 @@ type BridgeEventContent struct {
 	BeeperRoomType   string `json:"com.beeper.room_type,omitempty"`
 	BeeperRoomTypeV2 string `json:"com.beeper.room_type.v2,omitempty"`
 
-	TempSlackRemoteIDMigratedFlag  bool `json:"com.beeper.slack_remote_id_migrated,omitempty"`
-	TempSlackRemoteIDMigratedFlag2 bool `json:"com.beeper.slack_remote_id_really_migrated,omitempty"`
+	TempSlackRemoteIDMigratedFlag  bool `json:"com.beeper.slack_remote_id_migrated,omitzero"`
+	TempSlackRemoteIDMigratedFlag2 bool `json:"com.beeper.slack_remote_id_really_migrated,omitzero"`
 }
 
 // DisappearingType represents the type of a disappearing message timer.
@@ -296,12 +296,12 @@ func (bdt *BeeperDisappearingTimer) MarshalJSON() ([]byte, error) {
 type SpaceChildEventContent struct {
 	Via       []string `json:"via,omitempty"`
 	Order     string   `json:"order,omitempty"`
-	Suggested bool     `json:"suggested,omitempty"`
+	Suggested bool     `json:"suggested,omitzero"`
 }
 
 type SpaceParentEventContent struct {
 	Via       []string `json:"via,omitempty"`
-	Canonical bool     `json:"canonical,omitempty"`
+	Canonical bool     `json:"canonical,omitzero"`
 }
 
 type PolicyRecommendation string

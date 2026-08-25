@@ -134,7 +134,7 @@ type PresenceEventContent struct {
 	Presence        Presence            `json:"presence"`
 	Displayname     string              `json:"displayname,omitempty"`
 	AvatarURL       id.ContentURIString `json:"avatar_url,omitempty"`
-	LastActiveAgo   int64               `json:"last_active_ago,omitempty"`
-	CurrentlyActive bool                `json:"currently_active,omitempty"`
+	LastActiveAgo   int64               `json:"last_active_ago,omitzero"`
+	CurrentlyActive bool                `json:"currently_active,omitzero"`
 	StatusMessage   string              `json:"status_msg,omitempty"`
 }

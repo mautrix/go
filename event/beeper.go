@@ -91,8 +91,8 @@ type BeeperRoomKeyAckEventContent struct {
 }
 
 type BeeperChatDeleteEventContent struct {
-	DeleteForEveryone  bool `json:"delete_for_everyone,omitempty"`
-	FromMessageRequest bool `json:"from_message_request,omitempty"`
+	DeleteForEveryone  bool `json:"delete_for_everyone,omitzero"`
+	FromMessageRequest bool `json:"from_message_request,omitzero"`
 }
 
 type BeeperAcceptMessageRequestEventContent struct {
@@ -134,9 +134,9 @@ type LinkPreview struct {
 
 	ImageURL id.ContentURIString `json:"og:image,omitempty"`
 
-	ImageSize   IntOrString `json:"matrix:image:size,omitempty"`
-	ImageWidth  IntOrString `json:"og:image:width,omitempty"`
-	ImageHeight IntOrString `json:"og:image:height,omitempty"`
+	ImageSize   IntOrString `json:"matrix:image:size,omitempty,omitzero"`
+	ImageWidth  IntOrString `json:"og:image:width,omitempty,omitzero"`
+	ImageHeight IntOrString `json:"og:image:height,omitempty,omitzero"`
 	ImageType   string      `json:"og:image:type,omitempty"`
 }
 
@@ -156,8 +156,8 @@ type BeeperProfileExtra struct {
 	Identifiers  []string `json:"com.beeper.bridge.identifiers,omitempty"`
 	Service      string   `json:"com.beeper.bridge.service,omitempty"`
 	Network      string   `json:"com.beeper.bridge.network,omitempty"`
-	IsBridgeBot  bool     `json:"com.beeper.bridge.is_bridge_bot,omitempty"`
-	IsNetworkBot bool     `json:"com.beeper.bridge.is_network_bot,omitempty"`
+	IsBridgeBot  bool     `json:"com.beeper.bridge.is_bridge_bot,omitzero"`
+	IsNetworkBot bool     `json:"com.beeper.bridge.is_network_bot,omitzero"`
 }
 
 type BeeperPerMessageProfile struct {
@@ -165,7 +165,7 @@ type BeeperPerMessageProfile struct {
 	Displayname string               `json:"displayname,omitempty"`
 	AvatarURL   *id.ContentURIString `json:"avatar_url,omitempty"`
 	AvatarFile  *EncryptedFileInfo   `json:"avatar_file,omitempty"`
-	HasFallback bool                 `json:"has_fallback,omitempty"`
+	HasFallback bool                 `json:"has_fallback,omitzero"`
 }
 
 type BeeperActionMessageType string
@@ -220,8 +220,8 @@ type BeeperStreamInfo struct {
 	UserID             id.UserID                   `json:"user_id"`
 	DeviceID           id.DeviceID                 `json:"device_id,omitempty"`
 	Type               string                      `json:"type"`
-	ExpiryMS           int64                       `json:"expiry_ms,omitempty"`
-	MaxBufferedUpdates int                         `json:"max_buffered_updates,omitempty"`
+	ExpiryMS           int64                       `json:"expiry_ms,omitzero"`
+	MaxBufferedUpdates int                         `json:"max_buffered_updates,omitzero"`
 	Encryption         *BeeperStreamEncryptionInfo `json:"encryption,omitempty"`
 }
 
