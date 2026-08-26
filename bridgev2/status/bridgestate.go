@@ -131,8 +131,10 @@ type BridgeState struct {
 	RemoteName    string                `json:"remote_name,omitempty"`
 	RemoteProfile RemoteProfile         `json:"remote_profile,omitzero"`
 
-	Reason string                 `json:"reason,omitempty"`
-	Info   map[string]interface{} `json:"info,omitempty"`
+	Version any `json:"version,omitempty"`
+
+	Reason string         `json:"reason,omitempty"`
+	Info   map[string]any `json:"info,omitempty"`
 }
 
 type GlobalBridgeState struct {

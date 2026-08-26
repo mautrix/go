@@ -78,6 +78,7 @@ type Connector struct {
 	doublePuppetIntents *exsync.Map[id.UserID, *appservice.IntentAPI]
 
 	deterministicEventIDServer string
+	BridgeStateVersion         any
 
 	MediaConfig             mautrix.RespMediaConfig
 	SpecVersions            *mautrix.RespVersions
@@ -514,6 +515,7 @@ func (br *Connector) GhostIntent(userID networkid.UserID) bridgev2.MatrixAPI {
 }
 
 func (br *Connector) SendBridgeStatus(ctx context.Context, state *status.BridgeState) error {
+	state.Version = br.BridgeStateVersion
 	if br.Websocket {
 		br.hasSentAnyStates = true
 		return br.AS.SendWebsocket(ctx, &appservice.WebsocketRequest{

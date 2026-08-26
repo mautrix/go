@@ -112,6 +112,14 @@ type VersionJSONOutput struct {
 	}
 }
 
+type BridgeStateVersion struct {
+	Name           string `json:"name"`
+	Commit         string `json:"commit"`
+	BuildTime      string `json:"build_time"`
+	GoVersion      string `json:"go_version"`
+	MautrixVersion string `json:"mautrix_version"`
+}
+
 // Run runs the bridge and waits for SIGTERM before stopping.
 func (br *BridgeMain) Run() {
 	br.PreInit()
@@ -238,6 +246,13 @@ func (br *BridgeMain) Init() {
 	br.Matrix = matrix.NewConnector(br.Config)
 	br.Matrix.OnWebsocketReplaced = func() {
 		br.TriggerStop(0)
+	}
+	br.Matrix.BridgeStateVersion = &BridgeStateVersion{
+		Name:           br.Name,
+		Commit:         br.ver.Commit,
+		BuildTime:      br.ver.BuildTime.Format(time.RFC3339),
+		GoVersion:      runtime.Version(),
+		MautrixVersion: mautrix.VersionWithCommit,
 	}
 	br.Matrix.IgnoreUnsupportedServer = *ignoreUnsupportedServer
 	br.Bridge = bridgev2.NewBridge("", br.DB, *br.Log, &br.Config.Bridge, br.Matrix, br.Connector, commands.NewProcessor)
