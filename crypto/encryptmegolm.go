@@ -372,6 +372,21 @@ func (mach *OlmMachine) ShareGroupSession(ctx context.Context, roomID id.RoomID,
 	return mach.CryptoStore.AddOutboundGroupSession(ctx, session)
 }
 
+func (mach *OlmMachine) addMegolmSessionRecipient(ctx context.Context, device *id.Device, sessionID id.SessionID) {
+	if !mach.DisableSharedGroupSessionTracking {
+		err := mach.CryptoStore.MarkOutboundGroupSessionShared(ctx, device.UserID, device.IdentityKey, sessionID)
+		if err != nil {
+			zerolog.Ctx(ctx).Warn().
+				Err(err).
+				Stringer("target_user_id", device.UserID).
+				Stringer("target_device_id", device.DeviceID).
+				Stringer("target_identity_key", device.IdentityKey).
+				Stringer("target_session_id", sessionID).
+				Msg("Failed to mark outbound group session shared")
+		}
+	}
+}
+
 func (mach *OlmMachine) encryptAndSendGroupSession(ctx context.Context, session *OutboundGroupSession, olmSessions map[id.UserID]map[id.DeviceID]deviceSessionWrapper) error {
 	mach.olmLock.Lock()
 	defer mach.olmLock.Unlock()
@@ -392,18 +407,7 @@ func (mach *OlmMachine) encryptAndSendGroupSession(ctx context.Context, session 
 			output[deviceID] = &event.Content{Parsed: content}
 			logDevices.Str(string(deviceID), string(device.identity.IdentityKey))
 			deviceCount++
-			if !mach.DisableSharedGroupSessionTracking {
-				err := mach.CryptoStore.MarkOutboundGroupSessionShared(ctx, userID, device.identity.IdentityKey, session.id)
-				if err != nil {
-					log.Warn().
-						Err(err).
-						Stringer("target_user_id", userID).
-						Stringer("target_device_id", deviceID).
-						Stringer("target_identity_key", device.identity.IdentityKey).
-						Stringer("target_session_id", session.id).
-						Msg("Failed to mark outbound group session shared")
-				}
-			}
+			mach.addMegolmSessionRecipient(ctx, device.identity, session.ID())
 		}
 		logUsers.Dict(string(userID), logDevices)
 	}
@@ -417,7 +421,15 @@ func (mach *OlmMachine) encryptAndSendGroupSession(ctx context.Context, session 
 	return err
 }
 
-func (mach *OlmMachine) findOlmSessionsForUser(ctx context.Context, session *OutboundGroupSession, userID id.UserID, devices map[id.DeviceID]*id.Device, output map[id.DeviceID]deviceSessionWrapper, withheld map[id.DeviceID]*event.Content, missingOutput map[id.DeviceID]*id.Device) {
+func (mach *OlmMachine) findOlmSessionsForUser(
+	ctx context.Context,
+	session *OutboundGroupSession,
+	userID id.UserID,
+	devices map[id.DeviceID]*id.Device,
+	output map[id.DeviceID]deviceSessionWrapper,
+	withheld map[id.DeviceID]*event.Content,
+	missingOutput map[id.DeviceID]*id.Device,
+) {
 	for deviceID, device := range devices {
 		log := zerolog.Ctx(ctx).With().
 			Stringer("target_user_id", userID).
@@ -460,8 +472,22 @@ func (mach *OlmMachine) findOlmSessionsForUser(ctx context.Context, session *Out
 			log.Warn().Err(err).Msg("Didn't find olm session to encrypt group session")
 			if missingOutput != nil {
 				missingOutput[deviceID] = device
+			} else {
+				// This is the second pass of looking for olm sessions. If we still didn't find one,
+				// mark the device as a recipient for the megolm session so requests will be accepted.
+				mach.addMegolmSessionRecipient(ctx, device, session.ID())
+				withheld[deviceID] = &event.Content{Parsed: &event.RoomKeyWithheldEventContent{
+					RoomID:    session.RoomID,
+					Algorithm: id.AlgorithmMegolmV1,
+					SessionID: session.ID(),
+					SenderKey: mach.account.IdentityKey(),
+					Code:      event.RoomKeyWithheldNoOlmSession,
+					Reason:    "No Olm session established",
+				}}
 			}
 		} else {
+			// This shouldn't be needed, but delete it just to be safe
+			delete(withheld, deviceID)
 			output[deviceID] = deviceSessionWrapper{
 				session:  deviceSession,
 				identity: device,
