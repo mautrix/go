@@ -200,7 +200,7 @@ func (content *MessageEventContent) AddPerMessageProfileFallback() {
 	)
 }
 
-var HTMLProfileFallbackRegex = regexp.MustCompile(`<strong\s+data-mx-profile-fallback\s*>([^<]+): </strong\s*>`)
+var HTMLProfileFallbackRegex = regexp.MustCompile(`<strong\s+data-mx-profile-fallback(?:="")?\s*>([^<]+): </strong\s*>`)
 
 func (content *MessageEventContent) RemovePerMessageProfileFallback() {
 	if content.NewContent != nil && content.NewContent != content {
