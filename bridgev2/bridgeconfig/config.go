@@ -74,6 +74,7 @@ type BridgeConfig struct {
 	NoBridgeInfoStateKey          bool               `yaml:"no_bridge_info_state_key"`
 	BridgeStatusNotices           string             `yaml:"bridge_status_notices"`
 	TransientStateDebounce        time.Duration      `yaml:"transient_state_debounce"`
+	SendReconnectWait             time.Duration      `yaml:"send_reconnect_wait"`
 	UnknownErrorAutoReconnect     time.Duration      `yaml:"unknown_error_auto_reconnect"`
 	UnknownErrorMaxAutoReconnects int                `yaml:"unknown_error_max_auto_reconnects"`
 	BridgeMatrixLeave             bool               `yaml:"bridge_matrix_leave"`

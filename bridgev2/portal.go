@@ -709,6 +709,31 @@ func (portal *Portal) FindPreferredLogin(ctx context.Context, user *User, allowR
 	}
 }
 
+func (portal *Portal) waitForReceiverLogin(ctx context.Context, login *UserLogin) bool {
+	wait := portal.Bridge.Config.SendReconnectWait
+	if wait <= 0 || login == nil || login.Client == nil {
+		return false
+	}
+	switch login.BridgeState.GetPrev().StateEvent {
+	case status.StateBadCredentials, status.StateLoggedOut, status.StateUnconfigured:
+		return false
+	}
+	ctx, cancel := context.WithTimeout(ctx, wait)
+	defer cancel()
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if login.Client.IsLoggedIn() {
+			return true
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-ticker.C:
+		}
+	}
+}
+
 func (portal *Portal) sendSuccessStatus(ctx context.Context, evt *event.Event, streamOrder int64, newEventID id.EventID) {
 	info := StatusEventInfoFromEvent(evt)
 	info.StreamOrder = streamOrder
@@ -770,6 +795,10 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 		return portal.handleMatrixTombstone(ctx, evt)
 	}
 	login, userPortal, err := portal.FindPreferredLogin(ctx, sender, true)
+	if errors.Is(err, ErrNotLoggedIn) && portal.waitForReceiverLogin(ctx, login) {
+		log.Debug().Msg("Receiver login reconnected while waiting, retrying event")
+		login, userPortal, err = portal.FindPreferredLogin(ctx, sender, true)
+	}
 	if err != nil {
 		log.Err(err).Msg("Failed to get user login to handle Matrix event")
 		if errors.Is(err, ErrNotLoggedIn) {
