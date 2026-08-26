@@ -131,7 +131,7 @@ type BridgeState struct {
 	RemoteName    string                `json:"remote_name,omitempty"`
 	RemoteProfile RemoteProfile         `json:"remote_profile,omitzero"`
 
-	Version string `json:"version,omitempty"`
+	Version any `json:"version,omitempty"`
 
 	Reason string         `json:"reason,omitempty"`
 	Info   map[string]any `json:"info,omitempty"`

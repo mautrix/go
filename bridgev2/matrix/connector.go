@@ -78,7 +78,7 @@ type Connector struct {
 	doublePuppetIntents *exsync.Map[id.UserID, *appservice.IntentAPI]
 
 	deterministicEventIDServer string
-	BridgeStateVersion         string
+	BridgeStateVersion         any
 
 	MediaConfig             mautrix.RespMediaConfig
 	SpecVersions            *mautrix.RespVersions
