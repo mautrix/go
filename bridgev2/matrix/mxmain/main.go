@@ -239,6 +239,7 @@ func (br *BridgeMain) Init() {
 	br.Matrix.OnWebsocketReplaced = func() {
 		br.TriggerStop(0)
 	}
+	br.Matrix.BridgeStateVersion = br.ver.Commit
 	br.Matrix.IgnoreUnsupportedServer = *ignoreUnsupportedServer
 	br.Bridge = bridgev2.NewBridge("", br.DB, *br.Log, &br.Config.Bridge, br.Matrix, br.Connector, commands.NewProcessor)
 	br.Matrix.AS.DoublePuppetValue = br.Name
