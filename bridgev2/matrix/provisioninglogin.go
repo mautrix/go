@@ -37,6 +37,12 @@ type stepManager struct {
 
 	pendingHTTP chan *bridgev2.LoginClientHTTPResponse
 	stepCancel  context.CancelCauseFunc
+	stepResult  *stepExecutionResult
+	cancelling  bool
+}
+
+type stepExecutionResult struct {
+	err error
 }
 
 func (sm *stepManager) GetNext() (*bridgev2.LoginStep, error) {
@@ -123,7 +129,7 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 	go prov.executeStep(provLogin, provLogin.Ctx, "start", nil, nil, &bridgev2.LoginStartParams{
 		Override: overrideLogin,
 		HTTP:     rt,
-	})
+	}, nil)
 	select {
 	case <-ch:
 	case <-r.Context().Done():
@@ -239,6 +245,7 @@ func (prov *ProvisioningAPI) cancelLoginStep(
 ) (*bridgev2.LoginStep, error) {
 	var currentStep *bridgev2.LoginStep
 	var stepWaitChan chan struct{}
+	var stepResult *stepExecutionResult
 	err := login.step.WithLock(func(sm *stepManager) error {
 		if sm.err != nil {
 			return sm.err
@@ -252,15 +259,15 @@ func (prov *ProvisioningAPI) cancelLoginStep(
 			return mautrix.MBadState.WithMessage("Transaction ID does not match")
 		}
 
+		if _, ok := login.Process.(bridgev2.LoginProcessStepCancel); !ok {
+			return mautrix.MBadState.WithMessage("Login process does not support cancelling steps")
+		}
 		var canCancel bool
 		switch currentStep.Type {
 		case bridgev2.LoginStepTypeDisplayAndWait:
 			canCancel = currentStep.DisplayAndWaitParams != nil && currentStep.DisplayAndWaitParams.CanCancel
 		case bridgev2.LoginStepTypeUserInput:
 			canCancel = currentStep.UserInputParams != nil && currentStep.UserInputParams.CanCancel
-			if _, ok := login.Process.(bridgev2.LoginProcessUserInputCancel); !ok {
-				return mautrix.MBadState.WithMessage("Login process does not support cancelling user input")
-			}
 		default:
 			return mautrix.MBadState.WithMessage("Login step type cannot be cancelled")
 		}
@@ -268,23 +275,17 @@ func (prov *ProvisioningAPI) cancelLoginStep(
 			return mautrix.MBadState.WithMessage("Login step cannot be cancelled")
 		}
 
-		if !sm.started {
-			sm.started = true
-			sm.wait = make(chan struct{})
-			stepCtx, cancel := context.WithCancelCause(login.Ctx)
-			sm.stepCancel = cancel
-			if currentStep.Type == bridgev2.LoginStepTypeDisplayAndWait {
-				cancel(bridgev2.ErrLoginStepCancelled)
-				go prov.executeStep(login, stepCtx, currentStep.Type, nil, nil, nil)
-			} else {
-				go prov.executeStep(login, stepCtx, "cancel_user_input", nil, nil, nil)
-			}
-		} else if currentStep.Type == bridgev2.LoginStepTypeDisplayAndWait && sm.stepCancel != nil {
+		if sm.cancelling {
+			stepWaitChan = sm.wait
+			stepResult = sm.stepResult
+			return nil
+		} else if currentStep.Type == bridgev2.LoginStepTypeDisplayAndWait && sm.started && sm.stepCancel != nil {
 			sm.stepCancel(bridgev2.ErrLoginStepCancelled)
-		} else {
+			stepWaitChan = sm.wait
+			stepResult = sm.stepResult
+		} else if sm.started {
 			return mautrix.MBadState.WithMessage("Login step is already being submitted")
 		}
-		stepWaitChan = sm.wait
 		return nil
 	})
 	if errors.Is(err, errReturnCurrentStep) {
@@ -292,8 +293,46 @@ func (prov *ProvisioningAPI) cancelLoginStep(
 	} else if err != nil {
 		return nil, fmt.Errorf("step cancellation validation failed: %w", err)
 	}
+	if stepWaitChan != nil {
+		select {
+		case <-stepWaitChan:
+			if stepResult != nil && stepResult.err != nil && !errors.Is(stepResult.err, bridgev2.ErrLoginStepCancelled) {
+				return nil, stepResult.err
+			}
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+
+	err = login.step.WithLock(func(sm *stepManager) error {
+		if sm.err != nil {
+			return sm.err
+		} else if sm.next != currentStep {
+			return errReturnCurrentStep
+		} else if sm.cancelling {
+			stepWaitChan = sm.wait
+			stepResult = sm.stepResult
+			return nil
+		}
+		sm.started = true
+		sm.cancelling = true
+		sm.wait = make(chan struct{})
+		sm.stepResult = &stepExecutionResult{}
+		stepWaitChan = sm.wait
+		stepResult = sm.stepResult
+		go prov.executeStep(login, login.Ctx, "cancel_step", nil, nil, nil, stepResult)
+		return nil
+	})
+	if errors.Is(err, errReturnCurrentStep) {
+		return login.step.GetNext()
+	} else if err != nil {
+		return nil, err
+	}
 	select {
 	case <-stepWaitChan:
+		if stepResult.err != nil {
+			return nil, stepResult.err
+		}
 		return login.step.GetNext()
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -324,6 +363,7 @@ func (prov *ProvisioningAPI) doLoginStep(
 
 	var currentStep *bridgev2.LoginStep
 	var stepWaitChan chan struct{}
+	var stepResult *stepExecutionResult
 	err := login.step.WithLock(func(sm *stepManager) error {
 		if sm.err != nil {
 			return sm.err
@@ -356,13 +396,15 @@ func (prov *ProvisioningAPI) doLoginStep(
 				Msg("Submitting login step")
 			stepCtx, cancel := context.WithCancelCause(login.Ctx)
 			sm.stepCancel = cancel
-			go prov.executeStep(login, stepCtx, currentStep.Type, params, rawParams, nil)
+			sm.stepResult = &stepExecutionResult{}
+			go prov.executeStep(login, stepCtx, currentStep.Type, params, rawParams, nil, sm.stepResult)
 		} else {
 			log.Debug().
 				Str("step_id", currentStep.StepID).
 				Msg("Login step was already started, not submitting again")
 		}
 		stepWaitChan = sm.wait
+		stepResult = sm.stepResult
 		return nil
 	})
 	if errors.Is(err, errReturnCurrentStep) {
@@ -372,6 +414,9 @@ func (prov *ProvisioningAPI) doLoginStep(
 	}
 	select {
 	case <-stepWaitChan:
+		if stepResult != nil && stepResult.err != nil {
+			return nil, stepResult.err
+		}
 		nextStep, err := login.step.GetNext()
 		log.Debug().
 			Any("next_step", nextStep).
@@ -390,14 +435,15 @@ func (prov *ProvisioningAPI) executeStep(
 	params map[string]string,
 	rawParams json.RawMessage,
 	startParams *bridgev2.LoginStartParams,
+	stepResult *stepExecutionResult,
 ) {
 	var nextStep *bridgev2.LoginStep
 	var err error
 	switch currentStepType {
 	case bridgev2.LoginStepTypeUserInput:
 		nextStep, err = login.Process.(bridgev2.LoginProcessUserInput).SubmitUserInput(ctx, params)
-	case "cancel_user_input":
-		nextStep, err = login.Process.(bridgev2.LoginProcessUserInputCancel).CancelUserInput(ctx)
+	case "cancel_step":
+		nextStep, err = login.Process.(bridgev2.LoginProcessStepCancel).CancelStep(ctx)
 	case bridgev2.LoginStepTypeCookies:
 		nextStep, err = login.Process.(bridgev2.LoginProcessCookies).SubmitCookies(ctx, params)
 	case bridgev2.LoginStepTypeDisplayAndWait:
@@ -417,6 +463,18 @@ func (prov *ProvisioningAPI) executeStep(
 		}
 	default:
 		panic("Impossible state")
+	}
+	if errors.Is(err, bridgev2.ErrLoginStepCancelled) && currentStepType == bridgev2.LoginStepTypeDisplayAndWait {
+		login.step.WithNonErroringLock(func(sm *stepManager) {
+			stepResult.err = err
+			sm.started = false
+			sm.stepCancel = nil
+			if sm.wait != nil {
+				close(sm.wait)
+				sm.wait = nil
+			}
+		})
+		return
 	}
 	if nextStep != nil {
 		switch nextStep.Type {
@@ -456,6 +514,8 @@ func finishStep(sm *stepManager, nextStep *bridgev2.LoginStep, login *ProvLogin)
 	sm.next = nextStep
 	sm.started = false
 	sm.stepCancel = nil
+	sm.stepResult = nil
+	sm.cancelling = false
 	if sm.wait != nil {
 		close(sm.wait)
 		sm.wait = nil

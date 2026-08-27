@@ -66,8 +66,8 @@ type LoginProcessDisplayAndWait interface {
 	LoginProcess
 	// Wait waits for the remote login flow to advance. When a step with
 	// CanCancel is cancelled through the provisioning API, ctx is cancelled and
-	// context.Cause(ctx) is ErrLoginStepCancelled. The implementation may then
-	// return the step to show after going back.
+	// context.Cause(ctx) is ErrLoginStepCancelled. The implementation should
+	// stop waiting and return ErrLoginStepCancelled.
 	Wait(ctx context.Context) (*LoginStep, error)
 }
 
@@ -76,12 +76,12 @@ type LoginProcessUserInput interface {
 	SubmitUserInput(ctx context.Context, input map[string]string) (*LoginStep, error)
 }
 
-// LoginProcessUserInputCancel is implemented by login processes which return
-// cancellable user input steps. CancelUserInput should return the step that the
-// client should display after going back.
-type LoginProcessUserInputCancel interface {
-	LoginProcessUserInput
-	CancelUserInput(ctx context.Context) (*LoginStep, error)
+// LoginProcessStepCancel is implemented by login processes which return
+// cancellable steps. CancelStep should perform the back action and return the
+// step that the client should display next.
+type LoginProcessStepCancel interface {
+	LoginProcess
+	CancelStep(ctx context.Context) (*LoginStep, error)
 }
 
 type LoginProcessCookies interface {
@@ -358,7 +358,7 @@ type LoginUserInputParams struct {
 	Attachments []*LoginUserInputAttachment `json:"attachments"`
 
 	// If set, the client may allow the user to go back from this step. The login
-	// process must implement LoginProcessUserInputCancel.
+	// process must implement LoginProcessStepCancel.
 	CanCancel bool `json:"can_cancel,omitzero"`
 }
 
