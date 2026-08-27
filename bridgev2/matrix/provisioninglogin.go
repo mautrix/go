@@ -36,6 +36,7 @@ type stepManager struct {
 	reqCounter int
 
 	pendingHTTP chan *bridgev2.LoginClientHTTPResponse
+	stepCancel  context.CancelCauseFunc
 }
 
 func (sm *stepManager) GetNext() (*bridgev2.LoginStep, error) {
@@ -119,7 +120,7 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 	if r.URL.Query().Get("client_http") == "1" {
 		rt = provLogin
 	}
-	go prov.executeStep(provLogin, "start", nil, nil, &bridgev2.LoginStartParams{
+	go prov.executeStep(provLogin, provLogin.Ctx, "start", nil, nil, &bridgev2.LoginStartParams{
 		Override: overrideLogin,
 		HTTP:     rt,
 	})
@@ -208,9 +209,96 @@ func (prov *ProvisioningAPI) PostLoginCancel(w http.ResponseWriter, r *http.Requ
 	exhttp.WriteEmptyJSONResponse(w, http.StatusOK)
 }
 
+func (prov *ProvisioningAPI) PostLoginStepCancel(w http.ResponseWriter, r *http.Request) {
+	loginID := r.PathValue("loginProcessID")
+	prov.loginsLock.RLock()
+	login, ok := prov.logins[loginID]
+	prov.loginsLock.RUnlock()
+	if !ok {
+		mautrix.MNotFound.WithMessage("Login not found").Write(w)
+		return
+	}
+	nextStep, err := prov.cancelLoginStep(r.Context(), login, r.PathValue("stepID"), r.URL.Query().Get("txn_id"))
+	if err != nil {
+		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to cancel login step")
+		RespondWithError(w, err, "Internal error cancelling login step")
+	} else {
+		exhttp.WriteJSONResponse(w, http.StatusOK, &RespSubmitLogin{LoginID: login.ID, LoginStep: nextStep})
+	}
+}
+
 const LoginStepTxnIDPrefix = "bls_"
 
 var errReturnCurrentStep = errors.New("return current step")
+
+func (prov *ProvisioningAPI) cancelLoginStep(
+	ctx context.Context,
+	login *ProvLogin,
+	expectedID string,
+	expectedTxnID string,
+) (*bridgev2.LoginStep, error) {
+	var currentStep *bridgev2.LoginStep
+	var stepWaitChan chan struct{}
+	err := login.step.WithLock(func(sm *stepManager) error {
+		if sm.err != nil {
+			return sm.err
+		}
+		currentStep = sm.next
+		if sm.prev != nil && expectedTxnID != "" && sm.prev.TxnID == expectedTxnID {
+			return errReturnCurrentStep
+		} else if currentStep.StepID != expectedID {
+			return mautrix.MBadState.WithMessage("Step ID does not match")
+		} else if expectedTxnID != "" && currentStep.TxnID != expectedTxnID {
+			return mautrix.MBadState.WithMessage("Transaction ID does not match")
+		}
+
+		var canCancel bool
+		switch currentStep.Type {
+		case bridgev2.LoginStepTypeDisplayAndWait:
+			canCancel = currentStep.DisplayAndWaitParams != nil && currentStep.DisplayAndWaitParams.CanCancel
+		case bridgev2.LoginStepTypeUserInput:
+			canCancel = currentStep.UserInputParams != nil && currentStep.UserInputParams.CanCancel
+			if _, ok := login.Process.(bridgev2.LoginProcessUserInputCancel); !ok {
+				return mautrix.MBadState.WithMessage("Login process does not support cancelling user input")
+			}
+		default:
+			return mautrix.MBadState.WithMessage("Login step type cannot be cancelled")
+		}
+		if !canCancel {
+			return mautrix.MBadState.WithMessage("Login step cannot be cancelled")
+		}
+
+		if !sm.started {
+			sm.started = true
+			sm.wait = make(chan struct{})
+			stepCtx, cancel := context.WithCancelCause(login.Ctx)
+			sm.stepCancel = cancel
+			if currentStep.Type == bridgev2.LoginStepTypeDisplayAndWait {
+				cancel(bridgev2.ErrLoginStepCancelled)
+				go prov.executeStep(login, stepCtx, currentStep.Type, nil, nil, nil)
+			} else {
+				go prov.executeStep(login, stepCtx, "cancel_user_input", nil, nil, nil)
+			}
+		} else if currentStep.Type == bridgev2.LoginStepTypeDisplayAndWait && sm.stepCancel != nil {
+			sm.stepCancel(bridgev2.ErrLoginStepCancelled)
+		} else {
+			return mautrix.MBadState.WithMessage("Login step is already being submitted")
+		}
+		stepWaitChan = sm.wait
+		return nil
+	})
+	if errors.Is(err, errReturnCurrentStep) {
+		return currentStep, nil
+	} else if err != nil {
+		return nil, fmt.Errorf("step cancellation validation failed: %w", err)
+	}
+	select {
+	case <-stepWaitChan:
+		return login.step.GetNext()
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
 
 func (prov *ProvisioningAPI) doLoginStep(
 	ctx context.Context,
@@ -266,7 +354,9 @@ func (prov *ProvisioningAPI) doLoginStep(
 				Str("step_id", currentStep.StepID).
 				Str("step_type", string(currentStep.Type)).
 				Msg("Submitting login step")
-			go prov.executeStep(login, currentStep.Type, params, rawParams, nil)
+			stepCtx, cancel := context.WithCancelCause(login.Ctx)
+			sm.stepCancel = cancel
+			go prov.executeStep(login, stepCtx, currentStep.Type, params, rawParams, nil)
 		} else {
 			log.Debug().
 				Str("step_id", currentStep.StepID).
@@ -295,6 +385,7 @@ func (prov *ProvisioningAPI) doLoginStep(
 
 func (prov *ProvisioningAPI) executeStep(
 	login *ProvLogin,
+	ctx context.Context,
 	currentStepType bridgev2.LoginStepType,
 	params map[string]string,
 	rawParams json.RawMessage,
@@ -304,23 +395,25 @@ func (prov *ProvisioningAPI) executeStep(
 	var err error
 	switch currentStepType {
 	case bridgev2.LoginStepTypeUserInput:
-		nextStep, err = login.Process.(bridgev2.LoginProcessUserInput).SubmitUserInput(login.Ctx, params)
+		nextStep, err = login.Process.(bridgev2.LoginProcessUserInput).SubmitUserInput(ctx, params)
+	case "cancel_user_input":
+		nextStep, err = login.Process.(bridgev2.LoginProcessUserInputCancel).CancelUserInput(ctx)
 	case bridgev2.LoginStepTypeCookies:
-		nextStep, err = login.Process.(bridgev2.LoginProcessCookies).SubmitCookies(login.Ctx, params)
+		nextStep, err = login.Process.(bridgev2.LoginProcessCookies).SubmitCookies(ctx, params)
 	case bridgev2.LoginStepTypeDisplayAndWait:
-		nextStep, err = login.Process.(bridgev2.LoginProcessDisplayAndWait).Wait(login.Ctx)
+		nextStep, err = login.Process.(bridgev2.LoginProcessDisplayAndWait).Wait(ctx)
 	case bridgev2.LoginStepTypeWebAuthn:
-		nextStep, err = login.Process.(bridgev2.LoginProcessWebAuthn).SubmitWebAuthnResponse(login.Ctx, rawParams)
+		nextStep, err = login.Process.(bridgev2.LoginProcessWebAuthn).SubmitWebAuthnResponse(ctx, rawParams)
 	case "start":
 		if startParams == nil {
 			panic("Impossible state")
 		}
 		if paramable, ok := login.Process.(bridgev2.LoginProcessWithParams); ok {
-			nextStep, err = paramable.StartWithParams(login.Ctx, *startParams)
+			nextStep, err = paramable.StartWithParams(ctx, *startParams)
 		} else if overridable, ok := login.Process.(bridgev2.LoginProcessWithOverride); ok && startParams.Override != nil {
-			nextStep, err = overridable.StartWithOverride(login.Ctx, startParams.Override)
+			nextStep, err = overridable.StartWithOverride(ctx, startParams.Override)
 		} else {
-			nextStep, err = login.Process.Start(login.Ctx)
+			nextStep, err = login.Process.Start(ctx)
 		}
 	default:
 		panic("Impossible state")
@@ -362,6 +455,7 @@ func finishStep(sm *stepManager, nextStep *bridgev2.LoginStep, login *ProvLogin)
 	sm.prev = sm.next
 	sm.next = nextStep
 	sm.started = false
+	sm.stepCancel = nil
 	if sm.wait != nil {
 		close(sm.wait)
 		sm.wait = nil

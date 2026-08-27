@@ -9,6 +9,7 @@ package bridgev2
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -17,6 +18,11 @@ import (
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 )
+
+// ErrLoginStepCancelled is used as the cancellation cause when the user goes
+// back from a cancellable login step. It does not mean that the whole login
+// process was cancelled.
+var ErrLoginStepCancelled = errors.New("login step cancelled")
 
 // LoginProcess represents a single occurrence of a user logging into the remote network.
 type LoginProcess interface {
@@ -58,12 +64,24 @@ type LoginProcessWithParams interface {
 
 type LoginProcessDisplayAndWait interface {
 	LoginProcess
+	// Wait waits for the remote login flow to advance. When a step with
+	// CanCancel is cancelled through the provisioning API, ctx is cancelled and
+	// context.Cause(ctx) is ErrLoginStepCancelled. The implementation may then
+	// return the step to show after going back.
 	Wait(ctx context.Context) (*LoginStep, error)
 }
 
 type LoginProcessUserInput interface {
 	LoginProcess
 	SubmitUserInput(ctx context.Context, input map[string]string) (*LoginStep, error)
+}
+
+// LoginProcessUserInputCancel is implemented by login processes which return
+// cancellable user input steps. CancelUserInput should return the step that the
+// client should display after going back.
+type LoginProcessUserInputCancel interface {
+	LoginProcessUserInput
+	CancelUserInput(ctx context.Context) (*LoginStep, error)
 }
 
 type LoginProcessCookies interface {
@@ -167,6 +185,9 @@ type LoginDisplayAndWaitParams struct {
 	// An image containing the thing to display. If present, this is recommended over using data directly.
 	// For emojis, the URL to the canonical image representation of the emoji
 	ImageURL string `json:"image_url,omitempty"`
+	// If set, the client may allow the user to go back from this step. The
+	// context passed to Wait will be cancelled with ErrLoginStepCancelled.
+	CanCancel bool `json:"can_cancel,omitzero"`
 }
 
 type LoginCookieFieldSourceType string
@@ -335,6 +356,10 @@ type LoginUserInputParams struct {
 
 	// Attachments to display alongside the input fields.
 	Attachments []*LoginUserInputAttachment `json:"attachments"`
+
+	// If set, the client may allow the user to go back from this step. The login
+	// process must implement LoginProcessUserInputCancel.
+	CanCancel bool `json:"can_cancel,omitzero"`
 }
 
 type LoginUserInputAttachment struct {
