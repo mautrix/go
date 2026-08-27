@@ -9,7 +9,6 @@ package bridgev2
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -22,7 +21,11 @@ import (
 // ErrLoginStepCancelled is used as the cancellation cause when the user goes
 // back from a cancellable login step. It does not mean that the whole login
 // process was cancelled.
-var ErrLoginStepCancelled = errors.New("login step cancelled")
+var ErrLoginStepCancelled = RespError{
+	ErrCode:    "FI.MAU.LOGIN_STEP_CANCELLED",
+	Err:        "Login step was cancelled",
+	StatusCode: http.StatusConflict,
+}
 
 // LoginProcess represents a single occurrence of a user logging into the remote network.
 type LoginProcess interface {
