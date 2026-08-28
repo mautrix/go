@@ -311,6 +311,7 @@ const (
 	PolicyRecommendationUnstableTakedown PolicyRecommendation = "org.matrix.msc4204.takedown"
 	PolicyRecommendationUnstableBan      PolicyRecommendation = "org.matrix.mjolnir.ban"
 	PolicyRecommendationUnban            PolicyRecommendation = "fi.mau.meowlnir.unban"
+	PolicyRecommendationMute             PolicyRecommendation = "fi.mau.meowlnir.mute"
 )
 
 type PolicyHashes struct {
