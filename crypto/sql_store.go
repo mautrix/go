@@ -102,11 +102,17 @@ func (store *SQLCryptoStore) LoadFilterID(ctx context.Context, _ id.UserID) (str
 }
 
 func (store *SQLCryptoStore) SaveNextBatch(ctx context.Context, _ id.UserID, nextBatchToken string) error {
-	err := store.PutNextBatch(ctx, nextBatchToken)
-	if err != nil {
-		return fmt.Errorf("unable to store batch: %w", err)
+	for {
+		err := store.PutNextBatch(ctx, nextBatchToken)
+		if err != nil {
+			if strings.Contains(err.Error(), "database is locked") {
+				zerolog.Ctx(ctx).Err(err).Msg("Failed to save next batch, retrying")
+				continue
+			}
+			return fmt.Errorf("unable to store batch: %w", err)
+		}
+		return nil
 	}
-	return nil
 }
 
 func (store *SQLCryptoStore) LoadNextBatch(ctx context.Context, _ id.UserID) (string, error) {
