@@ -286,6 +286,28 @@ paths:
           $ref: '#/components/responses/InternalError'
       security:
       - matrix_auth: [ ]
+  /v3/login/step/{loginProcessID}/{stepID}/cancel:
+    post:
+      tags: [ auth ]
+      summary: Go back from a cancellable login step without cancelling the login process.
+      operationId: cancelLoginStep
+      parameters:
+      - $ref: '#/components/parameters/loginProcessID'
+      - $ref: '#/components/parameters/stepID'
+      - $ref: '#/components/parameters/txnID'
+      responses:
+        200:
+          $ref: '#/components/responses/LoginStepSubmitted'
+        400:
+          $ref: '#/components/responses/BadRequest'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        404:
+          $ref: '#/components/responses/LoginProcessNotFound'
+        500:
+          $ref: '#/components/responses/InternalError'
+      security:
+      - matrix_auth: [ ]
   /v3/login/cancel/{loginProcessID}:
     post:
       tags: [ auth ]
@@ -812,6 +834,9 @@ components:
               image_url:
                 type: string
                 description: An image containing the thing to display. If present, this is recommended over using data directly. For emojis, the URL to the canonical image representation of the emoji
+              can_cancel:
+                type: boolean
+                description: Whether the client may allow the user to go back from this step.
       - description: User input login step
         required: [ type, user_input ]
         properties:
@@ -823,6 +848,9 @@ components:
             description: Parameters for the user input login step
             required: [ fields ]
             properties:
+              can_cancel:
+                type: boolean
+                description: Whether the client may allow the user to go back from this step.
               fields:
                 type: array
                 description: The list of fields that the user is requested to fill.

@@ -18,6 +18,15 @@ import (
 	"maunium.net/go/mautrix/event"
 )
 
+// ErrLoginStepCancelled is used as the cancellation cause when the user goes
+// back from a cancellable login step. It does not mean that the whole login
+// process was cancelled.
+var ErrLoginStepCancelled = RespError{
+	ErrCode:    "FI.MAU.LOGIN_STEP_CANCELLED",
+	Err:        "Login step was cancelled",
+	StatusCode: http.StatusConflict,
+}
+
 // LoginProcess represents a single occurrence of a user logging into the remote network.
 type LoginProcess interface {
 	// Start starts the process and returns the first step.
@@ -58,12 +67,24 @@ type LoginProcessWithParams interface {
 
 type LoginProcessDisplayAndWait interface {
 	LoginProcess
+	// Wait waits for the remote login flow to advance. When a step with
+	// CanCancel is cancelled through the provisioning API, ctx is cancelled and
+	// context.Cause(ctx) is ErrLoginStepCancelled. The implementation should
+	// stop waiting and return ErrLoginStepCancelled.
 	Wait(ctx context.Context) (*LoginStep, error)
 }
 
 type LoginProcessUserInput interface {
 	LoginProcess
 	SubmitUserInput(ctx context.Context, input map[string]string) (*LoginStep, error)
+}
+
+// LoginProcessStepCancel is implemented by login processes which return
+// cancellable steps. CancelStep should perform the back action and return the
+// step that the client should display next.
+type LoginProcessStepCancel interface {
+	LoginProcess
+	CancelStep(ctx context.Context) (*LoginStep, error)
 }
 
 type LoginProcessCookies interface {
@@ -167,6 +188,9 @@ type LoginDisplayAndWaitParams struct {
 	// An image containing the thing to display. If present, this is recommended over using data directly.
 	// For emojis, the URL to the canonical image representation of the emoji
 	ImageURL string `json:"image_url,omitempty"`
+	// If set, the client may allow the user to go back from this step. The
+	// context passed to Wait will be cancelled with ErrLoginStepCancelled.
+	CanCancel bool `json:"can_cancel,omitzero"`
 }
 
 type LoginCookieFieldSourceType string
@@ -335,6 +359,10 @@ type LoginUserInputParams struct {
 
 	// Attachments to display alongside the input fields.
 	Attachments []*LoginUserInputAttachment `json:"attachments"`
+
+	// If set, the client may allow the user to go back from this step. The login
+	// process must implement LoginProcessStepCancel.
+	CanCancel bool `json:"can_cancel,omitzero"`
 }
 
 type LoginUserInputAttachment struct {
