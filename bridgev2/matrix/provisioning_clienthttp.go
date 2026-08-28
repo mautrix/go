@@ -116,6 +116,9 @@ func (prov *ProvisioningAPI) PostLoginClientHTTP(w http.ResponseWriter, r *http.
 			ErrLoginCancelled.Write(w)
 		}
 	} else {
+		log.Debug().
+			Object("next_step", nextStep).
+			Msg("Returning next login step from client HTTP response")
 		exhttp.WriteJSONResponse(w, http.StatusOK, &RespSubmitLogin{LoginID: login.ID, LoginStep: nextStep})
 	}
 }

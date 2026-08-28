@@ -14,6 +14,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/rs/zerolog"
+
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 )
@@ -148,12 +150,45 @@ type LoginStep struct {
 	CompleteParams       *LoginCompleteParams       `json:"complete,omitempty"`
 }
 
+func (ls *LoginStep) MarshalZerologObject(e *zerolog.Event) {
+	e.Str("type", string(ls.Type)).
+		Str("step_id", ls.StepID).
+		Str("txn_id", ls.TxnID).
+		Str("instructions", ls.Instructions)
+	if ls.DisplayAndWaitParams != nil {
+		e.Any("display_and_wait", ls.DisplayAndWaitParams)
+	}
+	if ls.CookiesParams != nil {
+		e.Any("cookies", ls.CookiesParams)
+	}
+	if ls.ClientHTTPParams != nil {
+		e.Object("client_http", ls.ClientHTTPParams)
+	}
+	if ls.UserInputParams != nil {
+		e.Any("user_input", ls.UserInputParams)
+	}
+	if ls.WebAuthnParams != nil {
+		e.Any("webauthn", ls.WebAuthnParams)
+	}
+	if ls.CompleteParams != nil {
+		e.Any("complete", ls.CompleteParams)
+	}
+}
+
 type LoginClientHTTPParams struct {
 	RequestID string      `json:"request_id"`
 	Method    string      `json:"method"`
 	URL       string      `json:"url"`
 	Headers   http.Header `json:"headers,omitempty"`
 	Body      []byte      `json:"body,omitempty"`
+}
+
+func (lchp *LoginClientHTTPParams) MarshalZerologObject(e *zerolog.Event) {
+	e.Str("request_id", lchp.RequestID).
+		Str("method", lchp.Method).
+		Str("url", lchp.URL).
+		Int("header_count", len(lchp.Headers)).
+		Int("body_length", len(lchp.Body))
 }
 
 type LoginClientHTTPResponse struct {

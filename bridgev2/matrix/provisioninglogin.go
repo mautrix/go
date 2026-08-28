@@ -144,7 +144,7 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 	}
 	zerolog.Ctx(r.Context()).Info().
 		Str("login_id", loginID).
-		Any("first_step", firstStep).
+		Object("first_step", firstStep).
 		Msg("Started login process")
 	exhttp.WriteJSONResponse(w, http.StatusOK, &RespSubmitLogin{LoginID: loginID, LoginStep: firstStep})
 }
@@ -374,7 +374,7 @@ func (prov *ProvisioningAPI) doLoginStep(
 			log.Debug().
 				Str("prev_step_id", sm.prev.StepID).
 				Str("prev_step_txn_id", sm.prev.TxnID).
-				Any("next_step", currentStep).
+				Object("next_step", currentStep).
 				Msg("Login step requested previous ID, returning last response")
 			return errReturnCurrentStep
 		}
@@ -419,7 +419,7 @@ func (prov *ProvisioningAPI) doLoginStep(
 		}
 		nextStep, err := login.step.GetNext()
 		log.Debug().
-			Any("next_step", nextStep).
+			Object("next_step", nextStep).
 			AnErr("step_error", err).
 			Msg("Returning next login step")
 		return nextStep, err

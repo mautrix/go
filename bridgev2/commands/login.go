@@ -136,7 +136,7 @@ func fnLogin(ce *Event) {
 		ce.Reply("Failed to start login: %v", err)
 		return
 	}
-	ce.Log.Debug().Any("first_step", nextStep).Msg("Created login process")
+	ce.Log.Debug().Object("first_step", nextStep).Msg("Created login process")
 
 	nextStep = checkLoginCommandDirectParams(ce, login, nextStep)
 	if nextStep != nil {
@@ -557,7 +557,7 @@ func (wlcs *webauthnLoginCommandState) submit(ce *Event) {
 }
 
 func doLoginStep(ce *Event, login bridgev2.LoginProcess, step *bridgev2.LoginStep, override *bridgev2.UserLogin) {
-	ce.Log.Debug().Any("next_step", step).Msg("Got next login step")
+	ce.Log.Debug().Object("next_step", step).Msg("Got next login step")
 	if step.Instructions != "" {
 		ce.Reply(step.Instructions)
 	}
