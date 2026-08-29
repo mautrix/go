@@ -166,7 +166,9 @@ func (spec *PerMessageProfilesEventContent) GetByID(id string) *BeeperPerMessage
 	}
 	for _, profile := range spec.Profiles {
 		if profile != nil && profile.ID == id {
-			return &profile.BeeperPerMessageProfile
+			profileCopy := profile.BeeperPerMessageProfile
+			profileCopy.HasFallback = false
+			return &profileCopy
 		}
 	}
 	return nil
@@ -187,7 +189,9 @@ func (spec *PerMessageProfilesEventContent) Match(input string) (string, *Beeper
 				if !trigger.KeepTrigger {
 					input = input[len(trigger.Prefix) : len(input)-len(trigger.Suffix)]
 				}
-				return input, &profile.BeeperPerMessageProfile
+				profileCopy := profile.BeeperPerMessageProfile
+				profileCopy.HasFallback = false
+				return input, &profileCopy
 			}
 		}
 	}
