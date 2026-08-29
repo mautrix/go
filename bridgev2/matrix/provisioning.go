@@ -609,7 +609,10 @@ func (prov *ProvisioningAPI) PostPaginate(w http.ResponseWriter, r *http.Request
 		})
 		select {
 		case err = <-doneChan:
-			if err != nil {
+			if errors.Is(err, bridgev2.ErrNotLoggedIn) {
+				log.Debug().Msg("Login logged out while backfilling, returning forbidden")
+				mautrix.MForbidden.WithMessage("Login is not logged in").Write(w)
+			} else if err != nil {
 				RespondWithError(w, err, "Internal error backfilling")
 			} else {
 				exhttp.WriteEmptyJSONResponse(w, http.StatusOK)
