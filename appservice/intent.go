@@ -502,9 +502,9 @@ func (intent *IntentAPI) SetAvatarURL(ctx context.Context, avatarURL id.ContentU
 		return err
 	}
 	resp, err := intent.Client.GetOwnAvatarURL(ctx)
-	if err != nil {
+	if err != nil && !errors.Is(err, mautrix.MNotFound) {
 		return fmt.Errorf("failed to check current avatar URL: %w", err)
-	} else if resp.FileID == avatarURL.FileID && resp.Homeserver == avatarURL.Homeserver {
+	} else if err == nil && resp.FileID == avatarURL.FileID && resp.Homeserver == avatarURL.Homeserver {
 		// No need to update
 		return nil
 	}
