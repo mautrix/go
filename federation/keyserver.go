@@ -186,7 +186,7 @@ func (ks *KeyServer) GetQueryKeys(w http.ResponseWriter, r *http.Request) {
 			resp.ServerKeys = append(resp.ServerKeys, key.GenerateKeyResponse(serverName, nil))
 		}
 	} else if ks.OtherKeys != nil {
-		otherKey, err := ks.OtherKeys.LoadKeys(serverName)
+		otherKey, err := ks.OtherKeys.LoadKeys(r.Context(), serverName)
 		if err != nil {
 			mautrix.MUnknown.WithMessage("Failed to load keys from cache").Write(w)
 			return
