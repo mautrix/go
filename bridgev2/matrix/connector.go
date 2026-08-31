@@ -77,6 +77,9 @@ type Connector struct {
 
 	doublePuppetIntents *exsync.Map[id.UserID, *appservice.IntentAPI]
 
+	accountDataSyncers     map[id.UserID]*accountDataSyncer
+	accountDataSyncersLock sync.Mutex
+
 	deterministicEventIDServer string
 	BridgeStateVersion         any
 
@@ -161,6 +164,10 @@ func (br *Connector) Init(bridge *bridgev2.Bridge) {
 	br.EventProcessor.On(event.EventEncrypted, br.handleEncryptedEvent)
 	br.EventProcessor.On(event.EphemeralEventReceipt, br.handleEphemeralEvent)
 	br.EventProcessor.On(event.EphemeralEventTyping, br.handleEphemeralEvent)
+	br.EventProcessor.On(event.AccountDataMarkedUnread, br.handleRoomEvent)
+	br.EventProcessor.On(event.AccountDataRoomTags, br.handleRoomEvent)
+	br.EventProcessor.On(event.AccountDataBeeperMute, br.handleRoomEvent)
+	br.accountDataSyncers = make(map[id.UserID]*accountDataSyncer)
 	br.Bot = br.AS.BotIntent()
 	br.Crypto = NewCryptoHelper(br)
 	br.Bridge.Commands.(*commands.Processor).AddHandlers(
@@ -330,6 +337,7 @@ func (br *Connector) PreStop() {
 }
 
 func (br *Connector) Stop() {
+	br.StopAllAccountDataSyncers()
 	br.EventProcessor.Stop()
 	if br.Crypto != nil {
 		br.Crypto.Stop()
@@ -634,6 +642,7 @@ func (br *Connector) NewUserIntent(ctx context.Context, userID id.UserID, access
 		return nil, accessToken, err
 	}
 	br.doublePuppetIntents.Set(userID, intent)
+	br.StartAccountDataSync(userID, intent.Client)
 	return &ASIntent{Connector: br, Matrix: intent}, newToken, nil
 }
 
