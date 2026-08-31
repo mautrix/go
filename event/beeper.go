@@ -166,6 +166,8 @@ type BeeperPerMessageProfile struct {
 	AvatarURL   *id.ContentURIString `json:"avatar_url,omitempty"`
 	AvatarFile  *EncryptedFileInfo   `json:"avatar_file,omitempty"`
 	HasFallback bool                 `json:"has_fallback,omitzero"`
+
+	Unknown json.RawMessage `json:",embed,unknown,omitempty"`
 }
 
 type BeeperActionMessageType string
