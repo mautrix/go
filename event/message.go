@@ -136,15 +136,16 @@ type MessageEventContent struct {
 	ImageSourcePacks map[id.ContentURIString]*ImageSource    `json:"com.beeper.msc4459.image_source_packs,omitempty"`
 	BridgedEmojis    map[id.ContentURIString]*BridgedSticker `json:"com.beeper.bridged_emojis,omitempty"`
 
-	MessageSendRetry         *BeeperRetryMetadata     `json:"com.beeper.message_send_retry,omitempty"`
-	BeeperGalleryImages      []*MessageEventContent   `json:"com.beeper.gallery.images,omitempty"`
-	BeeperGalleryCaption     string                   `json:"com.beeper.gallery.caption,omitempty"`
-	BeeperGalleryCaptionHTML string                   `json:"com.beeper.gallery.caption_html,omitempty"`
-	BeeperPerMessageProfile  *BeeperPerMessageProfile `json:"com.beeper.per_message_profile,omitempty"`
-	BeeperActionMessage      *BeeperActionMessage     `json:"com.beeper.action_message,omitempty"`
-	BeeperLinkPreviews       []*BeeperLinkPreview     `json:"com.beeper.linkpreviews,omitempty"`
-	BeeperStream             *BeeperStreamInfo        `json:"com.beeper.stream,omitempty"`
-	BeeperDisappearingTimer  *BeeperDisappearingTimer `json:"com.beeper.disappearing_timer,omitempty"`
+	MessageSendRetry             *BeeperRetryMetadata     `json:"com.beeper.message_send_retry,omitempty"`
+	BeeperGalleryImages          []*MessageEventContent   `json:"com.beeper.gallery.images,omitempty"`
+	BeeperGalleryCaption         string                   `json:"com.beeper.gallery.caption,omitempty"`
+	BeeperGalleryCaptionHTML     string                   `json:"com.beeper.gallery.caption_html,omitempty"`
+	BeeperPerMessageProfile      *BeeperPerMessageProfile `json:"com.beeper.per_message_profile,omitempty"`
+	BeeperActionMessage          *BeeperActionMessage     `json:"com.beeper.action_message,omitempty"`
+	BeeperLinkPreviews           []*BeeperLinkPreview     `json:"com.beeper.linkpreviews,omitempty"`
+	BeeperStream                 *BeeperStreamInfo        `json:"com.beeper.stream,omitempty"`
+	BeeperDisappearingTimer      *BeeperDisappearingTimer `json:"com.beeper.disappearing_timer,omitempty"`
+	BeeperBroadcastOutsideThread bool                     `json:"com.beeper.broadcast_outside_thread,omitempty"`
 
 	MSC1767Audio *MSC1767Audio `json:"org.matrix.msc1767.audio,omitempty"`
 	MSC3245Voice *MSC3245Voice `json:"org.matrix.msc3245.voice,omitempty"`
