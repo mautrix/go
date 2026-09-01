@@ -36,6 +36,30 @@ type MSC1767Message struct {
 	Message []ExtensibleText `json:"org.matrix.msc1767.message,omitempty"`
 }
 
+func (mm *MSC1767Message) GetText() string {
+	if mm.Text != "" {
+		return mm.Text
+	}
+	for _, msg := range mm.Message {
+		if msg.MimeType == "text/plain" || msg.MimeType == "" {
+			return msg.Body
+		}
+	}
+	return ""
+}
+
+func (mm *MSC1767Message) GetHTML() string {
+	if mm.HTML != "" {
+		return mm.HTML
+	}
+	for _, msg := range mm.Message {
+		if msg.MimeType == "text/html" {
+			return msg.Body
+		}
+	}
+	return ""
+}
+
 type PollOption struct {
 	ID string `json:"id"`
 	MSC1767Message
