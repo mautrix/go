@@ -306,6 +306,10 @@ type SpaceParentEventContent struct {
 
 type PolicyRecommendation string
 
+func (pr PolicyRecommendation) IsBanOrTakedown() bool {
+	return pr == PolicyRecommendationBan || pr == PolicyRecommendationUnstableBan || pr == PolicyRecommendationUnstableTakedown
+}
+
 const (
 	PolicyRecommendationBan              PolicyRecommendation = "m.ban"
 	PolicyRecommendationUnstableTakedown PolicyRecommendation = "org.matrix.msc4204.takedown"
