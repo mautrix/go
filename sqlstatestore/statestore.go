@@ -241,7 +241,7 @@ func (store *SQLStateStore) IsConfusableName(ctx context.Context, roomID id.Room
 		return nil, nil
 	}
 	skeleton := confusable.SkeletonHash(name)
-	rows, err := store.Query(ctx, "SELECT user_id FROM mx_user_profile WHERE room_id=$1 AND name_skeleton=$2 AND user_id<>$3", roomID, skeleton[:], currentUser)
+	rows, err := store.Query(ctx, "SELECT user_id FROM mx_user_profile WHERE room_id=$1 AND name_skeleton=$2 AND user_id<>$3 AND membership='join'", roomID, skeleton[:], currentUser)
 	return dbutil.NewRowIterWithError(rows, dbutil.ScanSingleColumn[id.UserID], err).AsList()
 }
 
