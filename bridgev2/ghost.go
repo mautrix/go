@@ -404,3 +404,30 @@ func (ghost *Ghost) pushProfileChanges(ctx context.Context, nameChanged, avatarC
 		}
 	}
 }
+
+// Check that the ghosts profile information matches the current content of an event. This allows
+// member events and ghosts to self heal in case they ever drift due to bugs.
+func (ghost *Ghost) reconcileProfile(ctx context.Context, current *event.MemberEventContent) {
+	nameDrift := ghost.NameSet && ghost.Name != "" && current.Displayname != ghost.Name
+	avatarDrift := ghost.AvatarSet && ghost.AvatarMXC != "" && current.AvatarURL != ghost.AvatarMXC
+	if !nameDrift && !avatarDrift {
+		return
+	}
+	zerolog.Ctx(ctx).Warn().
+		Str("ghost_id", string(ghost.ID)).
+		Bool("name_drift", nameDrift).
+		Bool("avatar_drift", avatarDrift).
+		Str("expected_name", ghost.Name).
+		Str("actual_name", current.Displayname).
+		Msg("Ghost profile drifted from the server copy, re-pushing")
+	if nameDrift {
+		ghost.NameSet = false
+	}
+	if avatarDrift {
+		ghost.AvatarSet = false
+	}
+	ghost.pushProfileChanges(ctx, nameDrift, avatarDrift, false)
+	if err := ghost.Bridge.DB.Ghost.Update(ctx, ghost.Ghost); err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to save ghost after profile reconcile")
+	}
+}
