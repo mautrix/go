@@ -883,6 +883,12 @@ components:
                       type: string
                       format: regex
                       description: A regular expression that the field value must match.
+                    min_length:
+                      type: integer
+                      description: Minimum input length as a hint for the client.
+                    max_length:
+                      type: integer
+                      description: Maximum input length as a hint for the client.
                     options:
                       type: array
                       description: For fields of type select, the valid options.
