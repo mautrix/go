@@ -314,6 +314,9 @@ type LoginInputDataField struct {
 	DefaultValue string `json:"default_value,omitempty"`
 	// A regex pattern that the client can use to validate input client-side.
 	Pattern string `json:"pattern,omitempty"`
+	// Minimum and maximum input length as a hint for the client
+	MinLength int `json:"min_length,omitempty"`
+	MaxLength int `json:"max_length,omitempty"`
 	// For fields of type select, the valid options.
 	// Pattern may also be filled with a regex that matches the same options.
 	Options []string `json:"options,omitempty"`
