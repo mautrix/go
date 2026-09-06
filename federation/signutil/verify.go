@@ -4,15 +4,13 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//go:build goexperiment.jsonv2 || go1.27
-
 package signutil
 
 import (
 	"bytes"
 	"crypto/ed25519"
 	"encoding/base64"
-	"encoding/json/jsontext"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -29,7 +27,7 @@ var ErrInvalidSignature = errors.New("invalid signature")
 
 func VerifyJSON(serverName string, keyID id.KeyID, key id.SigningKey, data any) error {
 	var err error
-	message, ok := data.(jsontext.Value)
+	message, ok := data.(json.RawMessage)
 	if !ok {
 		message, err = canonicaljson.Marshal(data)
 		if err != nil {
@@ -60,7 +58,7 @@ func VerifyJSON(serverName string, keyID id.KeyID, key id.SigningKey, data any) 
 
 func VerifyJSONAny(key id.SigningKey, data any) error {
 	var err error
-	message, ok := data.(jsontext.Value)
+	message, ok := data.(json.RawMessage)
 	if !ok {
 		message, err = canonicaljson.Marshal(data)
 		if err != nil {
@@ -106,7 +104,7 @@ func VerifyJSONAny(key id.SigningKey, data any) error {
 	return nil
 }
 
-func VerifyJSONCanonical(key id.SigningKey, sig string, message jsontext.Value) error {
+func VerifyJSONCanonical(key id.SigningKey, sig string, message json.RawMessage) error {
 	sigBytes, err := base64.RawStdEncoding.DecodeString(sig)
 	if err != nil {
 		return fmt.Errorf("failed to decode signature: %w", err)

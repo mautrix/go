@@ -4,14 +4,12 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//go:build goexperiment.jsonv2 || go1.27
-
 package federation
 
 import (
 	"crypto/ed25519"
 	"encoding/base64"
-	"encoding/json/jsontext"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -78,11 +76,11 @@ func GenerateSigningKey() *SigningKey {
 type ServerKeyResponse struct {
 	ServerName    string                         `json:"server_name"`
 	VerifyKeys    map[id.KeyID]ServerVerifyKey   `json:"verify_keys"`
-	OldVerifyKeys map[id.KeyID]OldVerifyKey      `json:"old_verify_keys,omitzero"`
-	Signatures    map[string]map[id.KeyID]string `json:"signatures,omitzero"`
+	OldVerifyKeys map[id.KeyID]OldVerifyKey      `json:"old_verify_keys,omitempty"`
+	Signatures    map[string]map[id.KeyID]string `json:"signatures,omitempty"`
 	ValidUntilTS  jsontime.UnixMilli             `json:"valid_until_ts"`
 
-	Unknown jsontext.Value `json:",embed,unknown"`
+	Raw json.RawMessage `json:"-"`
 }
 
 type QueryKeysResponse struct {
@@ -100,11 +98,18 @@ func (skr *ServerKeyResponse) HasKey(keyID id.KeyID) bool {
 
 func (skr *ServerKeyResponse) VerifySelfSignature() error {
 	for keyID, key := range skr.VerifyKeys {
-		if err := signutil.VerifyJSON(skr.ServerName, keyID, key.Key, skr); err != nil {
+		if err := signutil.VerifyJSON(skr.ServerName, keyID, key.Key, skr.Raw); err != nil {
 			return fmt.Errorf("failed to verify self signature for key %s: %w", keyID, err)
 		}
 	}
 	return nil
+}
+
+type marshalableSKR ServerKeyResponse
+
+func (skr *ServerKeyResponse) UnmarshalJSON(data []byte) error {
+	skr.Raw = data
+	return json.Unmarshal(data, (*marshalableSKR)(skr))
 }
 
 type ServerVerifyKey struct {
@@ -136,7 +141,7 @@ func (sk *SigningKey) SignJSON(data any) (string, error) {
 	return base64.RawStdEncoding.EncodeToString(sk.SignCanonicalJSON(marshaled)), err
 }
 
-func (sk *SigningKey) SignCanonicalJSON(data jsontext.Value) []byte {
+func (sk *SigningKey) SignCanonicalJSON(data json.RawMessage) []byte {
 	return ed25519.Sign(sk.Priv, data)
 }
 

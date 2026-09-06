@@ -4,15 +4,12 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//go:build goexperiment.jsonv2 || go1.27
-
 package federation
 
 import (
 	"cmp"
 	"context"
-	"encoding/json/jsontext"
-	"encoding/json/v2"
+	"encoding/json"
 	"fmt"
 	"io"
 	"mime"
@@ -78,7 +75,7 @@ func (c *Client) DownloadMedia(ctx context.Context, serverName, mediaID string) 
 		return nil, nil, fmt.Errorf("unexpected content type for metadata chunk: %s", part.Header.Get("Content-Type"))
 	}
 	mbr := http.MaxBytesReader(nil, part, 64*1024)
-	err = json.UnmarshalDecode(jsontext.NewDecoder(mbr), &meta)
+	err = json.NewDecoder(mbr).Decode(&meta)
 	_ = mbr.Close()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to parse metadata: %w", err)

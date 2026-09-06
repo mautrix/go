@@ -4,14 +4,12 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//go:build goexperiment.jsonv2 || go1.27
-
 package federation
 
 import (
 	"bytes"
 	"context"
-	"encoding/json/jsontext"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -216,7 +214,7 @@ func (sa *ServerAuth) Authenticate(r *http.Request) (*http.Request, *mautrix.Res
 			Msg("Didn't find expected key ID to verify request")
 		return nil, new(MUnauthorized.WithMessage("Key ID %q not found (got %v)", parsed.KeyID, keys))
 	}
-	var reqBody jsontext.Value
+	var reqBody []byte
 	if r.ContentLength != 0 && r.Method != http.MethodGet && r.Method != http.MethodHead {
 		reqBody, err = io.ReadAll(&fixedLimitedReader{R: r.Body, N: sa.MaxBodySize, Err: errRequestBodyTooLarge})
 		if errors.Is(err, errRequestBodyTooLarge) {
@@ -226,7 +224,7 @@ func (sa *ServerAuth) Authenticate(r *http.Request) (*http.Request, *mautrix.Res
 				Str("server_name", parsed.Origin).
 				Msg("Failed to read request body to authenticate")
 			return nil, &errBodyReadFailed
-		} else if !reqBody.IsValid() {
+		} else if !json.Valid(reqBody) {
 			return nil, &errInvalidJSONBody
 		}
 	}

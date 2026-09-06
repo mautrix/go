@@ -4,15 +4,12 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//go:build goexperiment.jsonv2 || go1.27
-
 package federation
 
 import (
 	"bytes"
 	"context"
-	"encoding/json/jsontext"
-	"encoding/json/v2"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -96,8 +93,8 @@ func (c *Client) QueryKeys(ctx context.Context, serverName string, req *ReqQuery
 	return
 }
 
-type PDU = jsontext.Value
-type EDU = jsontext.Value
+type PDU = json.RawMessage
+type EDU = json.RawMessage
 
 type ReqSendTransaction struct {
 	Destination string `json:"destination"`
@@ -565,7 +562,7 @@ func (c *Client) compileRequest(ctx context.Context, params RequestParams) (*htt
 		Host:   params.ServerName,
 	}, params.Path.FullPath()...)
 	reqURL.RawQuery = params.Query.Encode()
-	var reqJSON jsontext.Value
+	var reqJSON json.RawMessage
 	var reqBody io.Reader
 	if params.RequestJSON != nil {
 		var err error
@@ -609,11 +606,11 @@ func (c *Client) compileRequest(ctx context.Context, params RequestParams) (*htt
 }
 
 type signableRequest struct {
-	Method      string         `json:"method"`
-	URI         string         `json:"uri"`
-	Origin      string         `json:"origin"`
-	Destination string         `json:"destination"`
-	Content     jsontext.Value `json:"content,omitempty"`
+	Method      string          `json:"method"`
+	URI         string          `json:"uri"`
+	Origin      string          `json:"origin"`
+	Destination string          `json:"destination"`
+	Content     json.RawMessage `json:"content,omitempty"`
 }
 
 func (r *signableRequest) Verify(key id.SigningKey, sig string) error {

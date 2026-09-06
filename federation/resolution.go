@@ -4,14 +4,11 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//go:build goexperiment.jsonv2 || go1.27
-
 package federation
 
 import (
 	"context"
-	"encoding/json/jsontext"
-	"encoding/json/v2"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -183,7 +180,7 @@ func RequestWellKnown(ctx context.Context, cli *http.Client, hostname string) (*
 		return nil, time.Time{}, fmt.Errorf("response too large: %d bytes", resp.ContentLength)
 	}
 	var respData RespWellKnown
-	err = json.UnmarshalDecode(jsontext.NewDecoder(io.LimitReader(resp.Body, mautrix.WellKnownMaxSize)), &respData)
+	err = json.NewDecoder(io.LimitReader(resp.Body, mautrix.WellKnownMaxSize)).Decode(&respData)
 	if err != nil {
 		return nil, time.Time{}, fmt.Errorf("failed to decode response: %w", err)
 	} else if respData.Server == "" {

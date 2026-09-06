@@ -4,13 +4,10 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//go:build goexperiment.jsonv2 || go1.27
-
 package federation
 
 import (
-	"encoding/json/jsontext"
-	"encoding/json/v2"
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
@@ -137,7 +134,7 @@ type PostQueryKeysResponse struct {
 // https://spec.matrix.org/v1.9/server-server-api/#post_matrixkeyv2query
 func (ks *KeyServer) PostQueryKeys(w http.ResponseWriter, r *http.Request) {
 	var req ReqQueryKeys
-	err := json.UnmarshalDecode(jsontext.NewDecoder(r.Body), &req)
+	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		mautrix.MBadJSON.WithMessage("failed to parse request: %v", err).Write(w)
 		return
