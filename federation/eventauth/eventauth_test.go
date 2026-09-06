@@ -21,7 +21,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 	"go.mau.fi/util/exerrors"
-	"go.mau.fi/util/ptr"
 
 	"maunium.net/go/mautrix/federation/eventauth"
 	"maunium.net/go/mautrix/federation/pdu"
@@ -61,7 +60,7 @@ func TestAuthorize(t *testing.T) {
 				require.NoError(t, err)
 				if roomVersion == nil {
 					require.Equal(t, evt.Type, "m.room.create")
-					roomVersion = ptr.Ptr(id.RoomVersion(gjson.GetBytes(evt.Content, "room_version").Str))
+					roomVersion = new(id.RoomVersion(gjson.GetBytes(evt.Content, "room_version").Str))
 				}
 				expectedEventID := gjson.GetBytes(evt.Unsigned, "event_id").Str
 				evtID, err := evt.GetEventID(*roomVersion)

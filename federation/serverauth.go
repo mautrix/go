@@ -22,7 +22,6 @@ import (
 	"sync"
 
 	"github.com/rs/zerolog"
-	"go.mau.fi/util/ptr"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/id"
@@ -215,7 +214,7 @@ func (sa *ServerAuth) Authenticate(r *http.Request) (*http.Request, *mautrix.Res
 			Stringer("expected_key_id", parsed.KeyID).
 			Any("found_key_ids", keys).
 			Msg("Didn't find expected key ID to verify request")
-		return nil, ptr.Ptr(MUnauthorized.WithMessage("Key ID %q not found (got %v)", parsed.KeyID, keys))
+		return nil, new(MUnauthorized.WithMessage("Key ID %q not found (got %v)", parsed.KeyID, keys))
 	}
 	var reqBody []byte
 	if r.ContentLength != 0 && r.Method != http.MethodGet && r.Method != http.MethodHead {

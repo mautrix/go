@@ -10,7 +10,8 @@ package federation
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -182,7 +183,7 @@ func RequestWellKnown(ctx context.Context, cli *http.Client, hostname string) (*
 		return nil, time.Time{}, fmt.Errorf("response too large: %d bytes", resp.ContentLength)
 	}
 	var respData RespWellKnown
-	err = json.NewDecoder(io.LimitReader(resp.Body, mautrix.WellKnownMaxSize)).Decode(&respData)
+	err = json.UnmarshalDecode(jsontext.NewDecoder(io.LimitReader(resp.Body, mautrix.WellKnownMaxSize)), &respData)
 	if err != nil {
 		return nil, time.Time{}, fmt.Errorf("failed to decode response: %w", err)
 	} else if respData.Server == "" {

@@ -9,8 +9,8 @@
 package eventauth
 
 import (
-	"encoding/json"
 	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"slices"
@@ -656,7 +656,7 @@ func authorizePowerLevels(roomVersion id.RoomVersion, evt, createEvt *pdu.PDU, a
 	if senderPLPtr == nil {
 		senderPLPtr = parsePythonInt(gjson.GetBytes(oldPL.Content, "users_default"))
 		if senderPLPtr == nil {
-			senderPLPtr = ptr.Ptr(0)
+			senderPLPtr = new(0)
 		}
 	}
 	for _, key := range []string{"users_default", "events_default", "state_default", "ban", "redact", "kick", "invite"} {
@@ -809,7 +809,7 @@ func parseIntWithVersion(roomVersion id.RoomVersion, val gjson.Result) *int {
 		if val.Type != gjson.Number {
 			return nil
 		}
-		return ptr.Ptr(int(val.Int()))
+		return new(int(val.Int()))
 	}
 	return parsePythonInt(val)
 }
@@ -817,11 +817,11 @@ func parseIntWithVersion(roomVersion id.RoomVersion, val gjson.Result) *int {
 func parsePythonInt(val gjson.Result) *int {
 	switch val.Type {
 	case gjson.True:
-		return ptr.Ptr(1)
+		return new(1)
 	case gjson.False:
-		return ptr.Ptr(0)
+		return new(0)
 	case gjson.Number:
-		return ptr.Ptr(int(val.Int()))
+		return new(int(val.Int()))
 	case gjson.String:
 		// strconv.Atoi accepts signs as well as leading zeroes, so we just need to trim spaces beforehand
 		num, err := strconv.Atoi(strings.TrimSpace(val.Str))

@@ -11,7 +11,8 @@ package federation
 import (
 	"cmp"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"mime"
@@ -77,7 +78,7 @@ func (c *Client) DownloadMedia(ctx context.Context, serverName, mediaID string) 
 		return nil, nil, fmt.Errorf("unexpected content type for metadata chunk: %s", part.Header.Get("Content-Type"))
 	}
 	mbr := http.MaxBytesReader(nil, part, 64*1024)
-	err = json.NewDecoder(mbr).Decode(&meta)
+	err = json.UnmarshalDecode(jsontext.NewDecoder(mbr), &meta)
 	_ = mbr.Close()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to parse metadata: %w", err)

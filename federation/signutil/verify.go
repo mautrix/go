@@ -12,7 +12,7 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"encoding/base64"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 
@@ -29,7 +29,7 @@ var ErrInvalidSignature = errors.New("invalid signature")
 
 func VerifyJSON(serverName string, keyID id.KeyID, key id.SigningKey, data any) error {
 	var err error
-	message, ok := data.(json.RawMessage)
+	message, ok := data.(jsontext.Value)
 	if !ok {
 		message, err = canonicaljson.Marshal(data)
 		if err != nil {
@@ -60,7 +60,7 @@ func VerifyJSON(serverName string, keyID id.KeyID, key id.SigningKey, data any) 
 
 func VerifyJSONAny(key id.SigningKey, data any) error {
 	var err error
-	message, ok := data.(json.RawMessage)
+	message, ok := data.(jsontext.Value)
 	if !ok {
 		message, err = canonicaljson.Marshal(data)
 		if err != nil {
@@ -106,7 +106,7 @@ func VerifyJSONAny(key id.SigningKey, data any) error {
 	return nil
 }
 
-func VerifyJSONCanonical(key id.SigningKey, sig string, message json.RawMessage) error {
+func VerifyJSONCanonical(key id.SigningKey, sig string, message jsontext.Value) error {
 	sigBytes, err := base64.RawStdEncoding.DecodeString(sig)
 	if err != nil {
 		return fmt.Errorf("failed to decode signature: %w", err)
