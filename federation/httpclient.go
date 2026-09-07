@@ -80,7 +80,7 @@ func (srt *ServerResolvingTransport) resolve(ctx context.Context, serverName str
 
 	lock.Lock()
 	defer lock.Unlock()
-	res, err := srt.cache.LoadResolution(serverName)
+	res, err := srt.cache.LoadResolution(ctx, serverName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read cache: %w", err)
 	} else if res != nil {
@@ -88,7 +88,7 @@ func (srt *ServerResolvingTransport) resolve(ctx context.Context, serverName str
 	} else if res, err = ResolveServerName(ctx, serverName, srt.ResolveOpts); err != nil {
 		return nil, err
 	} else {
-		srt.cache.StoreResolution(res)
+		srt.cache.StoreResolution(ctx, res)
 		return res, nil
 	}
 }
