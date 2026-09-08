@@ -4828,7 +4828,7 @@ func (portal *Portal) syncParticipants(
 				zerolog.Ctx(ctx).Err(err).Str("ghost_id", string(member.Sender)).Msg("Failed to get ghost from member list to update info")
 			} else {
 				ghost.UpdateInfo(ctx, member.UserInfo)
-				if current, ok := currentMembers[ghost.Intent.GetMXID()]; ok && current.Membership == event.MembershipJoin {
+				if current, ok := currentMembers[ghost.Intent.GetMXID()]; ok && current.Membership == event.MembershipJoin && ptr.Val(member.Nickname) == "" {
 					ghost.reconcileProfile(ctx, current)
 				}
 			}
