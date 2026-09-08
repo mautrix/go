@@ -404,3 +404,34 @@ func (ghost *Ghost) pushProfileChanges(ctx context.Context, nameChanged, avatarC
 		}
 	}
 }
+
+func (ghost *Ghost) reconcileProfile(ctx context.Context, current *event.MemberEventContent, updatedProfile *UserInfo) {
+	// Re-set the profile on the server if:
+	// * the bridge database thinks the profile field is set
+	// * the member event has a different value than the bridge database
+	// * the value isn't being updated right after this call
+	nameDrift := ghost.NameSet && ghost.Name != "" && current.Displayname != ghost.Name &&
+		(updatedProfile == nil || updatedProfile.Name == nil || *updatedProfile.Name == ghost.Name)
+	avatarDrift := ghost.AvatarSet && ghost.AvatarMXC != "" && current.AvatarURL != ghost.AvatarMXC &&
+		(updatedProfile == nil || updatedProfile.Avatar == nil || updatedProfile.Avatar.ID == ghost.AvatarID)
+	if !nameDrift && !avatarDrift {
+		return
+	}
+	zerolog.Ctx(ctx).Warn().
+		Str("ghost_id", string(ghost.ID)).
+		Bool("name_drift", nameDrift).
+		Bool("avatar_drift", avatarDrift).
+		Str("expected_name", ghost.Name).
+		Str("actual_name", current.Displayname).
+		Msg("Ghost profile drifted from the server copy, re-pushing")
+	if nameDrift {
+		ghost.NameSet = false
+	}
+	if avatarDrift {
+		ghost.AvatarSet = false
+	}
+	ghost.pushProfileChanges(ctx, nameDrift, avatarDrift, false)
+	if err := ghost.Bridge.DB.Ghost.Update(ctx, ghost.Ghost); err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to save ghost after profile reconcile")
+	}
+}
