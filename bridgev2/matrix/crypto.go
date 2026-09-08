@@ -164,6 +164,18 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 			return ExitError{34}
 		}
 	}
+	if helper.bridge.Config.Encryption.Appservice {
+		helper.log.Debug().Msg("End-to-bridge encryption is in appservice mode, registering event listeners and not starting syncer")
+		helper.bridge.AS.Registration.EphemeralEvents = true
+		helper.mach.AddAppserviceListener(helper.bridge.EventProcessor)
+		helper.bridge.EventProcessor.On(event.StateHistoryVisibility, helper.mach.HandleHistoryVisibility)
+		if helper.streams != nil {
+			err = helper.streams.InitAppservice(helper.bridge.EventProcessor)
+			if err != nil {
+				helper.log.Err(err).Msg("Failed to initialize beeper stream appservice listener")
+			}
+		}
+	}
 
 	go helper.resyncEncryptionInfo(context.TODO())
 
@@ -385,16 +397,6 @@ func (helper *CryptoHelper) repairOTKsIfNeeded(ctx context.Context) error {
 
 func (helper *CryptoHelper) Start() {
 	if helper.bridge.Config.Encryption.Appservice {
-		helper.log.Debug().Msg("End-to-bridge encryption is in appservice mode, registering event listeners and not starting syncer")
-		helper.bridge.AS.Registration.EphemeralEvents = true
-		helper.mach.AddAppserviceListener(helper.bridge.EventProcessor)
-		helper.bridge.EventProcessor.On(event.StateHistoryVisibility, helper.mach.HandleHistoryVisibility)
-		if helper.streams != nil {
-			err := helper.streams.InitAppservice(helper.bridge.EventProcessor)
-			if err != nil {
-				helper.log.Err(err).Msg("Failed to initialize beeper stream appservice listener")
-			}
-		}
 		return
 	}
 	helper.syncDone.Add(1)
