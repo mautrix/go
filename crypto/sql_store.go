@@ -693,7 +693,7 @@ func (store *SQLCryptoStore) RemoveOutboundGroupSession(ctx context.Context, roo
 }
 
 func (store *SQLCryptoStore) MarkOutboundGroupSessionShared(ctx context.Context, userID id.UserID, identityKey id.IdentityKey, sessionID id.SessionID) error {
-	_, err := store.DB.Exec(ctx, "INSERT INTO crypto_megolm_outbound_session_shared (user_id, identity_key, session_id) VALUES ($1, $2, $3)", userID, identityKey, sessionID)
+	_, err := store.DB.Exec(ctx, "INSERT INTO crypto_megolm_outbound_session_shared (user_id, identity_key, session_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING", userID, identityKey, sessionID)
 	return err
 }
 
