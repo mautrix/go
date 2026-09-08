@@ -405,11 +405,15 @@ func (ghost *Ghost) pushProfileChanges(ctx context.Context, nameChanged, avatarC
 	}
 }
 
-// Check that the ghosts profile information matches the current content of an event. This allows
-// member events and ghosts to self heal in case they ever drift due to bugs.
-func (ghost *Ghost) reconcileProfile(ctx context.Context, current *event.MemberEventContent) {
-	nameDrift := ghost.NameSet && ghost.Name != "" && current.Displayname != ghost.Name
-	avatarDrift := ghost.AvatarSet && ghost.AvatarMXC != "" && current.AvatarURL != ghost.AvatarMXC
+func (ghost *Ghost) reconcileProfile(ctx context.Context, current *event.MemberEventContent, updatedProfile *UserInfo) {
+	// Re-set the profile on the server if:
+	// * the bridge database thinks the profile field is set
+	// * the member event has a different value than the bridge database
+	// * the value isn't being updated right after this call
+	nameDrift := ghost.NameSet && ghost.Name != "" && current.Displayname != ghost.Name &&
+		(updatedProfile == nil || updatedProfile.Name == nil || *updatedProfile.Name == ghost.Name)
+	avatarDrift := ghost.AvatarSet && ghost.AvatarMXC != "" && current.AvatarURL != ghost.AvatarMXC &&
+		(updatedProfile == nil || updatedProfile.Avatar == nil || updatedProfile.Avatar.ID == ghost.AvatarID)
 	if !nameDrift && !avatarDrift {
 		return
 	}
