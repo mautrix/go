@@ -5121,12 +5121,15 @@ func (portal *Portal) UpdateInfoFromGhost(ctx context.Context, ghost *Ghost) (ch
 		}
 	}
 	changed = portal.updateName(ctx, ghost.Name, nil, time.Time{}, false) || changed
-	changed = portal.updateAvatar(ctx, &Avatar{
-		ID:     ghost.AvatarID,
-		MXC:    ghost.AvatarMXC,
-		Hash:   ghost.AvatarHash,
-		Remove: ghost.AvatarID == "",
-	}, nil, time.Time{}, false) || changed
+	// Don't change avatar if the ghost avatar upload failed (has ID, but no MXC and AvatarSet is false)
+	if ghost.AvatarMXC != "" || ghost.AvatarSet || ghost.AvatarID == "" {
+		changed = portal.updateAvatar(ctx, &Avatar{
+			ID:     ghost.AvatarID,
+			MXC:    ghost.AvatarMXC,
+			Hash:   ghost.AvatarHash,
+			Remove: ghost.AvatarID == "" || ghost.AvatarMXC == "",
+		}, nil, time.Time{}, false) || changed
+	}
 	return
 }
 
