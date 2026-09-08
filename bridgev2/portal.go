@@ -64,12 +64,13 @@ type portalEvent interface {
 }
 
 type outgoingMessage struct {
-	db        *database.Message
-	evt       *event.Event
-	ignore    bool
-	handle    func(RemoteMessage, *database.Message) (bool, error)
-	ackedAt   time.Time
-	timeouted bool
+	db                 *database.Message
+	evt                *event.Event
+	ignore             bool
+	handle             func(RemoteMessage, *database.Message) (bool, error)
+	ackedAt            time.Time
+	timeouted          bool
+	recipientReadTimer time.Duration
 }
 
 type Portal struct {
@@ -1024,7 +1025,20 @@ func (portal *Portal) callReadReceiptHandler(
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to save user portal metadata")
 	}
-	portal.Bridge.DisappearLoop.StartAllBefore(ctx, portal.MXID, evt.ReadUpTo)
+	portal.startDisappearingAfterRead(ctx, evt.ReadUpTo, time.Now(), true)
+}
+
+func (portal *Portal) startDisappearingAfterRead(ctx context.Context, readUpTo, timestamp time.Time, fromMe bool) error {
+	if portal.usesRecipientReadDisappearingDMs() {
+		return portal.Bridge.DisappearLoop.StartAllBeforeFrom(ctx, portal.MXID, readUpTo, timestamp, portal.OtherUserID, fromMe)
+	} else if fromMe {
+		portal.Bridge.DisappearLoop.StartAllBefore(ctx, portal.MXID, readUpTo)
+	}
+	return nil
+}
+
+func (portal *Portal) usesRecipientReadDisappearingDMs() bool {
+	return portal.RoomType == database.RoomTypeDM && portal.OtherUserID != "" && portal.Bridge.Network.GetCapabilities().RecipientReadDisappearingDMs
 }
 
 func (portal *Portal) handleMatrixTyping(ctx context.Context, evt *event.Event) EventHandlingResult {
@@ -1322,6 +1336,15 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		ThreadRoot: threadRoot,
 		ReplyTo:    replyTo,
 	}
+	if portal.usesRecipientReadDisappearingDMs() {
+		ds := portal.Disappear
+		if messageTimer != nil {
+			ds = database.DisappearingSettingFromEvent(messageTimer)
+		}
+		if ds.Type == event.DisappearingTypeAfterRead {
+			wrappedMsgEvt.recipientReadTimer = ds.Timer
+		}
+	}
 	if portal.Bridge.Config.DeduplicateMatrixMessages {
 		if part, err := portal.Bridge.DB.Message.GetPartByTxnID(ctx, portal.Receiver, evt.ID, wrappedMsgEvt.InputTransactionID); err != nil {
 			log.Err(err).Msg("Failed to check db if message is already sent")
@@ -1377,7 +1400,7 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 			// Hack to ensure the ghost row exists
 			// TODO move to better place (like login)
 			portal.Bridge.GetGhostByID(ctx, message.SenderID)
-			err = portal.Bridge.DB.Message.Insert(ctx, message)
+			err = portal.saveMessageWithReadTimer(ctx, message, wrappedMsgEvt.recipientReadTimer)
 			if err != nil {
 				log.Err(err).Msg("Failed to save message to database")
 			} else if resp.PostSave != nil {
@@ -1395,7 +1418,7 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 	if messageTimer != nil {
 		ds = database.DisappearingSettingFromEvent(messageTimer)
 	}
-	if ds.Type != event.DisappearingTypeNone {
+	if ds.Type != event.DisappearingTypeNone && wrappedMsgEvt.recipientReadTimer == 0 {
 		go portal.Bridge.DisappearLoop.Add(ctx, &database.DisappearingMessage{
 			RoomID:              portal.MXID,
 			EventID:             message.MXID,
@@ -1408,6 +1431,26 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		return EventHandlingResultQueued
 	}
 	return EventHandlingResultSuccess.WithEventID(message.MXID).WithStreamOrder(resp.StreamOrder)
+}
+
+func (portal *Portal) saveMessageWithReadTimer(ctx context.Context, message *database.Message, recipientReadTimer time.Duration) error {
+	if recipientReadTimer == 0 {
+		return portal.Bridge.DB.Message.Insert(ctx, message)
+	}
+	return portal.Bridge.DB.DoTxn(ctx, nil, func(ctx context.Context) error {
+		if err := portal.Bridge.DB.Message.Insert(ctx, message); err != nil {
+			return err
+		}
+		return portal.Bridge.DB.DisappearingMessage.Put(ctx, &database.DisappearingMessage{
+			RoomID:    portal.MXID,
+			EventID:   message.MXID,
+			Timestamp: message.Timestamp,
+			DisappearingSetting: database.DisappearingSetting{
+				Type:  event.DisappearingTypeAfterRead,
+				Timer: recipientReadTimer,
+			},
+		})
+	})
 }
 
 // AddPendingToIgnore adds a transaction ID that should be ignored if encountered as a new message.
@@ -1434,9 +1477,10 @@ func (evt *MatrixMessage) AddPendingToIgnore(txnID networkid.TransactionID) {
 // The provided function will be called when the message is encountered.
 func (evt *MatrixMessage) AddPendingToSave(message *database.Message, txnID networkid.TransactionID, handleEcho RemoteEchoHandler) {
 	pending := &outgoingMessage{
-		db:     evt.fillDBMessage(message),
-		evt:    evt.Event,
-		handle: handleEcho,
+		db:                 evt.fillDBMessage(message),
+		evt:                evt.Event,
+		handle:             handleEcho,
+		recipientReadTimer: evt.recipientReadTimer,
 	}
 	evt.Portal.outgoingMessagesLock.Lock()
 	evt.Portal.outgoingMessages[txnID] = pending
@@ -2592,7 +2636,15 @@ func (portal *Portal) handleMatrixRedaction(
 	return EventHandlingResultSuccess.WithMSS()
 }
 
-func (portal *Portal) handleRemoteEvent(ctx context.Context, source *UserLogin, evtType RemoteEventType, evt RemoteEvent) (res EventHandlingResult) {
+func (portal *Portal) handleRemoteEvent(ctx context.Context, source *UserLogin, evtType RemoteEventType, evt RemoteEvent) EventHandlingResult {
+	res := portal.handleRemoteEventInner(ctx, source, evtType, evt)
+	if handler, ok := evt.(RemotePostHandlerWithResult); ok {
+		handler.PostHandleWithResult(ctx, portal, res)
+	}
+	return res
+}
+
+func (portal *Portal) handleRemoteEventInner(ctx context.Context, source *UserLogin, evtType RemoteEventType, evt RemoteEvent) (res EventHandlingResult) {
 	log := zerolog.Ctx(ctx)
 	if portal.MXID == "" {
 		mcp, ok := evt.(RemoteEventThatMayCreatePortal)
@@ -2963,14 +3015,18 @@ func (portal *Portal) sendConvertedMessage(
 				Msg("Sent message part to Matrix")
 			dbMessage.MXID = resp.EventID
 		}
+		var recipientReadTimer time.Duration
+		if save && !dbMessage.HasFakeMXID() && converted.Disappear.Type == event.DisappearingTypeAfterRead && converted.Disappear.DisappearAt.IsZero() && portal.usesRecipientReadDisappearingDMs() {
+			recipientReadTimer = converted.Disappear.Timer
+		}
 		if save {
-			err := portal.Bridge.DB.Message.Insert(ctx, dbMessage)
+			err := portal.saveMessageWithReadTimer(ctx, dbMessage, recipientReadTimer)
 			if err != nil {
 				logContext(log.Err(err)).Str("part_id", string(part.ID)).Msg("Failed to save message part to database")
 				errorList = append(errorList, fmt.Errorf("%w: failed to save message part to database: %w", ErrDatabaseError, err))
 			}
 		}
-		if converted.Disappear.Type != event.DisappearingTypeNone && !dbMessage.HasFakeMXID() {
+		if converted.Disappear.Type != event.DisappearingTypeNone && !dbMessage.HasFakeMXID() && recipientReadTimer == 0 {
 			if converted.Disappear.Type == event.DisappearingTypeAfterSend && converted.Disappear.DisappearAt.IsZero() {
 				converted.Disappear.DisappearAt = dbMessage.Timestamp.Add(converted.Disappear.Timer)
 			}
@@ -3033,7 +3089,7 @@ func (portal *Portal) checkPendingMessage(ctx context.Context, evt RemoteMessage
 		// Hack to ensure the ghost row exists
 		// TODO move to better place (like login)
 		portal.Bridge.GetGhostByID(ctx, pending.db.SenderID)
-		err := portal.Bridge.DB.Message.Insert(ctx, pending.db)
+		err := portal.saveMessageWithReadTimer(ctx, pending.db, pending.recipientReadTimer)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to save message to database after receiving remote echo")
 		}
@@ -3869,8 +3925,8 @@ func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserL
 	} else {
 		addTargetLog(log.Debug()).Msg("Bridged read receipt")
 	}
-	if sender.IsFromMe {
-		portal.Bridge.DisappearLoop.StartAllBefore(ctx, portal.MXID, readUpTo)
+	if err = portal.startDisappearingAfterRead(ctx, readUpTo, getEventTS(evt), sender.IsFromMe); err != nil {
+		return EventHandlingResultFailed.WithError(err)
 	}
 	return EventHandlingResultSuccess
 }

@@ -115,6 +115,20 @@ func (dmq *DisappearingMessageQuery) StartAllBefore(ctx context.Context, roomID 
 	return dmq.QueryMany(ctx, startDisappearingMessagesQuery, time.Now().UnixNano(), dmq.BridgeID, roomID, beforeTS.UnixNano())
 }
 
+func (dmq *DisappearingMessageQuery) StartAllBeforeFrom(ctx context.Context, roomID id.RoomID, beforeTS, startTS time.Time, senderID networkid.UserID, matchesSender bool) ([]*DisappearingMessage, error) {
+	return dmq.QueryMany(ctx, `
+		UPDATE disappearing_message
+		SET disappear_at=$1 + timer
+		WHERE bridge_id=$2 AND mx_room=$3 AND disappear_at IS NULL AND type='after_read' AND timestamp<=$4
+		AND EXISTS (
+			SELECT 1 FROM message
+			WHERE message.bridge_id=disappearing_message.bridge_id AND message.mxid=disappearing_message.mxid
+			AND (message.sender_id=$5)=$6
+		)
+		RETURNING bridge_id, mx_room, mxid, timestamp, type, timer, disappear_at
+	`, startTS.UnixNano(), dmq.BridgeID, roomID, beforeTS.UnixNano(), senderID, matchesSender)
+}
+
 func (dmq *DisappearingMessageQuery) GetUpcoming(ctx context.Context, duration time.Duration, limit int) ([]*DisappearingMessage, error) {
 	return dmq.QueryMany(ctx, getUpcomingDisappearingMessagesQuery, dmq.BridgeID, time.Now().Add(duration).UnixNano(), limit)
 }

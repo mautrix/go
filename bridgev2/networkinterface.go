@@ -367,7 +367,8 @@ type OutgoingTimeoutSuppressingNetworkAPI interface {
 type NetworkGeneralCapabilities struct {
 	// Does the network connector support disappearing messages?
 	// This flag enables the message disappearing loop in the bridge.
-	DisappearingMessages bool
+	DisappearingMessages         bool
+	RecipientReadDisappearingDMs bool
 	// Should the bridge re-request user info on incoming messages even if the ghost already has info?
 	// By default, info is only requested for ghosts with no name, and other updating is left to events.
 	AggressiveUpdateInfo bool
@@ -1210,6 +1211,11 @@ type RemotePostHandler interface {
 	PostHandle(ctx context.Context, portal *Portal)
 }
 
+type RemotePostHandlerWithResult interface {
+	RemoteEvent
+	PostHandleWithResult(ctx context.Context, portal *Portal, result EventHandlingResult)
+}
+
 type RemoteChatInfoChange interface {
 	RemoteEvent
 	GetChatInfoChange(ctx context.Context) (*ChatInfoChange, error)
@@ -1442,7 +1448,8 @@ type MatrixMessage struct {
 	ThreadRoot *database.Message
 	ReplyTo    *database.Message
 
-	pendingSaves []*outgoingMessage
+	pendingSaves       []*outgoingMessage
+	recipientReadTimer time.Duration
 }
 
 type MatrixEdit struct {
