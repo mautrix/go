@@ -15,6 +15,8 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/tidwall/sjson"
@@ -32,6 +34,9 @@ type Ghost struct {
 	Bridge *Bridge
 	Log    zerolog.Logger
 	Intent MatrixAPI
+
+	syncLock      sync.Mutex
+	lastReconcile time.Time
 }
 
 func (br *Bridge) loadGhost(ctx context.Context, dbGhost *database.Ghost, queryErr error, id *networkid.UserID) (*Ghost, error) {
@@ -406,6 +411,10 @@ func (ghost *Ghost) pushProfileChanges(ctx context.Context, nameChanged, avatarC
 }
 
 func (ghost *Ghost) reconcileProfile(ctx context.Context, current *event.MemberEventContent, updatedProfile *UserInfo) {
+	if !ghost.syncLock.TryLock() {
+		return
+	}
+	defer ghost.syncLock.Unlock()
 	// Re-set the profile on the server if:
 	// * the bridge database thinks the profile field is set
 	// * the member event has a different value than the bridge database
@@ -414,7 +423,9 @@ func (ghost *Ghost) reconcileProfile(ctx context.Context, current *event.MemberE
 		(updatedProfile == nil || updatedProfile.Name == nil || *updatedProfile.Name == ghost.Name)
 	avatarDrift := ghost.AvatarSet && ghost.AvatarMXC != "" && current.AvatarURL != ghost.AvatarMXC &&
 		(updatedProfile == nil || updatedProfile.Avatar == nil || updatedProfile.Avatar.ID == ghost.AvatarID)
-	if !nameDrift && !avatarDrift {
+	// Also don't allow re-setting too often, because there might be multiple in-flight room syncs
+	// that all call this method in a short period.
+	if (!nameDrift && !avatarDrift) || time.Since(ghost.lastReconcile) < 5*time.Minute {
 		return
 	}
 	zerolog.Ctx(ctx).Warn().
@@ -434,4 +445,5 @@ func (ghost *Ghost) reconcileProfile(ctx context.Context, current *event.MemberE
 	if err := ghost.Bridge.DB.Ghost.Update(ctx, ghost.Ghost); err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to save ghost after profile reconcile")
 	}
+	ghost.lastReconcile = time.Now()
 }
