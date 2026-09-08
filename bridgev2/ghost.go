@@ -35,8 +35,8 @@ type Ghost struct {
 	Log    zerolog.Logger
 	Intent MatrixAPI
 
-	syncLock      sync.Mutex
-	lastReconcile time.Time
+	syncLock sync.Mutex
+	lastSync time.Time
 }
 
 func (br *Bridge) loadGhost(ctx context.Context, dbGhost *database.Ghost, queryErr error, id *networkid.UserID) (*Ghost, error) {
@@ -361,7 +361,9 @@ func (ghost *Ghost) UpdateInfo(ctx context.Context, info *UserInfo) {
 	if info.ExtraUpdates != nil {
 		update = info.ExtraUpdates(ctx, ghost) || update
 	}
+	ghost.syncLock.Lock()
 	ghost.pushProfileChanges(ctx, nameChanged, avatarMXCChanged, contactInfoChanged)
+	ghost.syncLock.Unlock()
 	if oldName != ghost.Name || oldAvatar != ghost.AvatarMXC {
 		ghost.updateDMPortals(ctx)
 	}
@@ -408,6 +410,7 @@ func (ghost *Ghost) pushProfileChanges(ctx context.Context, nameChanged, avatarC
 			}
 		}
 	}
+	ghost.lastSync = time.Now()
 }
 
 func (ghost *Ghost) reconcileProfile(ctx context.Context, current *event.MemberEventContent, updatedProfile *UserInfo) {
@@ -425,7 +428,7 @@ func (ghost *Ghost) reconcileProfile(ctx context.Context, current *event.MemberE
 		(updatedProfile == nil || updatedProfile.Avatar == nil || updatedProfile.Avatar.ID == ghost.AvatarID)
 	// Also don't allow re-setting too often, because there might be multiple in-flight room syncs
 	// that all call this method in a short period.
-	if (!nameDrift && !avatarDrift) || time.Since(ghost.lastReconcile) < 5*time.Minute {
+	if (!nameDrift && !avatarDrift) || time.Since(ghost.lastSync) < 5*time.Minute {
 		return
 	}
 	zerolog.Ctx(ctx).Warn().
@@ -445,5 +448,4 @@ func (ghost *Ghost) reconcileProfile(ctx context.Context, current *event.MemberE
 	if err := ghost.Bridge.DB.Ghost.Update(ctx, ghost.Ghost); err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to save ghost after profile reconcile")
 	}
-	ghost.lastReconcile = time.Now()
 }
