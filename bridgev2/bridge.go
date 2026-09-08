@@ -364,23 +364,37 @@ func (br *Bridge) MigrateToSplitPortals(ctx context.Context) (bool, func(), erro
 }
 
 func (br *Bridge) StartLogins(ctx context.Context) error {
+	users, err := br.GetUsersToStart(ctx)
+	if err != nil {
+		return err
+	}
+	br.StartLoginsForUsers(ctx, users)
+	return nil
+}
+
+func (br *Bridge) GetUsersToStart(ctx context.Context) ([]*User, error) {
 	userIDs, err := br.DB.UserLogin.GetAllUserIDsWithLogins(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get users with logins: %w", err)
+		return nil, fmt.Errorf("failed to get users with logins: %w", err)
 	}
-	startedAny := false
-	for _, userID := range userIDs {
+	users := make([]*User, len(userIDs))
+	for i, userID := range userIDs {
 		br.Log.Info().Stringer("user_id", userID).Msg("Loading user")
-		var user *User
-		user, err = br.GetUserByMXID(ctx, userID)
+		users[i], err = br.GetUserByMXID(ctx, userID)
 		if err != nil {
-			br.Log.Err(err).Stringer("user_id", userID).Msg("Failed to load user")
-		} else {
-			for _, login := range user.GetUserLogins() {
-				startedAny = true
-				br.Log.Info().Str("id", string(login.ID)).Msg("Starting user login")
-				login.Client.Connect(login.Log.WithContext(ctx))
-			}
+			return nil, fmt.Errorf("failed to load user %s: %w", userID, err)
+		}
+	}
+	return users, nil
+}
+
+func (br *Bridge) StartLoginsForUsers(ctx context.Context, users []*User) {
+	startedAny := false
+	for _, user := range users {
+		for _, login := range user.GetUserLogins() {
+			startedAny = true
+			br.Log.Info().Str("id", string(login.ID)).Msg("Starting user login")
+			login.Client.Connect(login.Log.WithContext(ctx))
 		}
 	}
 	if !startedAny {
@@ -392,7 +406,6 @@ func (br *Bridge) StartLogins(ctx context.Context) error {
 	}
 
 	br.Log.Info().Msg("Bridge started")
-	return nil
 }
 
 func (br *Bridge) ResetNetworkConnections() {
