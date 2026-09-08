@@ -27,10 +27,9 @@ type EventMeta struct {
 	Timestamp         time.Time
 	StreamOrder       int64
 
-	PreHandleFunc            func(context.Context, *bridgev2.Portal)
-	PostHandleFunc           func(context.Context, *bridgev2.Portal)
-	PostHandleWithResultFunc func(context.Context, *bridgev2.Portal, bridgev2.EventHandlingResult)
-	MutateContextFunc        func(context.Context) context.Context
+	PreHandleFunc     func(context.Context, *bridgev2.Portal)
+	PostHandleFunc    func(context.Context, *bridgev2.Portal)
+	MutateContextFunc func(context.Context) context.Context
 
 	FetchCertainPortalKeyFunc func(context.Context) networkid.PortalKey
 }
@@ -44,7 +43,6 @@ var (
 	_ bridgev2.RemoteEventWithStreamOrder                    = (*EventMeta)(nil)
 	_ bridgev2.RemotePreHandler                              = (*EventMeta)(nil)
 	_ bridgev2.RemotePostHandler                             = (*EventMeta)(nil)
-	_ bridgev2.RemotePostHandlerWithResult                   = (*EventMeta)(nil)
 	_ bridgev2.RemoteEventWithContextMutation                = (*EventMeta)(nil)
 )
 
@@ -102,12 +100,6 @@ func (evt *EventMeta) PreHandle(ctx context.Context, portal *bridgev2.Portal) {
 func (evt *EventMeta) PostHandle(ctx context.Context, portal *bridgev2.Portal) {
 	if evt.PostHandleFunc != nil {
 		evt.PostHandleFunc(ctx, portal)
-	}
-}
-
-func (evt *EventMeta) PostHandleWithResult(ctx context.Context, portal *bridgev2.Portal, result bridgev2.EventHandlingResult) {
-	if evt.PostHandleWithResultFunc != nil {
-		evt.PostHandleWithResultFunc(ctx, portal, result)
 	}
 }
 

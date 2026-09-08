@@ -92,10 +92,9 @@ func (dl *DisappearLoop) StartAllBefore(ctx context.Context, roomID id.RoomID, b
 	dl.start(ctx, startedMessages, err)
 }
 
-func (dl *DisappearLoop) StartAllBeforeFrom(ctx context.Context, roomID id.RoomID, beforeTS, startTS time.Time, senderID networkid.UserID, matchesSender bool) error {
+func (dl *DisappearLoop) StartAllBeforeFrom(ctx context.Context, roomID id.RoomID, beforeTS, startTS time.Time, senderID networkid.UserID, matchesSender bool) {
 	startedMessages, err := dl.br.DB.DisappearingMessage.StartAllBeforeFrom(ctx, roomID, beforeTS, startTS, senderID, matchesSender)
 	dl.start(ctx, startedMessages, err)
-	return err
 }
 
 func (dl *DisappearLoop) start(ctx context.Context, startedMessages []*database.DisappearingMessage, err error) {
