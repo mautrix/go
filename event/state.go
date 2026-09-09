@@ -274,9 +274,10 @@ type BridgeEventContent struct {
 type DisappearingType string
 
 const (
-	DisappearingTypeNone      DisappearingType = ""
-	DisappearingTypeAfterRead DisappearingType = "after_read"
-	DisappearingTypeAfterSend DisappearingType = "after_send"
+	DisappearingTypeNone                 DisappearingType = ""
+	DisappearingTypeAfterRead            DisappearingType = "after_read"
+	DisappearingTypeAfterReadByRecipient DisappearingType = "after_read_by_recipient"
+	DisappearingTypeAfterSend            DisappearingType = "after_send"
 )
 
 type BeeperDisappearingTimer struct {
