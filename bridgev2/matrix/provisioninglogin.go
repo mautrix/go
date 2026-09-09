@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -437,6 +438,20 @@ func (prov *ProvisioningAPI) executeStep(
 	startParams *bridgev2.LoginStartParams,
 	stepResult *stepExecutionResult,
 ) {
+	defer func() {
+		v := recover()
+		if v != nil {
+			if err, ok := v.(error); ok {
+				stepResult.err = fmt.Errorf("step panicked: %w", err)
+			} else {
+				stepResult.err = fmt.Errorf("step panicked: %v", v)
+			}
+			zerolog.Ctx(ctx).
+				Err(stepResult.err).
+				Bytes(zerolog.ErrorStackFieldName, debug.Stack()).
+				Msg("Panic in login step execution")
+		}
+	}()
 	var nextStep *bridgev2.LoginStep
 	var err error
 	switch currentStepType {
