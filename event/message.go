@@ -142,7 +142,7 @@ type MessageEventContent struct {
 	BeeperGalleryCaptionHTML     string                   `json:"com.beeper.gallery.caption_html,omitempty"`
 	BeeperPerMessageProfile      *BeeperPerMessageProfile `json:"com.beeper.per_message_profile,omitempty"`
 	BeeperActionMessage          *BeeperActionMessage     `json:"com.beeper.action_message,omitempty"`
-	BeeperLinkPreviews           []*BeeperLinkPreview     `json:"com.beeper.linkpreviews,omitempty"`
+	BeeperLinkPreviews           []*BeeperLinkPreview     `json:"com.beeper.linkpreviews,omitzero"`
 	BeeperStream                 *BeeperStreamInfo        `json:"com.beeper.stream,omitempty"`
 	BeeperDisappearingTimer      *BeeperDisappearingTimer `json:"com.beeper.disappearing_timer,omitempty"`
 	BeeperBroadcastOutsideThread bool                     `json:"com.beeper.broadcast_outside_thread,omitzero"`
