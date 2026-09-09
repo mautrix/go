@@ -98,6 +98,7 @@ func RedactContent(eventType string, content jsontext.Value, roomVersion id.Room
 func (pdu *PDU) Redact(roomVersion id.RoomVersion) *PDU {
 	pdu.Unknown = nil
 	pdu.Unsigned = nil
+	pdu.Sticky = nil
 	if roomVersion.UpdatedRedactionRules() {
 		pdu.DeprecatedPrevState = nil
 		pdu.DeprecatedOrigin = nil

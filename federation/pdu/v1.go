@@ -70,7 +70,7 @@ type RoomV1PDU struct {
 	Sender         id.UserID                      `json:"sender"`
 	Signatures     map[string]map[id.KeyID]string `json:"signatures,omitzero"`
 	StateKey       *string                        `json:"state_key,omitzero"`
-	Sticky         *event.Sticky                  `json:"msc4354_sticky,omitzero"`
+	Sticky         jsontext.Value                 `json:"msc4354_sticky,omitzero"`
 	Type           string                         `json:"type"`
 	Unsigned       jsontext.Value                 `json:"unsigned,omitzero"`
 
@@ -101,6 +101,7 @@ func (pdu *RoomV1PDU) RedactForSignature(roomVersion id.RoomVersion) *RoomV1PDU 
 func (pdu *RoomV1PDU) Redact(roomVersion id.RoomVersion) *RoomV1PDU {
 	pdu.Unknown = nil
 	pdu.Unsigned = nil
+	pdu.Sticky = nil
 	if pdu.Type != "m.room.redaction" {
 		pdu.Redacts = nil
 	}
@@ -246,11 +247,16 @@ func (pdu *RoomV1PDU) ToClientEvent(roomVersion id.RoomVersion) (*event.Event, e
 		ID:        pdu.EventID,
 		RoomID:    pdu.RoomID,
 		Redacts:   ptr.Val(pdu.Redacts),
-		Sticky:    pdu.Sticky,
 	}
 	err := json.Unmarshal(pdu.Content, &evt.Content)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal content: %w", err)
+	}
+	if len(pdu.Sticky) > 0 {
+		err = json.Unmarshal(pdu.Sticky, &evt.Sticky)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal sticky flag: %w", err)
+		}
 	}
 	return evt, nil
 }
