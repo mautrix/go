@@ -802,7 +802,7 @@ const deviceInsertQuery = `
 INSERT INTO crypto_device (user_id, device_id, identity_key, signing_key, trust, deleted, name)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (user_id, device_id) DO UPDATE
-    SET identity_key=excluded.identity_key, deleted=excluded.deleted, trust=excluded.trust, name=excluded.name
+    SET identity_key=excluded.identity_key, signing_key=excluded.signing_key, deleted=excluded.deleted, trust=excluded.trust, name=excluded.name
 `
 
 var deviceMassInsertTemplate = strings.ReplaceAll(deviceInsertQuery, "($1, $2, $3, $4, $5, $6, $7)", "%s")
