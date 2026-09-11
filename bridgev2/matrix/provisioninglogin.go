@@ -441,15 +441,24 @@ func (prov *ProvisioningAPI) executeStep(
 	defer func() {
 		v := recover()
 		if v != nil {
-			if err, ok := v.(error); ok {
-				stepResult.err = fmt.Errorf("step panicked: %w", err)
-			} else {
-				stepResult.err = fmt.Errorf("step panicked: %v", v)
+			var err error
+			var ok bool
+			if err, ok = v.(error); !ok {
+				err = fmt.Errorf("%v", err)
 			}
 			zerolog.Ctx(ctx).
-				Err(stepResult.err).
+				Err(err).
 				Bytes(zerolog.ErrorStackFieldName, debug.Stack()).
 				Msg("Panic in login step execution")
+			login.step.WithNonErroringLock(func(sm *stepManager) {
+				stepResult.err = err
+				sm.started = false
+				sm.stepCancel = nil
+				if sm.wait != nil {
+					close(sm.wait)
+					sm.wait = nil
+				}
+			})
 		}
 	}()
 	var nextStep *bridgev2.LoginStep
