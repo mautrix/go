@@ -42,6 +42,7 @@ func doUpgrade(helper up.Helper) {
 	helper.Copy(up.List, "bridge", "only_bridge_tags")
 	helper.Copy(up.Bool, "bridge", "mute_only_on_create")
 	helper.Copy(up.Bool, "bridge", "deduplicate_matrix_messages")
+	helper.Copy(up.Int, "bridge", "portal_event_buffer")
 	helper.Copy(up.Bool, "bridge", "cross_room_replies")
 	helper.Copy(up.Bool, "bridge", "revert_failed_state_changes")
 	helper.Copy(up.Bool, "bridge", "kick_matrix_users")

@@ -83,6 +83,7 @@ type BridgeConfig struct {
 	OnlyBridgeTags                []event.RoomTag    `yaml:"only_bridge_tags"`
 	MuteOnlyOnCreate              bool               `yaml:"mute_only_on_create"`
 	DeduplicateMatrixMessages     bool               `yaml:"deduplicate_matrix_messages"`
+	PortalEventBuffer             int                `yaml:"portal_event_buffer"`
 	CrossRoomReplies              bool               `yaml:"cross_room_replies"`
 	OutgoingMessageReID           bool               `yaml:"outgoing_message_re_id"`
 	RevertFailedStateChanges      bool               `yaml:"revert_failed_state_changes"`

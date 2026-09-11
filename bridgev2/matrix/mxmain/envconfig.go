@@ -20,10 +20,6 @@ import (
 )
 
 func LoadGlobalConfigEnv() {
-	peb, err := strconv.Atoi(os.Getenv("MAUTRIX_PORTAL_EVENT_BUFFER"))
-	if err == nil && peb >= 0 {
-		bridgev2.PortalEventBuffer = peb
-	}
 	pose, err := strconv.ParseBool(os.Getenv("MAUTRIX_PANIC_ON_STUCK_EVENT"))
 	if err == nil {
 		bridgev2.PanicOnStuckEvent = pose

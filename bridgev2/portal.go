@@ -107,7 +107,6 @@ type Portal struct {
 	nextBackfillDoneCallback func(error)
 }
 
-var PortalEventBuffer = 64
 var PanicOnStuckEvent = false
 var EventHandlingTimeoutTicks = 10
 
@@ -171,8 +170,8 @@ func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, que
 		}
 	}
 	portal.updateLogger()
-	if PortalEventBuffer != 0 {
-		portal.events = make(chan portalEvent, PortalEventBuffer)
+	if br.Config.PortalEventBuffer != 0 {
+		portal.events = make(chan portalEvent, br.Config.PortalEventBuffer)
 		go portal.eventLoop()
 	}
 	return portal, nil
@@ -356,7 +355,7 @@ func (portal *Portal) queueEvent(ctx context.Context, evt portalEvent) EventHand
 		}
 		return EventHandlingResultIgnored
 	}
-	if PortalEventBuffer == 0 {
+	if portal.Bridge.Config.PortalEventBuffer == 0 {
 		portal.eventsLock.Lock()
 		defer portal.eventsLock.Unlock()
 		portal.eventIdx++
@@ -5283,7 +5282,7 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 			}
 		},
 	}
-	if PortalEventBuffer == 0 {
+	if portal.Bridge.Config.PortalEventBuffer == 0 {
 		go portal.queueEvent(mergedCtx, evt)
 	} else {
 		select {
