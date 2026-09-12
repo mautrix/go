@@ -251,7 +251,8 @@ func (mach *OlmMachine) FetchKeys(ctx context.Context, users []id.UserID, includ
 			newDevice, err := mach.validateDevice(userID, deviceID, deviceKeys, existing)
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to validate device")
-			} else if newDevice != nil {
+			}
+			if newDevice != nil {
 				newDevices[deviceID] = newDevice
 				mach.storeDeviceSelfSignatures(ctx, userID, deviceID, resp)
 				if !existed {
@@ -352,6 +353,7 @@ func (mach *OlmMachine) validateDevice(userID id.UserID, deviceID id.DeviceID, d
 	// Changing identity keys is allowed as long as the object is signed by the signing key,
 	// though in practice no implementation rotates its identity keys currently.
 	if existing != nil && existing.SigningKey != signingKey {
+		existing.Trust = id.TrustStateDeviceKeyMismatch
 		return existing, fmt.Errorf("%w (expected %s, got %s)", ErrMismatchingSigningKey, existing.SigningKey, signingKey)
 	}
 
@@ -373,7 +375,7 @@ func (mach *OlmMachine) validateDevice(userID id.UserID, deviceID id.DeviceID, d
 
 	// This trust state doesn't matter much as most trust happens through cross-signing, but preserve it anyway.
 	trust := id.TrustStateUnset
-	if existing != nil {
+	if existing != nil && existing.Trust != id.TrustStateDeviceKeyMismatch {
 		trust = existing.Trust
 	}
 	return &id.Device{
