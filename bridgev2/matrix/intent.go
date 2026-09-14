@@ -209,7 +209,7 @@ func (as *ASIntent) DownloadMedia(ctx context.Context, uri id.ContentURIString, 
 		return nil, err
 	}
 	if file != nil {
-		err = file.DecryptInPlace(data)
+		data, err = file.DecryptInPlaceReturn(data)
 		if err != nil {
 			return nil, err
 		}
