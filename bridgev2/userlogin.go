@@ -41,6 +41,8 @@ type UserLogin struct {
 	disconnectOnce  sync.Once
 }
 
+var ErrorOnUserLoginLoadFail = false
+
 func (br *Bridge) loadUserLogin(ctx context.Context, user *User, dbUserLogin *database.UserLogin) (*UserLogin, error) {
 	if dbUserLogin == nil {
 		return nil, nil
@@ -65,9 +67,17 @@ func (br *Bridge) loadUserLogin(ctx context.Context, user *User, dbUserLogin *da
 	err := br.Network.LoadUserLogin(ctx, userLogin)
 	if err != nil {
 		userLogin.Log.Err(err).Msg("Failed to load user login")
+		user.TrackAnalytics("User Login Load Fail", map[string]any{})
+		if ErrorOnUserLoginLoadFail {
+			return nil, fmt.Errorf("failed to load user login %s: %w", dbUserLogin.ID, err)
+		}
 		return nil, nil
 	} else if userLogin.Client == nil {
 		userLogin.Log.Error().Msg("LoadUserLogin didn't fill Client")
+		user.TrackAnalytics("User Login Client Missing", map[string]any{})
+		if ErrorOnUserLoginLoadFail {
+			return nil, fmt.Errorf("failed to load user login %s: Client wasn't filled", dbUserLogin.ID)
+		}
 		return nil, nil
 	}
 	userLogin.BridgeState = br.NewBridgeStateQueue(userLogin)
