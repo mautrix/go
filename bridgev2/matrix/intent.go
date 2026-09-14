@@ -252,7 +252,7 @@ func (as *ASIntent) DownloadMedia(ctx context.Context, uri id.ContentURIString, 
 		return nil, fmt.Errorf("in-memory %w", makeMediaSizeError(-1, limit))
 	}
 	if file != nil {
-		err = file.DecryptInPlace(data)
+		data, err = file.DecryptInPlaceReturn(data)
 		if err != nil {
 			return nil, err
 		}
