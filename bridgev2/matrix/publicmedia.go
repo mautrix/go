@@ -65,6 +65,8 @@ func (br *Connector) hashDBPublicMedia(pm *database.PublicMedia) []byte {
 		hasher.Write([]byte(pm.Keys.Version))
 		hasher.Write([]byte(pm.Keys.Key.Algorithm))
 		hasher.Write([]byte(pm.Keys.Key.Key))
+		hasher.Write([]byte(pm.Keys.FLOEKey))
+		hasher.Write([]byte(pm.Keys.FLOEHeader))
 		hasher.Write([]byte(pm.Keys.InitVector))
 		hasher.Write([]byte(pm.Keys.Hashes.SHA256))
 	}
