@@ -71,19 +71,28 @@ type MessageStatus struct {
 	DisableMSS     bool
 }
 
+type HumanError interface {
+	error
+	HumanError() string
+}
+
 func WrapErrorInStatus(err error) MessageStatus {
 	var alreadyWrapped MessageStatus
 	var ok bool
+	var msg string
 	if alreadyWrapped, ok = err.(MessageStatus); ok {
 		return alreadyWrapped
 	} else if errors.As(err, &alreadyWrapped) {
 		alreadyWrapped.InternalError = err
 		return alreadyWrapped
+	} else if he, ok := errors.AsType[HumanError](err); ok {
+		msg = he.HumanError()
 	}
 	return MessageStatus{
 		Status:        event.MessageStatusRetriable,
 		ErrorReason:   event.MessageStatusGenericError,
 		InternalError: err,
+		Message:       msg,
 	}
 }
 
