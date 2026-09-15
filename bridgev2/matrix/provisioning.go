@@ -159,6 +159,9 @@ func (prov *ProvisioningAPI) Init() {
 		debugRouter.HandleFunc("GET /pprof/profile", pprof.Profile)
 		debugRouter.HandleFunc("GET /pprof/symbol", pprof.Symbol)
 		debugRouter.HandleFunc("GET /pprof/trace", pprof.Trace)
+		debugRouter.HandleFunc("GET /pprof/{name}", func(w http.ResponseWriter, r *http.Request) {
+			pprof.Handler(r.PathValue("name")).ServeHTTP(w, r)
+		})
 		debugRouter.HandleFunc("/pprof/", pprof.Index)
 		prov.br.AS.Router.Handle("/debug/", exhttp.ApplyMiddleware(
 			debugRouter,
