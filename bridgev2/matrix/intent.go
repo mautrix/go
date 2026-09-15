@@ -309,6 +309,7 @@ func (as *ASIntent) UploadMediaStream(
 	}
 	if !requireFile && 0 < size && size < as.Connector.Config.Matrix.UploadFileThreshold {
 		var buf bytes.Buffer
+		buf.Grow(int(size))
 		res, err := cb(&buf)
 		if err != nil {
 			return "", nil, err
