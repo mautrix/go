@@ -1,3 +1,53 @@
+## v0.31.0 (2026-09-16)
+
+* Bumped minimum Go version to 1.26.
+* *(client)* Added support for creating pushers (including [MSC4174] web push).
+* *(client)* Added support for [MSC4491]: invite reasons in room creation
+  (thanks to [@timedoutuk] in [#515]).
+* *(event)* Added helper for getting poll question text.
+* *(event)* Added support for parsing custom fields in per-message profiles.
+* *(bridgev2)* Added mechanism for unresolved media messages that can be
+  resolved using a provisioning API call.
+* *(bridgev2)* Added mechanism for canceling a single login step to go back
+  and choose another option. This can be used for things like 2FA flows that
+  the user can choose.
+* *(bridgev2)* Added min/max length hints to login input fields.
+* *(bridgev2)* Added config option to wait a few seconds for the login to be
+  connected before failing when handling messages from Matrix.
+* *(bridgev2)* Added disappearing message mode that starts after the recipient
+  reads the message.
+* *(bridgev2)* Added support for remaining pprof endpoints when debug endpoints
+  are enabled.
+* *(bridgev2)* Added custom error interface to let downstream libraries define
+  human-readable error messages for message send failures without having to wrap
+  errors in the message status struct.
+* *(bridgev2)* Added hacky ghost profile reconciliation to handle cases where
+  the profile on the homeserver doesn't match the profile in the bridge DB.
+* *(bridgev2)* Improved various error responses in the provisioning API backfill
+  endpoint.
+* *(crypto)* Added support for [MSC4385]: pushing secrets to other devices.
+  * Note that the support won't do anything with received secrets unless a
+    secret push callback is set.
+* *(crypto)* Fixed OTK corruption when running with jsonv2 enabled.
+* *(crypto)* Added `RepairOneTimeKeys` for clearing all one-time keys on the
+  server and uploading new ones.
+* *(crypto)* Fixed receiving Megolm sessions after initially storing a withheld
+  code for the session ID.
+* *(crypto)* Fixed Megolm session requests not being accepted if the original
+  share failed due to an Olm session establishment failure.
+* *(crypto)* Fixed devices being marked as deleted if validation fails for a
+  device that was previously successfully validated.
+* *(bridgev2)* Fixed DM room avatars not being cleared in some cases after
+  ghost avatar is cleared when using `direct_chat_portal_meta`.
+* *(federation/pdu)* Fixed MSC4354 sticky events not being signed correctly.
+* *(event)* Fixed per-message profile fallback regex not handling `=""` as the
+  attribute value correctly.
+
+[MSC4491]: https://github.com/matrix-org/matrix-spec-proposals/pull/4491
+[MSC4385]: https://github.com/matrix-org/matrix-spec-proposals/pull/4385
+[MSC4174]: https://github.com/matrix-org/matrix-spec-proposals/pull/4174
+[#515]: https://github.com/mautrix/go/pull/515
+
 ## v0.30.0 (2026-08-16)
 
 * *(crypto)* Added support for room history sharing.
