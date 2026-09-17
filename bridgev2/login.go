@@ -159,7 +159,7 @@ func (ls *LoginStep) MarshalZerologObject(e *zerolog.Event) {
 		e.Any("display_and_wait", ls.DisplayAndWaitParams)
 	}
 	if ls.CookiesParams != nil {
-		e.Any("cookies", ls.CookiesParams)
+		e.Object("cookies", ls.CookiesParams)
 	}
 	if ls.ClientHTTPParams != nil {
 		e.Object("client_http", ls.ClientHTTPParams)
@@ -265,10 +265,23 @@ type LoginCookieField struct {
 	Pattern string `json:"pattern,omitempty"`
 }
 
+type LoginCookie struct {
+	Name   string `json:"name"`
+	Value  string `json:"value"`
+	Domain string `json:"domain"`
+	// Path defaults to / if empty.
+	Path     string `json:"path,omitempty"`
+	Secure   bool   `json:"secure,omitzero"`
+	HTTPOnly bool   `json:"http_only,omitzero"`
+}
+
 type LoginCookiesParams struct {
 	URL       string `json:"url"`
 	UserAgent string `json:"user_agent,omitempty"`
 
+	// Cookies the client should set in the webview before loading the URL, used to continue a login
+	// session that was partially completed elsewhere (e.g. a captcha or checkpoint challenge).
+	InitialCookies []LoginCookie `json:"initial_cookies,omitempty"`
 	// The fields that are needed for this cookie login.
 	Fields []LoginCookieField `json:"fields"`
 	// A JavaScript snippet that can extract some or all of the fields.
@@ -284,6 +297,16 @@ type LoginCookiesParams struct {
 	// If set, the client should load the URL and run ExtractJS in a webview that is not shown to the
 	// user.
 	Hidden bool `json:"hidden,omitzero"`
+}
+
+func (lcp *LoginCookiesParams) MarshalZerologObject(e *zerolog.Event) {
+	e.Str("url", lcp.URL).
+		Str("user_agent", lcp.UserAgent).
+		Int("initial_cookie_count", len(lcp.InitialCookies)).
+		Any("fields", lcp.Fields).
+		Str("extract_js", lcp.ExtractJS).
+		Str("wait_for_url_pattern", lcp.WaitForURLPattern).
+		Bool("hidden", lcp.Hidden)
 }
 
 type LoginInputFieldType string
