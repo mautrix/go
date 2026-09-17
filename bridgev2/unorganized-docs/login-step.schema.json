@@ -72,6 +72,23 @@
 					"type": "string",
 					"description": "The user agent to use when opening the URL"
 				},
+				"initial_cookies": {
+					"type": "array",
+					"description": "Cookies the client should set in the webview before loading the URL, used to continue a partially completed login session",
+					"items": {
+						"title": "Cookie",
+						"type": "object",
+						"properties": {
+							"name": {"type": "string"},
+							"value": {"type": "string"},
+							"domain": {"type": "string"},
+							"path": {"type": "string"},
+							"secure": {"type": "boolean"},
+							"http_only": {"type": "boolean"}
+						},
+						"required": ["name", "value", "domain"]
+					}
+				},
 				"fields": {
 					"type": "array",
 					"description": "The list of cookies (or other stored data) that must be extracted",
