@@ -1023,16 +1023,32 @@ func (portal *Portal) callReadReceiptHandler(
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to save user portal metadata")
 	}
-	portal.startDisappearingAfterRead(ctx, evt.ReadUpTo, time.Now(), true)
+	portal.startDisappearingAfterRead(ctx, login, evt.ReadUpTo, evt.Receipt.Timestamp, EventSender{IsFromMe: true})
 }
 
-func (portal *Portal) startDisappearingAfterRead(ctx context.Context, readUpTo, timestamp time.Time, fromMe bool) {
-	if fromMe {
+func (portal *Portal) startDisappearingAfterRead(ctx context.Context, source *UserLogin, readUpTo, timestamp time.Time, sender EventSender) {
+	if sender.IsFromMe {
 		portal.Bridge.DisappearLoop.StartAllBefore(ctx, portal.MXID, readUpTo)
 	}
-	if portal.RoomType == database.RoomTypeDM && portal.OtherUserID != "" {
-		portal.Bridge.DisappearLoop.StartAllBeforeFrom(ctx, portal.MXID, readUpTo, timestamp, portal.OtherUserID, fromMe)
+	if timestamp.IsZero() {
+		timestamp = time.Now()
 	}
+	if portal.RoomType == database.RoomTypeDM && portal.OtherUserID != "" {
+		portal.Bridge.DisappearLoop.StartAllBeforeFrom(ctx, portal.MXID, readUpTo, timestamp, portal.OtherUserID, sender.IsFromMe)
+		return
+	}
+	if portal.RoomType != database.RoomTypeDefault && portal.RoomType != database.RoomTypeGroupDM {
+		return
+	}
+	api, ok := source.Client.(NetworkAPIWithUserID)
+	if !ok {
+		return
+	}
+	userID := api.GetUserID()
+	if userID == "" || !sender.IsFromMe && (sender.Sender == "" || sender.Sender == userID || source.Client.IsThisUser(ctx, sender.Sender)) {
+		return
+	}
+	portal.Bridge.DisappearLoop.StartAllBeforeFrom(ctx, portal.MXID, readUpTo, timestamp, userID, !sender.IsFromMe)
 }
 
 func (portal *Portal) handleMatrixTyping(ctx context.Context, evt *event.Event) EventHandlingResult {
@@ -3880,7 +3896,7 @@ func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserL
 	} else {
 		addTargetLog(log.Debug()).Msg("Bridged read receipt")
 	}
-	portal.startDisappearingAfterRead(ctx, readUpTo, getEventTS(evt), sender.IsFromMe)
+	portal.startDisappearingAfterRead(ctx, source, readUpTo, getEventTS(evt), sender)
 	return EventHandlingResultSuccess
 }
 
