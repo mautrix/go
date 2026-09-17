@@ -337,6 +337,8 @@ func (ghost *Ghost) updateDMPortals(ctx context.Context) {
 }
 
 func (ghost *Ghost) UpdateInfo(ctx context.Context, info *UserInfo) {
+	ghost.syncLock.Lock()
+	defer ghost.syncLock.Unlock()
 	oldName := ghost.Name
 	oldAvatar := ghost.AvatarMXC
 
@@ -361,9 +363,7 @@ func (ghost *Ghost) UpdateInfo(ctx context.Context, info *UserInfo) {
 	if info.ExtraUpdates != nil {
 		update = info.ExtraUpdates(ctx, ghost) || update
 	}
-	ghost.syncLock.Lock()
 	ghost.pushProfileChanges(ctx, nameChanged, avatarMXCChanged, contactInfoChanged)
-	ghost.syncLock.Unlock()
 	if oldName != ghost.Name || oldAvatar != ghost.AvatarMXC {
 		ghost.updateDMPortals(ctx)
 	}
