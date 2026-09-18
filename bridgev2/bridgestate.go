@@ -44,12 +44,16 @@ type BridgeStateQueue struct {
 func (br *Bridge) SendGlobalBridgeState(state status.BridgeState) {
 	state = state.Fill(nil)
 	for {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(br.BackgroundCtx, 30*time.Second)
 		if err := br.Matrix.SendBridgeStatus(ctx, &state); err != nil {
 			br.Log.Warn().Err(err).Msg("Failed to update global bridge state")
 			cancel()
-			time.Sleep(5 * time.Second)
-			continue
+			select {
+			case <-br.BackgroundCtx.Done():
+				return
+			case <-time.After(5 * time.Second):
+				continue
+			}
 		} else {
 			br.Log.Debug().Any("bridge_state", state).Msg("Sent new global bridge state")
 			cancel()
@@ -297,12 +301,12 @@ func (bsq *BridgeStateQueue) immediateSendBridgeState(state status.BridgeState) 
 		go bsq.unknownErrorReconnect(state)
 	}
 
-	ctx := bsq.login.Log.WithContext(context.Background())
-	bsq.sendNotice(ctx, state, false)
+	bgCtx := bsq.login.Log.WithContext(bsq.bridge.BackgroundCtx)
+	bsq.sendNotice(bgCtx, state, false)
 
 	retryIn := 2
 	for {
-		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		ctx, cancel := context.WithTimeout(bgCtx, 30*time.Second)
 		err := bsq.bridge.Matrix.SendBridgeStatus(ctx, &state)
 		cancel()
 
@@ -310,6 +314,9 @@ func (bsq *BridgeStateQueue) immediateSendBridgeState(state status.BridgeState) 
 			bsq.login.Log.Warn().Err(err).
 				Int("retry_in_seconds", retryIn).
 				Msg("Failed to update bridge state")
+			if bgCtx.Err() != nil {
+				return
+			}
 			time.Sleep(time.Duration(retryIn) * time.Second)
 			retryIn *= 2
 			if retryIn > 64 {
