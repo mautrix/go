@@ -331,6 +331,7 @@ type RespSendKnock struct {
 type ReqSendInvite struct {
 	RoomID          id.RoomID      `json:"-"`
 	UserID          id.UserID      `json:"-"`
+	EventID         id.EventID     `json:"-"`
 	Event           PDU            `json:"event"`
 	InviteRoomState []PDU          `json:"invite_room_state"`
 	RoomVersion     id.RoomVersion `json:"room_version"`
@@ -422,7 +423,7 @@ func (c *Client) SendInvite(ctx context.Context, req *ReqSendInvite) (resp *Resp
 	_, _, err = c.MakeFullRequest(ctx, RequestParams{
 		ServerName:   req.UserID.Homeserver(),
 		Method:       http.MethodPut,
-		Path:         URLPath{"v2", "invite", req.RoomID, req.UserID},
+		Path:         URLPath{"v2", "invite", req.RoomID, req.EventID},
 		Authenticate: true,
 		RequestJSON:  req,
 		ResponseJSON: &resp,
