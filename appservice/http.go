@@ -29,8 +29,11 @@ import (
 // Start starts the HTTP server that listens for calls from the Matrix homeserver.
 func (as *AppService) Start() {
 	as.server = &http.Server{
-		Handler: as.Router,
+		Handler:   as.Router,
+		Protocols: &http.Protocols{},
 	}
+	as.server.Protocols.SetHTTP1(true)
+	as.server.Protocols.SetUnencryptedHTTP2(true)
 	var err error
 	if as.Host.IsUnixSocket() {
 		err = as.listenUnix()
