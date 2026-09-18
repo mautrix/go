@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"runtime/debug"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -31,12 +32,14 @@ type BridgeStateQueue struct {
 	ch         chan status.BridgeState
 	bridge     *Bridge
 	login      *UserLogin
+	writeLock  sync.Mutex
 
 	firstTransientDisconnect time.Time
 	cancelScheduledNotice    atomic.Pointer[context.CancelFunc]
 
 	stopChan      chan struct{}
 	stopReconnect atomic.Pointer[context.CancelFunc]
+	destroyed     bool
 
 	unknownErrorReconnects int
 }
@@ -74,6 +77,15 @@ func (br *Bridge) NewBridgeStateQueue(login *UserLogin) *BridgeStateQueue {
 }
 
 func (bsq *BridgeStateQueue) Destroy() {
+	if bsq == nil {
+		return
+	}
+	bsq.writeLock.Lock()
+	defer bsq.writeLock.Unlock()
+	if !bsq.destroyed {
+		return
+	}
+	bsq.destroyed = true
 	close(bsq.stopChan)
 	close(bsq.ch)
 	bsq.StopUnknownErrorReconnect()
@@ -312,6 +324,7 @@ func (bsq *BridgeStateQueue) immediateSendBridgeState(state status.BridgeState) 
 
 		if err != nil {
 			bsq.login.Log.Warn().Err(err).
+				Str("state_event", string(state.StateEvent)).
 				Int("retry_in_seconds", retryIn).
 				Msg("Failed to update bridge state")
 			if bgCtx.Err() != nil {
@@ -338,6 +351,15 @@ func (bsq *BridgeStateQueue) Send(state status.BridgeState) {
 	}
 
 	state = state.Fill(bsq.login)
+	bsq.writeLock.Lock()
+	defer bsq.writeLock.Unlock()
+	if bsq.destroyed {
+		bsq.login.Log.Warn().
+			Any("bridge_state", state).
+			Msg("Tried to send bridge state on destroyed queue")
+		return
+	}
+
 	bsq.prevUnsent = &state
 
 	if len(bsq.ch) >= 8 {
@@ -350,7 +372,9 @@ func (bsq *BridgeStateQueue) Send(state status.BridgeState) {
 	select {
 	case bsq.ch <- state:
 	default:
-		bsq.login.Log.Error().Msg("Bridge state queue is full, dropped new state")
+		bsq.login.Log.Error().
+			Any("bridge_state", state).
+			Msg("Bridge state queue is full, dropped new state")
 	}
 }
 
@@ -362,7 +386,7 @@ func (bsq *BridgeStateQueue) GetPrev() status.BridgeState {
 }
 
 func (bsq *BridgeStateQueue) GetPrevUnsent() status.BridgeState {
-	if bsq != nil && bsq.prevSent != nil {
+	if bsq != nil && bsq.prevUnsent != nil {
 		return *bsq.prevUnsent
 	}
 	return status.BridgeState{}
