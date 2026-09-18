@@ -1023,16 +1023,32 @@ func (portal *Portal) callReadReceiptHandler(
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to save user portal metadata")
 	}
-	portal.startDisappearingAfterRead(ctx, evt.ReadUpTo, time.Now(), true)
+	portal.startDisappearingAfterRead(ctx, login, evt.ReadUpTo, evt.Receipt.Timestamp, true)
 }
 
-func (portal *Portal) startDisappearingAfterRead(ctx context.Context, readUpTo, timestamp time.Time, fromMe bool) {
+func (portal *Portal) startDisappearingAfterRead(ctx context.Context, source *UserLogin, readUpTo, timestamp time.Time, fromMe bool) {
 	if fromMe {
 		portal.Bridge.DisappearLoop.StartAllBefore(ctx, portal.MXID, readUpTo)
 	}
+	if timestamp.IsZero() {
+		timestamp = time.Now()
+	}
 	if portal.RoomType == database.RoomTypeDM && portal.OtherUserID != "" {
 		portal.Bridge.DisappearLoop.StartAllBeforeFrom(ctx, portal.MXID, readUpTo, timestamp, portal.OtherUserID, fromMe)
+		return
 	}
+	if portal.RoomType != database.RoomTypeDefault && portal.RoomType != database.RoomTypeGroupDM {
+		return
+	}
+	api, ok := source.Client.(NetworkAPIWithUserID)
+	if !ok {
+		return
+	}
+	userID := api.GetUserID()
+	if userID == "" {
+		return
+	}
+	portal.Bridge.DisappearLoop.StartAllBeforeFrom(ctx, portal.MXID, readUpTo, timestamp, userID, !fromMe)
 }
 
 func (portal *Portal) handleMatrixTyping(ctx context.Context, evt *event.Event) EventHandlingResult {
@@ -3880,7 +3896,7 @@ func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserL
 	} else {
 		addTargetLog(log.Debug()).Msg("Bridged read receipt")
 	}
-	portal.startDisappearingAfterRead(ctx, readUpTo, getEventTS(evt), sender.IsFromMe)
+	portal.startDisappearingAfterRead(ctx, source, readUpTo, getEventTS(evt), sender.IsFromMe)
 	return EventHandlingResultSuccess
 }
 
