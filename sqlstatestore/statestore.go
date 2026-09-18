@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -176,12 +177,7 @@ func (store *SQLStateStore) IsMembership(ctx context.Context, roomID id.RoomID, 
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to get membership")
 		return false
 	}
-	for _, allowedMembership := range allowedMemberships {
-		if allowedMembership == membership {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(allowedMemberships, membership)
 }
 
 func (store *SQLStateStore) SetMembership(ctx context.Context, roomID id.RoomID, userID id.UserID, membership event.Membership) error {

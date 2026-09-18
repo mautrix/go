@@ -52,12 +52,10 @@ func (br *BridgeMain) LogDBUpgradeErrorAndExit(name string, err error, message s
 	logEvt := br.Log.WithLevel(zerolog.FatalLevel).
 		Err(err).
 		Str("db_section", name)
-	var errWithLine *dbutil.PQErrorWithLine
-	if errors.As(err, &errWithLine) {
+	if errWithLine, ok := errors.AsType[*dbutil.PQErrorWithLine](err); ok {
 		logEvt.Str("sql_line", errWithLine.Line)
 	}
-	var pqe *pq.Error
-	if errors.As(err, &pqe) {
+	if pqe, ok := errors.AsType[*pq.Error](err); ok {
 		logEvt.Object("pq_error", (*zerologPQError)(pqe))
 	}
 	logEvt.Msg(message)

@@ -74,5 +74,5 @@ func (ec *EventContent) Equals(other *EventContent) bool {
 }
 
 func init() {
-	event.TypeMap[event.StateMSC4391BotCommand] = reflect.TypeOf(EventContent{})
+	event.TypeMap[event.StateMSC4391BotCommand] = reflect.TypeFor[EventContent]()
 }

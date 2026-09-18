@@ -9,6 +9,7 @@ package mautrix
 import (
 	"context"
 	"maps"
+	"slices"
 	"sync"
 
 	"github.com/rs/zerolog"
@@ -218,12 +219,7 @@ func (store *MemoryStateStore) IsInvited(ctx context.Context, roomID id.RoomID, 
 
 func (store *MemoryStateStore) IsMembership(ctx context.Context, roomID id.RoomID, userID id.UserID, allowedMemberships ...event.Membership) bool {
 	membership := exerrors.Must(store.GetMembership(ctx, roomID, userID))
-	for _, allowedMembership := range allowedMemberships {
-		if allowedMembership == membership {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(allowedMemberships, membership)
 }
 
 func (store *MemoryStateStore) SetMembership(_ context.Context, roomID id.RoomID, userID id.UserID, membership event.Membership) error {
@@ -270,11 +266,8 @@ func (store *MemoryStateStore) ClearCachedMembers(_ context.Context, roomID id.R
 		return nil
 	}
 	for userID, member := range members {
-		for _, membership := range memberships {
-			if membership == member.Membership {
-				delete(members, userID)
-				break
-			}
+		if slices.Contains(memberships, member.Membership) {
+			delete(members, userID)
 		}
 	}
 	store.MembersFetched[roomID] = false

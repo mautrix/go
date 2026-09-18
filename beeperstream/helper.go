@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -382,12 +383,7 @@ func expandStreamUpdateEvent(evt *event.Event) []*event.Event {
 }
 
 func containsType(types []event.Type, want event.Type) bool {
-	for _, candidate := range types {
-		if candidate == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(types, want)
 }
 
 func validateLogicalRouting(content *event.Content, evtType event.Type, roomID id.RoomID, eventID id.EventID) bool {

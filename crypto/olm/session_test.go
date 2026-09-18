@@ -84,7 +84,7 @@ func TestSession_EncryptDecrypt(t *testing.T) {
 
 		// Send a couple pre-key messages from sender -> receiver.
 		var receiverSession olm.Session
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			msgType, ciphertext, err := senderSession.Encrypt([]byte(fmt.Sprintf("prekey %d", i)))
 			require.NoError(t, err)
 			assert.Equal(t, id.OlmMsgTypePreKey, msgType)
@@ -98,7 +98,7 @@ func TestSession_EncryptDecrypt(t *testing.T) {
 		}
 
 		// Send some messages from receiver -> sender.
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			msgType, ciphertext, err := receiverSession.Encrypt([]byte(fmt.Sprintf("response %d", i)))
 			require.NoError(t, err)
 			assert.Equal(t, id.OlmMsgTypeMsg, msgType)
@@ -109,7 +109,7 @@ func TestSession_EncryptDecrypt(t *testing.T) {
 		}
 
 		// Send some more messages from sender -> receiver
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			msgType, ciphertext, err := senderSession.Encrypt([]byte(fmt.Sprintf("%d", i)))
 			require.NoError(t, err)
 			assert.Equal(t, id.OlmMsgTypeMsg, msgType)
@@ -122,7 +122,7 @@ func TestSession_EncryptDecrypt(t *testing.T) {
 		// Misordered messages
 		messages := make([][]byte, 10)
 		plainMessages := make([]string, 10)
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			plainMessages[i] = fmt.Sprintf("meow%d", i)
 			msgType, ciphertext, err := senderSession.Encrypt([]byte(plainMessages[i]))
 			require.NoError(t, err)

@@ -241,7 +241,7 @@ func TestStoreDevices(t *testing.T) {
 			assert.Empty(t, outdated, "Expected no outdated tracked users initially")
 
 			deviceMap := make(map[id.DeviceID]*id.Device)
-			for i := 0; i < devicesToCreate; i++ {
+			for i := range devicesToCreate {
 				iStr := strconv.Itoa(i)
 				acc := NewOlmAccount()
 				deviceMap[id.DeviceID("dev"+iStr)] = &id.Device{

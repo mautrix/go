@@ -36,7 +36,7 @@ func (ehr *escapingHTMLRenderer) renderRawHTML(w util.BufWriter, source []byte, 
 	}
 	n := node.(*ast.RawHTML)
 	l := n.Segments.Len()
-	for i := 0; i < l; i++ {
+	for i := range l {
 		segment := n.Segments.At(i)
 		html.DefaultWriter.RawWrite(w, segment.Value(source))
 	}
@@ -47,7 +47,7 @@ func (ehr *escapingHTMLRenderer) renderHTMLBlock(w util.BufWriter, source []byte
 	n := node.(*ast.HTMLBlock)
 	if entering {
 		l := n.Lines().Len()
-		for i := 0; i < l; i++ {
+		for i := range l {
 			line := n.Lines().At(i)
 			html.DefaultWriter.RawWrite(w, line.Value(source))
 		}

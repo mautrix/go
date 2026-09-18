@@ -20,7 +20,6 @@ import (
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/fallocate"
-	"go.mau.fi/util/ptr"
 	"golang.org/x/exp/slices"
 
 	"maunium.net/go/mautrix"
@@ -176,7 +175,7 @@ func (as *ASIntent) MarkUnread(ctx context.Context, roomID id.RoomID, unread boo
 	}
 	if as.Matrix.IsCustomPuppet && as.Connector.SpecVersions.Supports(mautrix.BeeperFeatureInboxState) {
 		return as.Matrix.SetBeeperInboxState(ctx, roomID, &mautrix.ReqSetBeeperInboxState{
-			MarkedUnread: ptr.Ptr(unread),
+			MarkedUnread: new(unread),
 		})
 	} else {
 		return as.Matrix.SetRoomAccountData(ctx, roomID, event.AccountDataMarkedUnread.Type, &event.MarkedUnreadEventContent{

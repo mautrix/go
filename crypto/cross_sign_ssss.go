@@ -60,7 +60,7 @@ func (mach *OlmMachine) retrieveDecryptXSigningKey(ctx context.Context, keyName 
 }
 
 func (mach *OlmMachine) GenerateAndUploadCrossSigningKeysWithPassword(ctx context.Context, userPassword, passphrase string) (string, *CrossSigningKeysCache, error) {
-	return mach.GenerateAndUploadCrossSigningKeys(ctx, func(uiResp *mautrix.RespUserInteractive) interface{} {
+	return mach.GenerateAndUploadCrossSigningKeys(ctx, func(uiResp *mautrix.RespUserInteractive) any {
 		return &mautrix.ReqUIAuthLogin{
 			BaseAuthData: mautrix.BaseAuthData{
 				Type:    mautrix.AuthTypePassword,

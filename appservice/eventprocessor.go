@@ -87,7 +87,7 @@ func (ep *EventProcessor) OnDeviceList(handler DeviceListHandler) {
 	ep.deviceListHandlers = append(ep.deviceListHandlers, handler)
 }
 
-func (ep *EventProcessor) recoverFunc(data interface{}) {
+func (ep *EventProcessor) recoverFunc(data any) {
 	if err := recover(); err != nil {
 		d, _ := json.Marshal(data)
 		ep.as.Log.Error().

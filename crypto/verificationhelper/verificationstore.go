@@ -52,7 +52,7 @@ func (step VerificationState) String() string {
 }
 
 type VerificationTransaction struct {
-	ExpirationTime jsontime.UnixMilli `json:"expiration_time,omitempty"`
+	ExpirationTime jsontime.UnixMilli `json:"expiration_time"`
 
 	// RoomID is the room ID if the verification is happening in a room or
 	// empty if it is a to-device verification.

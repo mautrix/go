@@ -430,7 +430,7 @@ type LoginUserInputAttachment struct {
 	Type     event.MessageType            `json:"type,omitempty"`
 	FileName string                       `json:"filename,omitempty"`
 	Content  []byte                       `json:"content,omitempty"`
-	Info     LoginUserInputAttachmentInfo `json:"info,omitempty"`
+	Info     LoginUserInputAttachmentInfo `json:"info,omitzero"`
 }
 
 type LoginUserInputAttachmentInfo struct {

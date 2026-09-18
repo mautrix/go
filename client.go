@@ -23,7 +23,6 @@ import (
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exsync"
-	"go.mau.fi/util/ptr"
 	"go.mau.fi/util/random"
 	"go.mau.fi/util/retryafter"
 	"golang.org/x/exp/maps"
@@ -128,7 +127,7 @@ type Client struct {
 
 	ResponseSizeLimit int64
 
-	txnID int32
+	txnID atomic.Int32
 
 	// Should the ?user_id= query parameter be set in requests?
 	// See https://spec.matrix.org/v1.6/application-service-api/#identity-assertion
@@ -137,7 +136,7 @@ type Client struct {
 	// See https://github.com/matrix-org/matrix-spec-proposals/pull/3202
 	SetAppServiceDeviceID bool
 
-	syncingID uint32 // Identifies the current Sync. Only one Sync can be active at any given time.
+	syncingID atomic.Uint32 // Identifies the current Sync. Only one Sync can be active at any given time.
 }
 
 type ClientWellKnown struct {
@@ -342,11 +341,11 @@ func (cli *Client) SyncWithContext(ctx context.Context) error {
 }
 
 func (cli *Client) incrementSyncingID() uint32 {
-	return atomic.AddUint32(&cli.syncingID, 1)
+	return cli.syncingID.Add(1)
 }
 
 func (cli *Client) getSyncingID() uint32 {
-	return atomic.LoadUint32(&cli.syncingID)
+	return cli.syncingID.Load()
 }
 
 // StopSync stops the ongoing sync started by Sync.
@@ -462,11 +461,11 @@ type FullRequest struct {
 	Client            *http.Client
 }
 
-var requestID int32
+var requestID atomic.Int32
 var logSensitiveContent = os.Getenv("MAUTRIX_LOG_SENSITIVE_CONTENT") == "yes"
 
 func (params *FullRequest) compileRequest(ctx context.Context) (*http.Request, error) {
-	reqID := atomic.AddInt32(&requestID, 1)
+	reqID := requestID.Add(1)
 	logger := zerolog.Ctx(ctx)
 	if logger.GetLevel() == zerolog.Disabled || logger == zerolog.DefaultContextLogger {
 		logger = params.Logger
@@ -1436,14 +1435,14 @@ func (cli *Client) UnstableOverwriteProfile(ctx context.Context, data any) (err 
 }
 
 // GetAccountData gets the user's account data of this type. See https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3useruseridaccount_datatype
-func (cli *Client) GetAccountData(ctx context.Context, name string, output interface{}) (err error) {
+func (cli *Client) GetAccountData(ctx context.Context, name string, output any) (err error) {
 	urlPath := cli.BuildClientURL("v3", "user", cli.UserID, "account_data", name)
 	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, output)
 	return
 }
 
 // SetAccountData sets the user's account data of this type. See https://spec.matrix.org/v1.2/client-server-api/#put_matrixclientv3useruseridaccount_datatype
-func (cli *Client) SetAccountData(ctx context.Context, name string, data interface{}) (err error) {
+func (cli *Client) SetAccountData(ctx context.Context, name string, data any) (err error) {
 	urlPath := cli.BuildClientURL("v3", "user", cli.UserID, "account_data", name)
 	_, err = cli.MakeRequest(ctx, http.MethodPut, urlPath, data, nil)
 	if err != nil {
@@ -1454,14 +1453,14 @@ func (cli *Client) SetAccountData(ctx context.Context, name string, data interfa
 }
 
 // GetRoomAccountData gets the user's account data of this type in a specific room. See https://spec.matrix.org/v1.2/client-server-api/#put_matrixclientv3useruseridaccount_datatype
-func (cli *Client) GetRoomAccountData(ctx context.Context, roomID id.RoomID, name string, output interface{}) (err error) {
+func (cli *Client) GetRoomAccountData(ctx context.Context, roomID id.RoomID, name string, output any) (err error) {
 	urlPath := cli.BuildClientURL("v3", "user", cli.UserID, "rooms", roomID, "account_data", name)
 	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, output)
 	return
 }
 
 // SetRoomAccountData sets the user's account data of this type in a specific room. See https://spec.matrix.org/v1.2/client-server-api/#put_matrixclientv3useruseridroomsroomidaccount_datatype
-func (cli *Client) SetRoomAccountData(ctx context.Context, roomID id.RoomID, name string, data interface{}) (err error) {
+func (cli *Client) SetRoomAccountData(ctx context.Context, roomID id.RoomID, name string, data any) (err error) {
 	urlPath := cli.BuildClientURL("v3", "user", cli.UserID, "rooms", roomID, "account_data", name)
 	_, err = cli.MakeRequest(ctx, http.MethodPut, urlPath, data, nil)
 	if err != nil {
@@ -1473,7 +1472,7 @@ func (cli *Client) SetRoomAccountData(ctx context.Context, roomID id.RoomID, nam
 
 // SendMessageEvent sends a message event into a room. See https://spec.matrix.org/v1.2/client-server-api/#put_matrixclientv3roomsroomidsendeventtypetxnid
 // contentJSON should be a pointer to something that can be encoded as JSON using json.Marshal.
-func (cli *Client) SendMessageEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, contentJSON interface{}, extra ...ReqSendEvent) (resp *RespSendEvent, err error) {
+func (cli *Client) SendMessageEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, contentJSON any, extra ...ReqSendEvent) (resp *RespSendEvent, err error) {
 	var req ReqSendEvent
 	if len(extra) > 0 {
 		req = extra[0]
@@ -1560,7 +1559,7 @@ func (cli *Client) SendStateEvent(ctx context.Context, roomID id.RoomID, eventTy
 // contentJSON should be a pointer to something that can be encoded as JSON using json.Marshal.
 //
 // Deprecated: SendStateEvent accepts a timestamp via ReqSendEvent and should be used instead.
-func (cli *Client) SendMassagedStateEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string, contentJSON interface{}, ts int64) (resp *RespSendEvent, err error) {
+func (cli *Client) SendMassagedStateEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string, contentJSON any, ts int64) (resp *RespSendEvent, err error) {
 	resp, err = cli.SendStateEvent(ctx, roomID, eventType, stateKey, contentJSON, ReqSendEvent{
 		Timestamp: ts,
 	})
@@ -1634,7 +1633,7 @@ func (cli *Client) RedactEvent(ctx context.Context, roomID id.RoomID, eventID id
 		req = extra[0]
 	}
 	if req.Extra == nil {
-		req.Extra = make(map[string]interface{})
+		req.Extra = make(map[string]any)
 	}
 	if len(req.Reason) > 0 {
 		req.Extra["reason"] = req.Reason
@@ -1682,7 +1681,7 @@ func (cli *Client) CreateRoom(ctx context.Context, req *ReqCreateRoom) (resp *Re
 		for _, evt := range req.InitialState {
 			evt.RoomID = resp.RoomID
 			if evt.StateKey == nil {
-				evt.StateKey = ptr.Ptr("")
+				evt.StateKey = new("")
 			}
 			UpdateStateStore(ctx, cli.StateStore, evt)
 		}
@@ -1814,7 +1813,7 @@ func (cli *Client) SetPresence(ctx context.Context, presence ReqPresence) (err e
 	return
 }
 
-func (cli *Client) updateStoreWithOutgoingEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string, contentJSON interface{}) {
+func (cli *Client) updateStoreWithOutgoingEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string, contentJSON any) {
 	if cli == nil || cli.StateStore == nil {
 		return
 	}
@@ -1850,7 +1849,7 @@ func (cli *Client) updateStoreWithOutgoingEvent(ctx context.Context, roomID id.R
 // StateEvent gets the content of a single state event in a room.
 // It will attempt to JSON unmarshal into the given "outContent" struct with the HTTP response body, or return an error.
 // See https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3roomsroomidstateeventtypestatekey
-func (cli *Client) StateEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string, outContent interface{}) (err error) {
+func (cli *Client) StateEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string, outContent any) (err error) {
 	u := cli.BuildClientURL("v3", "rooms", roomID, "state", eventType.String(), stateKey)
 	_, err = cli.MakeRequest(ctx, http.MethodGet, u, nil, outContent)
 	if err == nil && cli.StateStore != nil {
@@ -2333,7 +2332,7 @@ func (cli *Client) JoinedMembers(ctx context.Context, roomID id.RoomID) (resp *R
 		i := 0
 		for userID, member := range resp.Joined {
 			fakeEvents[i] = &event.Event{
-				StateKey: ptr.Ptr(userID.String()),
+				StateKey: new(userID.String()),
 				Type:     event.StateMember,
 				RoomID:   roomID,
 				Content: event.Content{Parsed: &event.MemberEventContent{
@@ -2523,7 +2522,7 @@ func (cli *Client) MarkRead(ctx context.Context, roomID id.RoomID, eventID id.Ev
 // MarkReadWithContent sends a read receipt including custom data.
 //
 // Deprecated: Use SendReceipt instead.
-func (cli *Client) MarkReadWithContent(ctx context.Context, roomID id.RoomID, eventID id.EventID, content interface{}) (err error) {
+func (cli *Client) MarkReadWithContent(ctx context.Context, roomID id.RoomID, eventID id.EventID, content any) (err error) {
 	return cli.SendReceipt(ctx, roomID, eventID, event.ReceiptTypeRead, content)
 }
 
@@ -2531,13 +2530,13 @@ func (cli *Client) MarkReadWithContent(ctx context.Context, roomID id.RoomID, ev
 //
 // Passing nil as the content is safe, the library will automatically replace it with an empty JSON object.
 // To mark a message in a specific thread as read, use pass a ReqSendReceipt as the content.
-func (cli *Client) SendReceipt(ctx context.Context, roomID id.RoomID, eventID id.EventID, receiptType event.ReceiptType, content interface{}) (err error) {
+func (cli *Client) SendReceipt(ctx context.Context, roomID id.RoomID, eventID id.EventID, receiptType event.ReceiptType, content any) (err error) {
 	urlPath := cli.BuildClientURL("v3", "rooms", roomID, "receipt", receiptType, eventID)
 	_, err = cli.MakeRequest(ctx, http.MethodPost, urlPath, content, nil)
 	return
 }
 
-func (cli *Client) SetReadMarkers(ctx context.Context, roomID id.RoomID, content interface{}) (err error) {
+func (cli *Client) SetReadMarkers(ctx context.Context, roomID id.RoomID, content any) (err error) {
 	urlPath := cli.BuildClientURL("v3", "rooms", roomID, "read_markers")
 	_, err = cli.MakeRequest(ctx, http.MethodPost, urlPath, content, nil)
 	return
@@ -2845,7 +2844,7 @@ func (cli *Client) DeleteDevices(ctx context.Context, req *ReqDeleteDevices[any]
 	return err
 }
 
-type UIACallback = func(*RespUserInteractive) interface{}
+type UIACallback = func(*RespUserInteractive) any
 
 // UploadCrossSigningKeys uploads the given cross-signing keys to the server.
 // Because the endpoint requires user-interactive authentication a callback must be provided that,
@@ -3064,7 +3063,7 @@ func (cli *Client) TxnID() string {
 	if cli == nil {
 		return "client is nil"
 	}
-	txnID := atomic.AddInt32(&cli.txnID, 1)
+	txnID := cli.txnID.Add(1)
 	return fmt.Sprintf("mautrix-go_%d_%d", time.Now().UnixNano(), txnID)
 }
 

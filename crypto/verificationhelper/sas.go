@@ -382,7 +382,7 @@ func (vh *VerificationHelper) onVerificationKey(ctx context.Context, txn Verific
 		sasNum := uint64(sasBytes[0])<<40 | uint64(sasBytes[1])<<32 | uint64(sasBytes[2])<<24 |
 			uint64(sasBytes[3])<<16 | uint64(sasBytes[4])<<8 | uint64(sasBytes[5])
 
-		for i := 0; i < 7; i++ {
+		for i := range 7 {
 			// Right shift the number and then mask the lowest 6 bits.
 			emojiIdx := (sasNum >> uint(48-(i+1)*6)) & 0b111111
 			emojis = append(emojis, allEmojis[emojiIdx])

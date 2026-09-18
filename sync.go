@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime/debug"
+	"slices"
 	"time"
 
 	"maunium.net/go/mautrix/event"
@@ -239,8 +240,8 @@ func dontProcessOldEvents(userID id.UserID, resp *RespSync, since string) bool {
 	// exists and is "join" and then discard processing that room entirely if so.
 	// TODO: We probably want to process messages from after the last join event in the timeline.
 	for roomID, roomData := range resp.Rooms.Join {
-		for i := len(roomData.Timeline.Events) - 1; i >= 0; i-- {
-			evt := roomData.Timeline.Events[i]
+		for _, evt := range slices.Backward(roomData.Timeline.Events) {
+
 			if evt.Type == event.StateMember && evt.GetStateKey() == string(userID) {
 				membership, _ := evt.Content.Raw["membership"].(string)
 				if membership == "join" {

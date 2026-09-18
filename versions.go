@@ -9,6 +9,7 @@ package mautrix
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 )
 
@@ -22,12 +23,7 @@ func (versions *RespVersions) ContainsFunc(match func(found SpecVersion) bool) b
 	if versions == nil {
 		return false
 	}
-	for _, found := range versions.Versions {
-		if match(found) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(versions.Versions, match)
 }
 
 func (versions *RespVersions) Contains(version SpecVersion) bool {

@@ -207,7 +207,7 @@ func TestMoreMessages(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, plainText, decryptedMessage)
 
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		//alice sends, bob reveices
 		msgType, message, err := aliceSession.Encrypt(plainText)
 		assert.NoError(t, err)

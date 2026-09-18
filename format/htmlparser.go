@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -23,8 +24,8 @@ import (
 type TagStack []string
 
 func (ts TagStack) Index(tag string) int {
-	for i := len(ts) - 1; i >= 0; i-- {
-		if ts[i] == tag {
+	for i, t := range slices.Backward(ts) {
+		if t == tag {
 			return i
 		}
 	}
@@ -199,11 +200,8 @@ func (parser *HTMLParser) listToString(node *html.Node, ctx Context) string {
 		var prefix string
 		// TODO make bullets and numbering configurable
 		if ordered {
-			indexPadding := indentLength - Digits(counter)
-			if indexPadding < 0 {
-				// This will happen on negative start indexes where longestIndex is usually wrong, otherwise shouldn't happen
-				indexPadding = 0
-			}
+			// Ensure padding is at least 0 even on negative start indexes where longestIndex is usually wrong
+			indexPadding := max(indentLength-Digits(counter), 0)
 			prefix = fmt.Sprintf("%d. %s", counter, strings.Repeat(" ", indexPadding))
 		} else {
 			prefix = "* "
@@ -426,12 +424,7 @@ func (parser *HTMLParser) nodeToTaggedStrings(node *html.Node, ctx Context) (str
 var BlockTags = []string{"p", "h1", "h2", "h3", "h4", "h5", "h6", "ol", "ul", "pre", "blockquote", "div", "hr", "table"}
 
 func (parser *HTMLParser) isBlockTag(tag string) bool {
-	for _, blockTag := range BlockTags {
-		if tag == blockTag {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(BlockTags, tag)
 }
 
 func (parser *HTMLParser) nodeToTagAwareString(node *html.Node, ctx Context) string {

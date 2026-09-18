@@ -32,9 +32,7 @@ type BridgeStateErrorCode string
 type BridgeStateErrorMap map[BridgeStateErrorCode]string
 
 func (bem BridgeStateErrorMap) Update(data BridgeStateErrorMap) {
-	for key, value := range data {
-		bem[key] = value
-	}
+	maps.Copy(bem, data)
 }
 
 var BridgeStateHumanErrors = make(BridgeStateErrorMap)

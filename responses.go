@@ -155,10 +155,10 @@ type RespPreviewURL = event.LinkPreview
 
 // RespUserInteractive is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#user-interactive-authentication-api
 type RespUserInteractive struct {
-	Flows     []UIAFlow                `json:"flows,omitempty"`
-	Params    map[AuthType]interface{} `json:"params,omitempty"`
-	Session   string                   `json:"session,omitempty"`
-	Completed []string                 `json:"completed,omitempty"`
+	Flows     []UIAFlow        `json:"flows,omitempty"`
+	Params    map[AuthType]any `json:"params,omitempty"`
+	Session   string           `json:"session,omitempty"`
+	Completed []string         `json:"completed,omitempty"`
 
 	ErrCode string `json:"errcode,omitempty"`
 	Error   string `json:"error,omitempty"`
@@ -185,7 +185,7 @@ type RespUserDisplayName struct {
 
 type RespUserProfile struct {
 	DisplayName string         `json:"displayname,omitempty"`
-	AvatarURL   id.ContentURI  `json:"avatar_url,omitempty"`
+	AvatarURL   id.ContentURI  `json:"avatar_url"`
 	Extra       map[string]any `json:"-"`
 }
 
@@ -298,10 +298,8 @@ type RespLoginFlows struct {
 
 func (rlf *RespLoginFlows) FirstFlowOfType(flowTypes ...AuthType) *LoginFlow {
 	for _, flow := range rlf.Flows {
-		for _, flowType := range flowTypes {
-			if flow.Type == flowType {
-				return &flow
-			}
+		if slices.Contains(flowTypes, flow.Type) {
+			return &flow
 		}
 	}
 	return nil
@@ -508,7 +506,7 @@ type RespUploadKeys struct {
 }
 
 type RespQueryKeys struct {
-	Failures        map[string]interface{}                   `json:"failures,omitempty"`
+	Failures        map[string]any                           `json:"failures,omitempty"`
 	DeviceKeys      map[id.UserID]map[id.DeviceID]DeviceKeys `json:"device_keys"`
 	MasterKeys      map[id.UserID]CrossSigningKeys           `json:"master_keys"`
 	SelfSigningKeys map[id.UserID]CrossSigningKeys           `json:"self_signing_keys"`
@@ -516,12 +514,12 @@ type RespQueryKeys struct {
 }
 
 type RespClaimKeys struct {
-	Failures    map[string]interface{}                                `json:"failures,omitempty"`
+	Failures    map[string]any                                        `json:"failures,omitempty"`
 	OneTimeKeys map[id.UserID]map[id.DeviceID]map[id.KeyID]OneTimeKey `json:"one_time_keys"`
 }
 
 type RespUploadSignatures struct {
-	Failures map[string]interface{} `json:"failures,omitempty"`
+	Failures map[string]any `json:"failures,omitempty"`
 }
 
 type RespKeyChanges struct {
@@ -559,7 +557,7 @@ type RespCapabilities struct {
 	WebPush                   *CapWebPush                   `json:"org.matrix.msc4174.webpush,omitempty"`
 	UnstableAccountModeration *CapUnstableAccountModeration `json:"uk.timedout.msc4323,omitempty"`
 
-	Custom map[string]interface{} `json:"-"`
+	Custom map[string]any `json:"-"`
 }
 
 type serializableRespCapabilities RespCapabilities
@@ -584,7 +582,7 @@ func (rc *RespCapabilities) UnmarshalJSON(data []byte) error {
 	}
 	// Remove non-custom capabilities from the custom map so that they don't get overridden when serializing back
 	for _, field := range reflect.VisibleFields(reflect.TypeOf(rc).Elem()) {
-		jsonTag := strings.Split(field.Tag.Get("json"), ",")[0]
+		jsonTag, _, _ := strings.Cut(field.Tag.Get("json"), ",")
 		if jsonTag != "-" && jsonTag != "" {
 			delete(rc.Custom, jsonTag)
 		}
@@ -593,10 +591,10 @@ func (rc *RespCapabilities) UnmarshalJSON(data []byte) error {
 }
 
 func (rc *RespCapabilities) MarshalJSON() ([]byte, error) {
-	marshalableCopy := make(map[string]interface{}, len(rc.Custom))
+	marshalableCopy := make(map[string]any, len(rc.Custom))
 	val := reflect.ValueOf(rc).Elem()
 	for _, field := range reflect.VisibleFields(val.Type()) {
-		jsonTag := strings.Split(field.Tag.Get("json"), ",")[0]
+		jsonTag, _, _ := strings.Cut(field.Tag.Get("json"), ",")
 		if jsonTag != "-" && jsonTag != "" {
 			fieldVal := val.FieldByIndex(field.Index)
 			if !fieldVal.IsNil() {
@@ -605,9 +603,7 @@ func (rc *RespCapabilities) MarshalJSON() ([]byte, error) {
 		}
 	}
 	if rc.Custom != nil {
-		for key, value := range rc.Custom {
-			marshalableCopy[key] = value
-		}
+		maps.Copy(marshalableCopy, rc.Custom)
 	}
 	var buf bytes.Buffer
 	buf.WriteString(`{"capabilities":`)
@@ -795,7 +791,7 @@ type RespLocked struct {
 
 type ConnectionInfo struct {
 	IP        string             `json:"ip,omitempty"`
-	LastSeen  jsontime.UnixMilli `json:"last_seen,omitempty"`
+	LastSeen  jsontime.UnixMilli `json:"last_seen"`
 	UserAgent string             `json:"user_agent,omitempty"`
 }
 

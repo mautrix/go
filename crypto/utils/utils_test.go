@@ -23,10 +23,10 @@ func TestAES256Ctr(t *testing.T) {
 
 	var key2 [AESCTRKeyLength]byte
 	var iv2 [AESCTRIVLength]byte
-	for i := 0; i < AESCTRKeyLength; i++ {
+	for i := range AESCTRKeyLength {
 		key2[i] = byte(i)
 	}
-	for i := 0; i < AESCTRIVLength; i++ {
+	for i := range AESCTRIVLength {
 		iv2[i] = byte(i) + 32
 	}
 	dec2 := XorA256CTR([]byte{0x29, 0xc3, 0xff, 0x02, 0x21, 0xaf, 0x67, 0x73, 0x6e, 0xad, 0x9d}, key2, iv2)
@@ -35,7 +35,7 @@ func TestAES256Ctr(t *testing.T) {
 
 func TestPBKDF(t *testing.T) {
 	salt := make([]byte, 16)
-	for i := 0; i < 16; i++ {
+	for i := range 16 {
 		salt[i] = byte(i)
 	}
 	key := PBKDF2SHA512([]byte("Hello world"), salt, 1000, 256)

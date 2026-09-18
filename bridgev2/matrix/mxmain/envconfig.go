@@ -41,8 +41,8 @@ func parseEnv(prefix string) iter.Seq2[[]string, string] {
 			kv := strings.SplitN(s, "=", 2)
 			key := strings.TrimPrefix(kv[0], prefix)
 			value := kv[1]
-			if strings.HasSuffix(key, "_FILE") {
-				key = strings.TrimSuffix(key, "_FILE")
+			if before, ok := strings.CutSuffix(key, "_FILE"); ok {
+				key = before
 				value = randomParseFilePrefix + value
 			}
 			key = strings.ToLower(key)
@@ -78,7 +78,7 @@ func reflectGetYAML(rv reflect.Value, path []string) (*reflectGetResult, bool) {
 	if len(path) == 0 {
 		return &reflectGetResult{val: rv, valKind: rv.Kind()}, true
 	}
-	if rv.Kind() == reflect.Ptr {
+	if rv.Kind() == reflect.Pointer {
 		rv = rv.Elem()
 	}
 	switch rv.Kind() {
@@ -116,8 +116,8 @@ func UpdateConfigFromEnv(cfg, networkData any, prefix string) error {
 		if !ok {
 			return fmt.Errorf("%s not found", formatKeyString(key))
 		}
-		if strings.HasPrefix(value, randomParseFilePrefix) {
-			filepath := strings.TrimPrefix(value, randomParseFilePrefix)
+		if after, ok := strings.CutPrefix(value, randomParseFilePrefix); ok {
+			filepath := after
 			fileData, err := os.ReadFile(filepath)
 			if err != nil {
 				return fmt.Errorf("failed to read file %s for %s: %w", filepath, formatKeyString(key), err)
@@ -152,7 +152,7 @@ func UpdateConfigFromEnv(cfg, networkData any, prefix string) error {
 		default:
 			return fmt.Errorf("unsupported type %s in %s", field.valKind, formatKeyString(key))
 		}
-		if field.val.Kind() == reflect.Ptr {
+		if field.val.Kind() == reflect.Pointer {
 			if field.val.IsNil() {
 				field.val.Set(reflect.New(field.val.Type().Elem()))
 			}

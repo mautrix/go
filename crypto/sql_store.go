@@ -849,7 +849,7 @@ func (store *SQLCryptoStore) PutDevices(ctx context.Context, userID id.UserID, d
 			} else {
 				batchDevices = deviceIDs[batchDeviceIdx:]
 			}
-			values := make([]interface{}, 1, len(devices)*6+1)
+			values := make([]any, 1, len(devices)*6+1)
 			values[0] = userID
 			valueStrings := make([]string, 0, len(devices))
 			i := 2

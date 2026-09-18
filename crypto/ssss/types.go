@@ -71,11 +71,11 @@ func (ed *EncryptedAccountDataEventContent) Decrypt(eventType string, key *Key) 
 }
 
 func init() {
-	encryptedContent := reflect.TypeOf(&EncryptedAccountDataEventContent{})
+	encryptedContent := reflect.TypeFor[*EncryptedAccountDataEventContent]()
 	event.TypeMap[event.AccountDataCrossSigningMaster] = encryptedContent
 	event.TypeMap[event.AccountDataCrossSigningSelf] = encryptedContent
 	event.TypeMap[event.AccountDataCrossSigningUser] = encryptedContent
-	event.TypeMap[event.AccountDataSecretStorageDefaultKey] = reflect.TypeOf(&DefaultSecretStorageKeyContent{})
-	event.TypeMap[event.AccountDataSecretStorageKey] = reflect.TypeOf(&KeyMetadata{})
-	event.TypeMap[event.AccountDataMegolmBackupKey] = reflect.TypeOf(&EncryptedAccountDataEventContent{})
+	event.TypeMap[event.AccountDataSecretStorageDefaultKey] = reflect.TypeFor[*DefaultSecretStorageKeyContent]()
+	event.TypeMap[event.AccountDataSecretStorageKey] = reflect.TypeFor[*KeyMetadata]()
+	event.TypeMap[event.AccountDataMegolmBackupKey] = reflect.TypeFor[*EncryptedAccountDataEventContent]()
 }

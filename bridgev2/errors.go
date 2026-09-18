@@ -109,8 +109,7 @@ func (re RespError) Error() string {
 }
 
 func (re RespError) Is(err error) bool {
-	var e2 RespError
-	if errors.As(err, &e2) {
+	if e2, ok := errors.AsType[RespError](err); ok {
 		return e2.Err == re.Err
 	}
 	return errors.Is(err, mautrix.RespError(re))

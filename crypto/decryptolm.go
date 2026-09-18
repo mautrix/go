@@ -18,7 +18,6 @@ import (
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exerrors"
-	"go.mau.fi/util/ptr"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/goolm/account"
@@ -241,7 +240,7 @@ func (mach *OlmMachine) tryDecryptOlmCiphertext(ctx context.Context, sender id.U
 	log = log.With().Str("new_olm_session_id", session.ID().String()).Logger()
 	log.Debug().
 		Hex("ciphertext_hash", ciphertextHash[:]).
-		Hex("ciphertext_hash_repeat", ptr.Ptr(exerrors.Must(olmMessageHash(ciphertext)))[:]).
+		Hex("ciphertext_hash_repeat", new(exerrors.Must(olmMessageHash(ciphertext)))[:]).
 		Str("olm_session_description", session.Describe()).
 		Msg("Created inbound olm session")
 	ctx = log.WithContext(ctx)
@@ -252,7 +251,7 @@ func (mach *OlmMachine) tryDecryptOlmCiphertext(ctx context.Context, sender id.U
 	if err != nil {
 		log.Debug().
 			Hex("ciphertext_hash", ciphertextHash[:]).
-			Hex("ciphertext_hash_repeat", ptr.Ptr(exerrors.Must(olmMessageHash(ciphertext)))[:]).
+			Hex("ciphertext_hash_repeat", new(exerrors.Must(olmMessageHash(ciphertext)))[:]).
 			Str("ciphertext", ciphertext).
 			Str("olm_session_description", session.Describe()).
 			Msg("DEBUG: Failed to decrypt prekey olm message with newly created session")
@@ -359,7 +358,7 @@ func (mach *OlmMachine) tryDecryptOlmCiphertextWithExistingSession(
 		if err != nil {
 			log.Warn().Err(err).
 				Hex("ciphertext_hash", ciphertextHash[:]).
-				Hex("ciphertext_hash_repeat", ptr.Ptr(exerrors.Must(olmMessageHash(ciphertext)))[:]).
+				Hex("ciphertext_hash_repeat", new(exerrors.Must(olmMessageHash(ciphertext)))[:]).
 				Str("session_description", session.Describe()).
 				Msg("Failed to decrypt olm message")
 			if olmType == id.OlmMsgTypePreKey {

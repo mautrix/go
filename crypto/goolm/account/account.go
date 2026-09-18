@@ -124,7 +124,7 @@ func (a *Account) MarkKeysAsPublished() {
 // of keys stored by this Account exceeds MaxOneTimeKeys then the older
 // keys are discarded.
 func (a *Account) GenOneTimeKeys(num uint) error {
-	for i := uint(0); i < num; i++ {
+	for range num {
 		key := crypto.OneTimeKey{
 			Published: false,
 			ID:        a.NextOneTimeKeyID,
@@ -327,7 +327,7 @@ func (a *Account) UnpickleLibOlm(buf []byte) error {
 	}
 
 	a.OTKeys = make([]crypto.OneTimeKey, otkCount)
-	for i := uint32(0); i < otkCount; i++ {
+	for i := range otkCount {
 		if err := a.OTKeys[i].UnpickleLibOlm(decoder); err != nil {
 			return err
 		}

@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
-	"go.mau.fi/util/ptr"
 
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/event"
@@ -113,7 +112,7 @@ func (mach *OlmMachine) ImportRoomKeyFromBundleWithoutSaving(
 		ReceivedAt:    time.Now().UTC(),
 		MaxAge:        maxAge.Milliseconds(),
 		MaxMessages:   maxMessages,
-		SharedHistory: ptr.Ptr(true),
+		SharedHistory: new(true),
 		KeySource:     id.KeySourceForward,
 		SourceUser:    evt.Sender,
 	}, nil

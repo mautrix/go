@@ -224,7 +224,7 @@ func (er *ErrorResponse) Error() string {
 }
 
 func (as *AppService) RequestWebsocket(ctx context.Context, cmd *WebsocketRequest, response any) error {
-	cmd.ReqID = int(atomic.AddInt32(&as.websocketRequestID, 1))
+	cmd.ReqID = int(as.websocketRequestID.Add(1))
 	respChan := make(chan *WebsocketCommand, 1)
 	as.addWebsocketResponseWaiter(cmd.ReqID, respChan)
 	defer as.removeWebsocketResponseWaiter(cmd.ReqID, respChan)

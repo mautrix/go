@@ -272,10 +272,10 @@ func (portal *Portal) cutoffMessages(ctx context.Context, messages []*BackfillMe
 	} else {
 		cutoff := -1
 		var cutoffIDs []networkid.MessageID
-		for i := len(messages) - 1; i >= 0; i-- {
-			if messages[i].ID == lastMessage.ID || !messages[i].Timestamp.Before(lastMessage.Timestamp) {
+		for i, message := range slices.Backward(messages) {
+			if message.ID == lastMessage.ID || !message.Timestamp.Before(lastMessage.Timestamp) {
 				cutoff = i
-				cutoffIDs = append(cutoffIDs, messages[i].ID)
+				cutoffIDs = append(cutoffIDs, message.ID)
 			} else {
 				break
 			}

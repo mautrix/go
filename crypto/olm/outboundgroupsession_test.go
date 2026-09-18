@@ -116,7 +116,7 @@ func FuzzMegolmOutboundSession_Encrypt(f *testing.F) {
 		assert.Equal(t, libolmSession.Key(), goolmSession.Key())
 
 		// Encrypt the plaintext ten times because the ratchet increments.
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			assert.EqualValues(t, i, libolmSession.MessageIndex())
 			assert.EqualValues(t, i, goolmSession.MessageIndex())
 

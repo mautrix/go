@@ -4316,7 +4316,7 @@ func (plc *PowerLevelOverrides) Apply(actor id.UserID, content *event.PowerLevel
 
 // DefaultChatName can be used to explicitly clear the name of a room
 // and reset it to the default one based on members.
-var DefaultChatName = ptr.Ptr("")
+var DefaultChatName = new("")
 
 type ChatInfo struct {
 	Name   *string
@@ -5463,7 +5463,7 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 	}
 	if portal.Parent != nil && portal.Parent.MXID != "" {
 		req.InitialState = append(req.InitialState, &event.Event{
-			StateKey: ptr.Ptr(portal.Parent.MXID.String()),
+			StateKey: new(portal.Parent.MXID.String()),
 			Type:     event.StateSpaceParent,
 			Content: event.Content{Parsed: &event.SpaceParentEventContent{
 				Via:       []string{portal.Bridge.Matrix.ServerName()},

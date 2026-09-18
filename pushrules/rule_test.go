@@ -72,7 +72,7 @@ func TestPushRule_Match_Conditions_NestedKey_Boolean(t *testing.T) {
 	assert.True(t, rule.Match(blankTestRoom, evt))
 	delete(evt.Content.Raw, "fi.mau.will_auto_accept")
 	assert.False(t, rule.Match(blankTestRoom, evt))
-	evt.Content.Raw["fi.mau"] = map[string]interface{}{
+	evt.Content.Raw["fi.mau"] = map[string]any{
 		"will_auto_accept": true,
 	}
 	assert.True(t, rule.Match(blankTestRoom, evt))
@@ -106,7 +106,7 @@ func TestPushRule_Match_Conditions_EscapedKey_NoNesting(t *testing.T) {
 		Membership: "invite",
 	})
 	assert.False(t, rule.Match(blankTestRoom, evt))
-	evt.Content.Raw["fi.mau"] = map[string]interface{}{
+	evt.Content.Raw["fi.mau"] = map[string]any{
 		"will_auto_accept": true,
 	}
 	assert.False(t, rule.Match(blankTestRoom, evt))

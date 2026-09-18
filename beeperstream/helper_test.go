@@ -776,7 +776,7 @@ func TestHelperPendingSubscribeQueueTrim(t *testing.T) {
 	client := newTestStreamClient(t, "", testStreamBotUserID, testStreamPublisherDev)
 	streams := newTestHelper(t, client)
 
-	for i := 0; i < maxPendingSubscriptions+1; i++ {
+	for i := range maxPendingSubscriptions + 1 {
 		evt := &event.Event{
 			Sender: testStreamSubscriberID,
 			Type:   event.ToDeviceBeeperStreamSubscribe,

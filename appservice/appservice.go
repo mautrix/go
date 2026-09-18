@@ -16,6 +16,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -183,7 +184,7 @@ type AppService struct {
 	websocketHandlersLock sync.RWMutex
 	websocketRequests     map[int]chan<- *WebsocketCommand
 	websocketRequestsLock sync.RWMutex
-	websocketRequestID    int32
+	websocketRequestID    atomic.Int32
 	// ProcessID is an identifier sent to the websocket proxy for debugging connections
 	ProcessID string
 

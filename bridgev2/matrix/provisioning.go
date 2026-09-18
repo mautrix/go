@@ -25,7 +25,6 @@ import (
 	"go.mau.fi/util/exhttp"
 	"go.mau.fi/util/exstrings"
 	"go.mau.fi/util/jsontime"
-	"go.mau.fi/util/ptr"
 	"go.mau.fi/util/requestlog"
 
 	"maunium.net/go/mautrix"
@@ -173,8 +172,8 @@ func (prov *ProvisioningAPI) Init() {
 	}
 
 	errorBodies := exhttp.ErrorBodies{
-		NotFound:         exerrors.Must(ptr.Ptr(mautrix.MUnrecognized.WithMessage("Unrecognized endpoint")).MarshalJSON()),
-		MethodNotAllowed: exerrors.Must(ptr.Ptr(mautrix.MUnrecognized.WithMessage("Invalid method for endpoint")).MarshalJSON()),
+		NotFound:         exerrors.Must(new(mautrix.MUnrecognized.WithMessage("Unrecognized endpoint")).MarshalJSON()),
+		MethodNotAllowed: exerrors.Must(new(mautrix.MUnrecognized.WithMessage("Invalid method for endpoint")).MarshalJSON()),
 	}
 	requestIDHeader := prov.br.Config.Provisioning.RequestIDHeader
 	if requestIDHeader == "" {
@@ -281,8 +280,8 @@ func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {
 			var err error
 			if !prov.br.Config.Provisioning.AllowMatrixAuth {
 				err = errors.New("matrix auth is disabled")
-			} else if strings.HasPrefix(auth, "openid:") {
-				err = prov.checkFederatedMatrixAuth(r.Context(), userID, strings.TrimPrefix(auth, "openid:"))
+			} else if after, ok := strings.CutPrefix(auth, "openid:"); ok {
+				err = prov.checkFederatedMatrixAuth(r.Context(), userID, after)
 			} else {
 				err = prov.checkMatrixAuth(r.Context(), userID, auth)
 			}
@@ -461,12 +460,12 @@ func (prov *ProvisioningAPI) GetLoginForRequest(w http.ResponseWriter, r *http.R
 }
 
 type WritableError interface {
+	error
 	Write(w http.ResponseWriter)
 }
 
 func RespondWithError(w http.ResponseWriter, err error, message string) {
-	var we WritableError
-	if errors.As(err, &we) {
+	if we, ok := errors.AsType[WritableError](err); ok {
 		we.Write(w)
 	} else {
 		mautrix.MUnknown.WithMessage(message).WithInternalError(err).Write(w)

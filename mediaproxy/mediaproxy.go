@@ -26,7 +26,6 @@ import (
 	"github.com/rs/zerolog/hlog"
 	"go.mau.fi/util/exerrors"
 	"go.mau.fi/util/exhttp"
-	"go.mau.fi/util/ptr"
 	"go.mau.fi/util/requestlog"
 
 	"maunium.net/go/mautrix"
@@ -221,8 +220,8 @@ func (mp *MediaProxy) EnableServerAuth(client *federation.Client, keyCache feder
 
 func (mp *MediaProxy) RegisterRoutes(router *http.ServeMux, log zerolog.Logger) {
 	errorBodies := exhttp.ErrorBodies{
-		NotFound:         exerrors.Must(ptr.Ptr(mautrix.MUnrecognized.WithMessage("Unrecognized endpoint")).MarshalJSON()),
-		MethodNotAllowed: exerrors.Must(ptr.Ptr(mautrix.MUnrecognized.WithMessage("Invalid method for endpoint")).MarshalJSON()),
+		NotFound:         exerrors.Must(new(mautrix.MUnrecognized.WithMessage("Unrecognized endpoint")).MarshalJSON()),
+		MethodNotAllowed: exerrors.Must(new(mautrix.MUnrecognized.WithMessage("Invalid method for endpoint")).MarshalJSON()),
 	}
 	router.Handle("/_matrix/federation/", exhttp.ApplyMiddleware(
 		mp.FederationRouter,
@@ -262,10 +261,9 @@ func (mp *MediaProxy) getMedia(w http.ResponseWriter, r *http.Request) GetMediaR
 	}
 	resp, err := mp.GetMedia(r.Context(), mediaID, queryToMap(r.URL.Query()))
 	if err != nil {
-		var mautrixRespError mautrix.RespError
 		if errors.Is(err, ErrInvalidMediaIDSyntax) {
 			mautrix.MNotFound.WithMessage("This is a media proxy at %q, other media downloads are not available here", mp.serverName).Write(w)
-		} else if errors.As(err, &mautrixRespError) {
+		} else if mautrixRespError, ok := errors.AsType[mautrix.RespError](err); ok {
 			mautrixRespError.Write(w)
 		} else {
 			zerolog.Ctx(r.Context()).Err(err).Str("media_id", mediaID).Msg("Failed to get media URL")
@@ -343,8 +341,7 @@ func (mp *MediaProxy) DownloadMediaFederation(w http.ResponseWriter, r *http.Req
 		if err != nil {
 			log.Err(err).Msg("Failed to do media proxy with temp file")
 			if !responseStarted {
-				var mautrixRespError mautrix.RespError
-				if errors.As(err, &mautrixRespError) {
+				if mautrixRespError, ok := errors.AsType[mautrix.RespError](err); ok {
 					mautrixRespError.Write(w)
 				} else {
 					mautrix.MUnknown.WithMessage("Internal error proxying media").Write(w)
@@ -433,8 +430,7 @@ func (mp *MediaProxy) DownloadMedia(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Err(err).Msg("Failed to do media proxy with temp file")
 			if !responseStarted {
-				var mautrixRespError mautrix.RespError
-				if errors.As(err, &mautrixRespError) {
+				if mautrixRespError, ok := errors.AsType[mautrix.RespError](err); ok {
 					mautrixRespError.Write(w)
 				} else {
 					mautrix.MUnknown.WithMessage("Internal error proxying media").Write(w)

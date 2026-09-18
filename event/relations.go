@@ -207,9 +207,9 @@ func (ec *EventIDChunk) Serialize(typ RelationType) RelationChunk {
 type Relations struct {
 	Raw map[RelationType]RelationChunk `json:"-"`
 
-	Annotations AnnotationChunk `json:"m.annotation,omitempty"`
-	References  EventIDChunk    `json:"m.reference,omitempty"`
-	Replaces    EventIDChunk    `json:"m.replace,omitempty"`
+	Annotations AnnotationChunk `json:"m.annotation"`
+	References  EventIDChunk    `json:"m.reference"`
+	Replaces    EventIDChunk    `json:"m.replace"`
 }
 
 type serializableRelations Relations

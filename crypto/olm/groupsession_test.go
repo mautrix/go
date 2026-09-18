@@ -21,7 +21,7 @@ func TestEncryptDecrypt_GoolmToLibolm(t *testing.T) {
 	libolmInbound, err := libolm.NewInboundGroupSession([]byte(goolmOutbound.Key()))
 	require.NoError(t, err)
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		ciphertext, err := goolmOutbound.Encrypt([]byte(fmt.Sprintf("message %d", i)))
 		require.NoError(t, err)
 
@@ -38,7 +38,7 @@ func TestEncryptDecrypt_LibolmToGoolm(t *testing.T) {
 	goolmInbound, err := session.NewMegolmInboundSession([]byte(libolmOutbound.Key()))
 	require.NoError(t, err)
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		ciphertext, err := libolmOutbound.Encrypt([]byte(fmt.Sprintf("message %d", i)))
 		require.NoError(t, err)
 

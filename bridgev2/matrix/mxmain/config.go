@@ -25,7 +25,7 @@ func (br *BridgeMain) makeFullExampleConfig(networkExample string) string {
 	var buf strings.Builder
 	buf.WriteString("# Network-specific config options\n")
 	buf.WriteString("network:\n")
-	for _, line := range strings.Split(networkExample, "\n") {
+	for line := range strings.SplitSeq(networkExample, "\n") {
 		buf.WriteString("    ")
 		buf.WriteString(line)
 		buf.WriteRune('\n')

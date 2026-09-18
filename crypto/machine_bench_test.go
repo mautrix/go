@@ -41,7 +41,7 @@ func BenchmarkOlmMachine_ShareGroupSession(b *testing.B) {
 	for i = 1; i < 1000; i++ {
 		userID := id.UserID(fmt.Sprintf("@user%d:localhost", i))
 		deviceCount := randomDeviceCount(r)
-		for j := 0; j < deviceCount; j++ {
+		for j := range deviceCount {
 			client, _ := server.Login(b, nil, userID, id.DeviceID(fmt.Sprintf("u%d_d%d", i, j)))
 			mach := client.Crypto.(*cryptohelper.CryptoHelper).Machine()
 			keysCache, err := mach.GenerateCrossSigningKeys()

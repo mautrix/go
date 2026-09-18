@@ -169,7 +169,7 @@ func TestMessageEventContent__Marshal(t *testing.T) {
 }
 
 var customParsedMessage = &event.Content{
-	Raw: map[string]interface{}{
+	Raw: map[string]any{
 		"net.maunium.custom": "hello world",
 	},
 	Parsed: &event.MessageEventContent{

@@ -74,8 +74,8 @@ var sampleObject = mautrix.RespCapabilities{
 	ChangePassword:  &mautrix.CapBooleanTrue{Enabled: true},
 	SetDisplayname:  &mautrix.CapBooleanTrue{Enabled: true},
 	ThreePIDChanges: &mautrix.CapBooleanTrue{Enabled: false},
-	Custom: map[string]interface{}{
-		"fi.mau.custom_field": map[string]interface{}{
+	Custom: map[string]any{
+		"fi.mau.custom_field": map[string]any{
 			"🐈️": true,
 		},
 	},

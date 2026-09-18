@@ -133,18 +133,18 @@ type ReqUIAuthLogin struct {
 
 // ReqCreateRoom is the JSON request for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3createroom
 type ReqCreateRoom struct {
-	Visibility      string                 `json:"visibility,omitempty"`
-	RoomAliasName   string                 `json:"room_alias_name,omitempty"`
-	Name            string                 `json:"name,omitempty"`
-	Topic           string                 `json:"topic,omitempty"`
-	Invite          []id.UserID            `json:"invite,omitempty"`
-	Invite3PID      []ReqInvite3PID        `json:"invite_3pid,omitempty"`
-	InviteReason    string                 `json:"uk.timedout.msc4491.invite_reason,omitempty"`
-	CreationContent map[string]interface{} `json:"creation_content,omitempty"`
-	InitialState    []*event.Event         `json:"initial_state,omitempty"`
-	Preset          string                 `json:"preset,omitempty"`
-	IsDirect        bool                   `json:"is_direct,omitzero"`
-	RoomVersion     id.RoomVersion         `json:"room_version,omitempty"`
+	Visibility      string          `json:"visibility,omitempty"`
+	RoomAliasName   string          `json:"room_alias_name,omitempty"`
+	Name            string          `json:"name,omitempty"`
+	Topic           string          `json:"topic,omitempty"`
+	Invite          []id.UserID     `json:"invite,omitempty"`
+	Invite3PID      []ReqInvite3PID `json:"invite_3pid,omitempty"`
+	InviteReason    string          `json:"uk.timedout.msc4491.invite_reason,omitempty"`
+	CreationContent map[string]any  `json:"creation_content,omitempty"`
+	InitialState    []*event.Event  `json:"initial_state,omitempty"`
+	Preset          string          `json:"preset,omitempty"`
+	IsDirect        bool            `json:"is_direct,omitzero"`
+	RoomVersion     id.RoomVersion  `json:"room_version,omitempty"`
 
 	PowerLevelOverride *event.PowerLevelsEventContent `json:"power_level_content_override,omitempty"`
 
@@ -161,7 +161,7 @@ type ReqCreateRoom struct {
 type ReqRedact struct {
 	Reason string
 	TxnID  string
-	Extra  map[string]interface{}
+	Extra  map[string]any
 }
 
 type ReqRedactUser struct {

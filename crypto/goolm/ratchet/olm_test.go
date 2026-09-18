@@ -83,7 +83,7 @@ func TestMoreMessages(t *testing.T) {
 	aliceRatchet, bobRatchet, err := initializeRatchets()
 	assert.NoError(t, err)
 	plainText := []byte("These 15 bytes")
-	for i := 0; i < 8; i++ {
+	for range 8 {
 		messageEncrypted, err := aliceRatchet.Encrypt(plainText)
 		assert.NoError(t, err)
 
@@ -91,7 +91,7 @@ func TestMoreMessages(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, plainText, decrypted)
 	}
-	for i := 0; i < 8; i++ {
+	for range 8 {
 		messageEncrypted, err := bobRatchet.Encrypt(plainText)
 		assert.NoError(t, err)
 

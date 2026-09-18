@@ -89,7 +89,7 @@ func (m *Ratchet) Advance() {
 // AdvanceTo advances the ratchet so that the ratchet counter = target
 func (m *Ratchet) AdvanceTo(target uint32) {
 	//starting with R0, see if we need to update each part of the hash
-	for j := 0; j < RatchetParts; j++ {
+	for j := range RatchetParts {
 		shift := uint32((RatchetParts - j - 1) * 8)
 		mask := (^uint32(0)) << shift
 

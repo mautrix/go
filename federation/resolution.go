@@ -130,8 +130,8 @@ func parseCacheControl(resp *http.Response) time.Duration {
 	if cc == "" {
 		return 0
 	}
-	parts := strings.Split(cc, ",")
-	for _, part := range parts {
+	parts := strings.SplitSeq(cc, ",")
+	for part := range parts {
 		kv := strings.SplitN(strings.TrimSpace(part), "=", 1)
 		switch kv[0] {
 		case "no-cache", "no-store":

@@ -11,8 +11,6 @@ import (
 	"fmt"
 	"time"
 
-	"go.mau.fi/util/ptr"
-
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/event"
 
@@ -238,7 +236,7 @@ func NewOutboundGroupSession(
 		RoomID:      roomID,
 	}
 	if historyVisibilityContent != nil {
-		ogs.SharedHistory = ptr.Ptr(historyVisibilityContent.SharedHistory())
+		ogs.SharedHistory = new(historyVisibilityContent.SharedHistory())
 	}
 	if encryptionContent != nil {
 		// Clamp rotation period to prevent unreasonable values

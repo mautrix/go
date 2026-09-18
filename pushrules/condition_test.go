@@ -37,7 +37,7 @@ func init() {
 		ID:        "$123:maunium.net",
 		RoomID:    "!fakeroom:maunium.net",
 		Content: event.Content{
-			Raw: map[string]interface{}{
+			Raw: map[string]any{
 				"msgtype": "m.text",
 				"body":    "test",
 			},
@@ -54,12 +54,12 @@ func init() {
 	}
 }
 
-func newFakeEvent(evtType event.Type, parsed interface{}) *event.Event {
+func newFakeEvent(evtType event.Type, parsed any) *event.Event {
 	data, err := json.Marshal(parsed)
 	if err != nil {
 		panic(err)
 	}
-	var raw map[string]interface{}
+	var raw map[string]any
 	err = json.Unmarshal(data, &raw)
 	if err != nil {
 		panic(err)

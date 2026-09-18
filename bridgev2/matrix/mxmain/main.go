@@ -394,11 +394,9 @@ func (br *BridgeMain) LoadConfig() {
 func (br *BridgeMain) Start() {
 	ctx := br.Log.WithContext(context.Background())
 	err := br.Bridge.StartConnectors(ctx)
-	var exitError matrix.ExitError
-	var dbUpgradeErr bridgev2.DBUpgradeError
-	if errors.As(err, &exitError) {
+	if exitError, ok := errors.AsType[matrix.ExitError](err); ok {
 		exitError.Exit()
-	} else if errors.As(err, &dbUpgradeErr) {
+	} else if dbUpgradeErr, ok := errors.AsType[bridgev2.DBUpgradeError](err); ok {
 		br.LogDBUpgradeErrorAndExit(dbUpgradeErr.Section, dbUpgradeErr.Err, "Failed to initialize database")
 	} else if errors.Is(err, bridgev2.ErrSplitPortalMigrationFailed) {
 		os.Exit(31)

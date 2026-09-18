@@ -79,10 +79,10 @@ func getMentions(content any) *event.Mentions {
 }
 
 type rawMegolmEvent struct {
-	RoomID   id.RoomID   `json:"room_id"`
-	Type     event.Type  `json:"type"`
-	StateKey *string     `json:"state_key,omitempty"`
-	Content  interface{} `json:"content"`
+	RoomID   id.RoomID  `json:"room_id"`
+	Type     event.Type `json:"type"`
+	StateKey *string    `json:"state_key,omitempty"`
+	Content  any        `json:"content"`
 }
 
 // IsShareError returns true if the error is caused by the lack of an outgoing megolm session and can be solved with OlmMachine.ShareGroupSession
@@ -115,7 +115,7 @@ func ParseMegolmMessageIndex(ciphertext []byte) (uint, error) {
 //
 // If you use the event.Content struct, make sure you pass a pointer to the struct,
 // as JSON serialization will not work correctly otherwise.
-func (mach *OlmMachine) EncryptMegolmEvent(ctx context.Context, roomID id.RoomID, evtType event.Type, content interface{}) (*event.EncryptedEventContent, error) {
+func (mach *OlmMachine) EncryptMegolmEvent(ctx context.Context, roomID id.RoomID, evtType event.Type, content any) (*event.EncryptedEventContent, error) {
 	return mach.EncryptMegolmEventWithStateKey(ctx, roomID, evtType, nil, content)
 }
 
@@ -123,7 +123,7 @@ func (mach *OlmMachine) EncryptMegolmEvent(ctx context.Context, roomID id.RoomID
 //
 // If you use the event.Content struct, make sure you pass a pointer to the struct,
 // as JSON serialization will not work correctly otherwise.
-func (mach *OlmMachine) EncryptMegolmEventWithStateKey(ctx context.Context, roomID id.RoomID, evtType event.Type, stateKey *string, content interface{}) (*event.EncryptedEventContent, error) {
+func (mach *OlmMachine) EncryptMegolmEventWithStateKey(ctx context.Context, roomID id.RoomID, evtType event.Type, stateKey *string, content any) (*event.EncryptedEventContent, error) {
 	defer mach.megolmEncryptLock.WithLock(roomID)()
 	session, err := mach.CryptoStore.GetOutboundGroupSession(ctx, roomID)
 	if err != nil {

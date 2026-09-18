@@ -137,7 +137,7 @@ type RespDeleteRoomResult struct {
 type RespDeleteRoomStatus struct {
 	Status       string               `json:"status,omitempty"`
 	Error        string               `json:"error,omitempty"`
-	ShutdownRoom RespDeleteRoomResult `json:"shutdown_room,omitempty"`
+	ShutdownRoom RespDeleteRoomResult `json:"shutdown_room"`
 }
 
 // DeleteRoom deletes a room from the server, optionally blocking it and/or purging all data from the database.
