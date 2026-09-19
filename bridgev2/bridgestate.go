@@ -82,7 +82,7 @@ func (bsq *BridgeStateQueue) Destroy() {
 	}
 	bsq.writeLock.Lock()
 	defer bsq.writeLock.Unlock()
-	if !bsq.destroyed {
+	if bsq.destroyed {
 		return
 	}
 	bsq.destroyed = true
