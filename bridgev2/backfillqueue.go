@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exerrors"
 
 	"maunium.net/go/mautrix/bridgev2/database"
 )
@@ -131,6 +132,13 @@ func (mt *ManualBackfill) addLogAndDo(ctx context.Context) {
 		with = mt.LogContext(with)
 	}
 	log := with.Logger()
+	defer func() {
+		if v := recover(); v != nil {
+			log.Err(exerrors.RecoverToError(v)).
+				Bytes(zerolog.ErrorStackFieldName, debug.Stack()).
+				Msg("Panic in manual backfill task")
+		}
+	}()
 	ctx = log.WithContext(ctx)
 	mt.Do(ctx)
 }
@@ -194,16 +202,10 @@ func (br *Bridge) DoBackfillTask(ctx context.Context, task *database.BackfillTas
 		Str("login_id", string(task.UserLoginID)).
 		Logger()
 	defer func() {
-		err := recover()
-		if err != nil {
-			logEvt := log.Error().
-				Bytes(zerolog.ErrorStackFieldName, debug.Stack())
-			if realErr, ok := err.(error); ok {
-				logEvt = logEvt.Err(realErr)
-			} else {
-				logEvt = logEvt.Any(zerolog.ErrorFieldName, err)
-			}
-			logEvt.Msg("Panic in backfill queue")
+		if v := recover(); v != nil {
+			log.Err(exerrors.RecoverToError(v)).
+				Bytes(zerolog.ErrorStackFieldName, debug.Stack()).
+				Msg("Panic in backfill queue")
 		}
 	}()
 	ctx = log.WithContext(ctx)
