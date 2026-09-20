@@ -738,6 +738,19 @@ type RoomTopicHandlingNetworkAPI interface {
 	HandleMatrixRoomTopic(ctx context.Context, msg *MatrixRoomTopic) (bool, error)
 }
 
+// PinHandlingNetworkAPI is an optional interface that network connectors can implement
+// to handle changes to the pinned messages of a portal room.
+type PinHandlingNetworkAPI interface {
+	NetworkAPI
+	// HandleMatrixPinnedEvents is called when the m.room.pinned_events state of a portal room is changed.
+	// The message lists in the event are pre-resolved to database messages, and only contain
+	// messages that are actually bridged (unknown event IDs are dropped).
+	//
+	// The return value works the same way as other room metadata handlers: return true if the
+	// portal was changed and should be saved.
+	HandleMatrixPinnedEvents(ctx context.Context, msg *MatrixRoomPinnedEvents) (bool, error)
+}
+
 type DisappearTimerChangingNetworkAPI interface {
 	NetworkAPI
 	// HandleMatrixDisappearingTimer is called when the disappearing timer of a portal room is changed.
@@ -1148,6 +1161,8 @@ func (ret RemoteEventType) String() string {
 		return "RemoteEventChatResync"
 	case RemoteEventChatDelete:
 		return "RemoteEventChatDelete"
+	case RemoteEventPinnedMessages:
+		return "RemoteEventPinnedMessages"
 	case RemoteEventBackfill:
 		return "RemoteEventBackfill"
 	default:
@@ -1172,6 +1187,7 @@ const (
 	RemoteEventChatResync
 	RemoteEventChatDelete
 	RemoteEventBackfill
+	RemoteEventPinnedMessages
 )
 
 // RemoteEvent represents a single event from the remote network, such as a message or a reaction.
@@ -1251,6 +1267,26 @@ type RemoteChatDelete interface {
 type RemoteChatDeleteWithChildren interface {
 	RemoteChatDelete
 	DeleteChildren() bool
+}
+
+// RemotePinnedMessages is a remote event that replaces the full list of pinned messages in a chat.
+type RemotePinnedMessages interface {
+	RemoteEvent
+	// GetPinnedMessages returns the full list of message IDs that are pinned in the chat,
+	// in the order they should appear in m.room.pinned_events.
+	GetPinnedMessages(ctx context.Context) ([]networkid.MessageID, error)
+}
+
+// RemotePinnedMessagesDelta is a remote event that only describes a change to the pinned
+// messages of a chat. Networks that send deltas (e.g. Telegram) should implement this instead
+// of [RemotePinnedMessages]; the bridge will apply the delta to the current pinned list.
+type RemotePinnedMessagesDelta interface {
+	RemoteEvent
+	// IsPinnedMessagesDelta tells the bridge whether to use the delta or, if the event also
+	// implements [RemotePinnedMessages], the full list.
+	IsPinnedMessagesDelta() bool
+	// GetPinnedMessageChanges returns the message IDs that were pinned and unpinned.
+	GetPinnedMessageChanges(ctx context.Context) (pinned, unpinned []networkid.MessageID, err error)
 }
 
 type RemoteEventThatMayCreatePortal interface {
@@ -1493,6 +1529,20 @@ type MatrixRoomMeta[ContentType any] struct {
 	MatrixEventBase[ContentType]
 	PrevContent    ContentType
 	IsStateRequest bool
+}
+
+// MatrixRoomPinnedEvents is the parsed content of an m.room.pinned_events event
+// along with the bridged messages that the event IDs point to.
+type MatrixRoomPinnedEvents struct {
+	MatrixRoomMeta[*event.PinnedEventsEventContent]
+
+	// Pinned is the full new list of pinned messages that are bridged, in the order they
+	// appear in the event content.
+	Pinned []*database.Message
+	// Added contains the messages that were pinned by this event.
+	Added []*database.Message
+	// Removed contains the messages that were unpinned by this event.
+	Removed []*database.Message
 }
 
 type MatrixRoomName = MatrixRoomMeta[*event.RoomNameEventContent]

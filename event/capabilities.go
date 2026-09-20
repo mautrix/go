@@ -64,6 +64,7 @@ type RoomFeatures struct {
 
 	ReadReceipts          bool `json:"read_receipts,omitzero"`
 	TypingNotifications   bool `json:"typing_notifications,omitzero"`
+	PinnedMessages        bool `json:"pinned_messages,omitzero"`
 	Archive               bool `json:"archive,omitzero"`
 	MarkAsUnread          bool `json:"mark_as_unread,omitzero"`
 	DeleteChat            bool `json:"delete_chat,omitzero"`
@@ -379,6 +380,7 @@ func (rf *RoomFeatures) Hash() []byte {
 
 	hashBool(hasher, "read_receipts", rf.ReadReceipts)
 	hashBool(hasher, "typing_notifications", rf.TypingNotifications)
+	hashBool(hasher, "pinned_messages", rf.PinnedMessages)
 	hashBool(hasher, "archive", rf.Archive)
 	hashBool(hasher, "mark_as_unread", rf.MarkAsUnread)
 	hashBool(hasher, "delete_chat", rf.DeleteChat)
