@@ -118,7 +118,7 @@ func (portal *PortalInternals) HandleMatrixEdit(ctx context.Context, sender *Use
 }
 
 func (portal *PortalInternals) HandleMatrixReaction(ctx context.Context, sender *UserLogin, evt *event.Event) (handleRes EventHandlingResult) {
-	return (*Portal)(portal).handleMatrixReaction(ctx, sender, evt)
+	return (*Portal)(portal).handleMatrixReaction(ctx, sender, nil, evt)
 }
 
 func (portal *PortalInternals) GetTargetUser(ctx context.Context, userID id.UserID) (GhostOrUserLogin, error) {
