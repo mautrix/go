@@ -1,4 +1,4 @@
--- v0 -> v21 (compatible with v20+): Latest revision
+-- v0 -> v22 (compatible with v20+): Latest revision
 CREATE TABLE crypto_account (
 	account_id         TEXT    PRIMARY KEY,
 	device_id          TEXT    NOT NULL,
