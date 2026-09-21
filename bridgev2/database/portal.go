@@ -211,7 +211,15 @@ func (pq *PortalQuery) Insert(ctx context.Context, p *Portal) error {
 
 func (pq *PortalQuery) Update(ctx context.Context, p *Portal) error {
 	ensureBridgeIDMatches(&p.BridgeID, pq.BridgeID)
-	return pq.Exec(ctx, updatePortalQuery, p.ensureHasMetadata(pq.MetaType).sqlVariables()...)
+	res, err := pq.GetDB().Exec(ctx, updatePortalQuery, p.ensureHasMetadata(pq.MetaType).sqlVariables()...)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err == nil && rows == 0 {
+		return sql.ErrNoRows
+	}
+	return err
 }
 
 func (pq *PortalQuery) Delete(ctx context.Context, key networkid.PortalKey) error {

@@ -88,6 +88,7 @@ type Portal struct {
 	outgoingMessagesLock sync.Mutex
 
 	roomCreateLock   sync.Mutex
+	pendingRoomID    id.RoomID
 	cancelRoomCreate atomic.Pointer[context.CancelFunc]
 	backgroundCtx    context.Context
 	cancelBackground context.CancelFunc
@@ -2407,6 +2408,9 @@ func (portal *Portal) UpdateMatrixRoomID(
 	if !params.RoomCreateAlreadyLocked {
 		portal.roomCreateLock.Lock()
 		defer portal.roomCreateLock.Unlock()
+	}
+	if portal.pendingRoomID != "" {
+		return fmt.Errorf("portal room creation is incomplete")
 	}
 	oldRoom := portal.MXID
 	if oldRoom == newRoomID {
@@ -5353,9 +5357,98 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 		}
 	}
 
-	portal.UpdateInfo(cancellableCtx, info, source, nil, time.Time{})
-	if cancellableCtx.Err() != nil {
-		return cancellableCtx.Err()
+	if portal.pendingRoomID == "" {
+		req, err := portal.prepareCreateRoomRequest(cancellableCtx, source, info)
+		if err != nil {
+			return err
+		}
+		roomID, err := portal.Bridge.Bot.CreateRoom(ctx, req)
+		if err != nil {
+			log.Err(err).Msg("Failed to create Matrix room")
+			return err
+		}
+		log.Info().Stringer("room_id", roomID).Msg("Matrix room created")
+		portal.pendingRoomID = roomID
+	}
+	if portal.backgroundCtx.Err() != nil {
+		return ErrPortalIsDeleted
+	}
+	dbPortal := *portal.Portal
+	dbPortal.MXID = portal.pendingRoomID
+	dbPortal.AvatarSet = true
+	dbPortal.TopicSet = true
+	dbPortal.NameSet = true
+	err = portal.Bridge.DB.Portal.Update(ctx, &dbPortal)
+	if err != nil {
+		log.Err(err).Msg("Failed to save portal to database after creating Matrix room")
+		return err
+	}
+	portal.Bridge.cacheLock.Lock()
+	if portal.backgroundCtx.Err() != nil {
+		portal.Bridge.cacheLock.Unlock()
+		return ErrPortalIsDeleted
+	}
+	portal.AvatarSet = true
+	portal.TopicSet = true
+	portal.NameSet = true
+	portal.MXID = portal.pendingRoomID
+	portal.pendingRoomID = ""
+	portal.Bridge.portalsByMXID[portal.MXID] = portal
+	portal.Bridge.cacheLock.Unlock()
+	portal.updateLogger()
+	portal.RoomCreated.Set()
+	if info.CanBackfill && portal.RoomType != database.RoomTypeSpace {
+		err = portal.Bridge.DB.BackfillTask.Upsert(ctx, &database.BackfillTask{
+			PortalKey:         portal.PortalKey,
+			UserLoginID:       source.ID,
+			NextDispatchMinTS: time.Now().Add(BackfillMinBackoffAfterRoomCreate),
+		})
+		if err != nil {
+			log.Err(err).Msg("Failed to create backfill queue task after creating room")
+		}
+		portal.Bridge.WakeupBackfillQueue()
+	}
+	withoutCancelCtx := zerolog.Ctx(ctx).WithContext(portal.backgroundCtx)
+	if portal.Parent != nil {
+		if portal.Parent.MXID != "" {
+			portal.addToParentSpaceAndSave(ctx, true)
+		} else {
+			log.Info().Msg("Parent portal doesn't exist, creating in background")
+			go portal.createParentAndAddToSpace(withoutCancelCtx, source)
+		}
+	}
+	portal.updateUserLocalInfo(ctx, info.UserLocal, source, true)
+	if !portal.Bridge.Matrix.GetCapabilities().AutoJoinInvites {
+		if info.Members == nil {
+			dp := source.User.DoublePuppet(ctx)
+			if dp != nil {
+				err = dp.EnsureJoined(ctx, portal.MXID)
+				if err != nil {
+					log.Err(err).Msg("Failed to ensure user is joined to room after creation")
+				}
+			}
+		} else {
+			err = portal.syncParticipants(ctx, info.Members, source, nil, time.Time{})
+			if err != nil {
+				log.Err(err).Msg("Failed to sync participants after room creation")
+			}
+		}
+	}
+	portal.addToUserSpaces(ctx)
+	if info.CanBackfill &&
+		portal.Bridge.Config.Backfill.Enabled &&
+		portal.RoomType != database.RoomTypeSpace &&
+		!portal.Bridge.Background {
+		portal.doForwardBackfill(ctx, source, nil, backfillBundle)
+	}
+	return nil
+}
+
+func (portal *Portal) prepareCreateRoomRequest(ctx context.Context, source *UserLogin, info *ChatInfo) (*mautrix.ReqCreateRoom, error) {
+	log := zerolog.Ctx(ctx)
+	portal.UpdateInfo(ctx, info, source, nil, time.Time{})
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
 	}
 
 	powerLevels := &event.PowerLevelsEventContent{
@@ -5368,10 +5461,10 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 			portal.Bridge.Bot.GetMXID(): 9001,
 		},
 	}
-	initialMembers, extraFunctionalMembers, err := portal.getInitialMemberList(cancellableCtx, info.Members, source, powerLevels)
+	initialMembers, extraFunctionalMembers, err := portal.getInitialMemberList(ctx, info.Members, source, powerLevels)
 	if err != nil {
 		log.Err(err).Msg("Failed to process participant list for portal creation")
-		return err
+		return nil, err
 	}
 	powerLevels.EnsureUserLevel(portal.Bridge.Bot.GetMXID(), 9001)
 
@@ -5395,7 +5488,7 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 		req.CreationContent["type"] = event.RoomTypeSpace
 	}
 	bridgeInfoStateKey, bridgeInfo := portal.getBridgeInfo()
-	roomFeatures := source.Client.GetCapabilities(cancellableCtx, portal)
+	roomFeatures := source.Client.GetCapabilities(ctx, portal)
 	portal.CapState = database.CapabilityState{
 		Source: source.ID,
 		ID:     roomFeatures.GetID(),
@@ -5477,74 +5570,10 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 			Content: event.Content{Parsed: info.JoinRule},
 		})
 	}
-	if cancellableCtx.Err() != nil {
-		return cancellableCtx.Err()
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
 	}
-	roomID, err := portal.Bridge.Bot.CreateRoom(ctx, &req)
-	if err != nil {
-		log.Err(err).Msg("Failed to create Matrix room")
-		return err
-	}
-	log.Info().Stringer("room_id", roomID).Msg("Matrix room created")
-	portal.AvatarSet = true
-	portal.TopicSet = true
-	portal.NameSet = true
-	portal.MXID = roomID
-	portal.RoomCreated.Set()
-	portal.Bridge.cacheLock.Lock()
-	portal.Bridge.portalsByMXID[roomID] = portal
-	portal.Bridge.cacheLock.Unlock()
-	portal.updateLogger()
-	err = portal.Save(ctx)
-	if err != nil {
-		log.Err(err).Msg("Failed to save portal to database after creating Matrix room")
-		return err
-	}
-	if info.CanBackfill && portal.RoomType != database.RoomTypeSpace {
-		err = portal.Bridge.DB.BackfillTask.Upsert(ctx, &database.BackfillTask{
-			PortalKey:         portal.PortalKey,
-			UserLoginID:       source.ID,
-			NextDispatchMinTS: time.Now().Add(BackfillMinBackoffAfterRoomCreate),
-		})
-		if err != nil {
-			log.Err(err).Msg("Failed to create backfill queue task after creating room")
-		}
-		portal.Bridge.WakeupBackfillQueue()
-	}
-	withoutCancelCtx := zerolog.Ctx(ctx).WithContext(portal.backgroundCtx)
-	if portal.Parent != nil {
-		if portal.Parent.MXID != "" {
-			portal.addToParentSpaceAndSave(ctx, true)
-		} else {
-			log.Info().Msg("Parent portal doesn't exist, creating in background")
-			go portal.createParentAndAddToSpace(withoutCancelCtx, source)
-		}
-	}
-	portal.updateUserLocalInfo(ctx, info.UserLocal, source, true)
-	if !autoJoinInvites {
-		if info.Members == nil {
-			dp := source.User.DoublePuppet(ctx)
-			if dp != nil {
-				err = dp.EnsureJoined(ctx, portal.MXID)
-				if err != nil {
-					log.Err(err).Msg("Failed to ensure user is joined to room after creation")
-				}
-			}
-		} else {
-			err = portal.syncParticipants(ctx, info.Members, source, nil, time.Time{})
-			if err != nil {
-				log.Err(err).Msg("Failed to sync participants after room creation")
-			}
-		}
-	}
-	portal.addToUserSpaces(ctx)
-	if info.CanBackfill &&
-		portal.Bridge.Config.Backfill.Enabled &&
-		portal.RoomType != database.RoomTypeSpace &&
-		!portal.Bridge.Background {
-		portal.doForwardBackfill(ctx, source, nil, backfillBundle)
-	}
-	return nil
+	return &req, nil
 }
 
 func (portal *Portal) addToUserSpaces(ctx context.Context) {

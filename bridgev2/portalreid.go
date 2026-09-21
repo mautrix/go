@@ -86,6 +86,9 @@ func (br *Bridge) ReIDPortal(ctx context.Context, source, target networkid.Porta
 		log.Debug().Msg("Acquired source portal room creation lock after waiting")
 	}
 	defer sourcePortal.roomCreateLock.Unlock()
+	if sourcePortal.pendingRoomID != "" {
+		return ReIDResultError, nil, fmt.Errorf("source portal room creation is incomplete")
+	}
 	if sourcePortal.MXID == "" {
 		log.Info().Msg("Source portal doesn't have Matrix room, deleting row")
 		err = sourcePortal.unlockedDelete(ctx)
@@ -124,6 +127,9 @@ func (br *Bridge) ReIDPortal(ctx context.Context, source, target networkid.Porta
 		log.Debug().Msg("Acquired target portal room creation lock after waiting")
 	}
 	defer targetPortal.roomCreateLock.Unlock()
+	if targetPortal.pendingRoomID != "" {
+		return ReIDResultError, nil, fmt.Errorf("target portal room creation is incomplete")
+	}
 	if targetPortal.MXID == "" {
 		log.Info().Msg("Target portal row exists, but doesn't have a Matrix room. Deleting target portal row and re-ID'ing source portal")
 		acquireCacheLock()
