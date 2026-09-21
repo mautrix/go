@@ -18,7 +18,9 @@ CREATE TABLE crypto_message_index (
 
 CREATE TABLE crypto_tracked_user (
 	user_id          TEXT PRIMARY KEY,
-	devices_outdated BOOLEAN NOT NULL DEFAULT FALSE
+	devices_outdated BOOLEAN NOT NULL DEFAULT FALSE,
+	last_attempt     BIGINT,
+	error_count      INTEGER
 );
 
 CREATE TABLE crypto_device (

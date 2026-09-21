@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -294,8 +295,13 @@ func (mach *OlmMachine) FetchKeys(ctx context.Context, users []id.UserID, includ
 			mach.OnDevicesChanged(ctx, userID)
 		}
 	}
-	for userID := range req.DeviceKeys {
-		log.Warn().Stringer("user_id", userID).Msg("Didn't get any keys for user")
+	missingUsers := slices.Collect(maps.Keys(req.DeviceKeys))
+	if len(missingUsers) > 0 {
+		err = mach.CryptoStore.IncrementTrackedUsersErrorCount(ctx, missingUsers)
+		log.Warn().
+			Array("user_ids", exzerolog.ArrayOfStringers(missingUsers)).
+			AnErr("error_count_save_error", err).
+			Msg("Didn't get any keys for user")
 	}
 
 	mach.storeCrossSigningKeys(ctx, resp.MasterKeys, resp.DeviceKeys)

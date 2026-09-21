@@ -815,16 +815,18 @@ func (store *SQLCryptoStore) PutDevice(ctx context.Context, userID id.UserID, de
 }
 
 const trackedUserUpsertQuery = `
-INSERT INTO crypto_tracked_user (user_id, devices_outdated)
-VALUES ($1, false)
+INSERT INTO crypto_tracked_user (user_id, devices_outdated, last_attempt, error_count)
+VALUES ($1, false, $2, 0)
 ON CONFLICT (user_id) DO UPDATE
-	SET devices_outdated = EXCLUDED.devices_outdated
+	SET devices_outdated = EXCLUDED.devices_outdated,
+		last_attempt = EXCLUDED.last_attempt,
+		error_count = EXCLUDED.error_count
 `
 
 // PutDevices stores the device identity information for the given user ID.
 func (store *SQLCryptoStore) PutDevices(ctx context.Context, userID id.UserID, devices map[id.DeviceID]*id.Device) error {
 	return store.DB.DoTxn(ctx, nil, func(ctx context.Context) error {
-		_, err := store.DB.Exec(ctx, trackedUserUpsertQuery, userID)
+		_, err := store.DB.Exec(ctx, trackedUserUpsertQuery, userID, time.Now().Unix())
 		if err != nil {
 			return fmt.Errorf("failed to upsert user to tracked users list: %w", err)
 		}
@@ -869,12 +871,13 @@ func (store *SQLCryptoStore) PutDevices(ctx context.Context, userID id.UserID, d
 	})
 }
 
-func userIDsToParams(users []id.UserID) (placeholders string, params []any) {
+func userIDsToParams(users []id.UserID, prefixParams ...any) (placeholders string, params []any) {
 	queryString := make([]string, len(users))
-	params = make([]any, len(users))
+	params = make([]any, len(users)+len(prefixParams))
+	copy(params, prefixParams)
 	for i, user := range users {
-		queryString[i] = fmt.Sprintf("$%d", i+1)
-		params[i] = user
+		queryString[i] = fmt.Sprintf("$%d", len(prefixParams)+i+1)
+		params[i+len(prefixParams)] = user
 	}
 	placeholders = strings.Join(queryString, ",")
 	return
@@ -897,18 +900,77 @@ func (store *SQLCryptoStore) FilterTrackedUsers(ctx context.Context, users []id.
 func (store *SQLCryptoStore) MarkTrackedUsersOutdated(ctx context.Context, users []id.UserID) (err error) {
 	for chunk := range slices.Chunk(users, 1000) {
 		if store.DB.Dialect == dbutil.Postgres && PostgresArrayWrapper != nil {
-			_, err = store.DB.Exec(ctx, "UPDATE crypto_tracked_user SET devices_outdated = true WHERE user_id = ANY($1)", PostgresArrayWrapper(chunk))
+			_, err = store.DB.Exec(ctx, markUsersOutdatedPostgresQuery, PostgresArrayWrapper(chunk))
 		} else {
 			placeholders, params := userIDsToParams(chunk)
-			_, err = store.DB.Exec(ctx, "UPDATE crypto_tracked_user SET devices_outdated = true WHERE user_id IN ("+placeholders+")", params...)
+			_, err = store.DB.Exec(ctx, fmt.Sprintf(markUsersOutdatedSQLiteQuery, placeholders), params...)
+		}
+		if err != nil {
+			return
 		}
 	}
 	return
 }
 
-// GetOutdatedTrackerUsers gets all tracked users whose devices need to be updated.
+const markUsersOutdatedPostgresQuery = `
+	UPDATE crypto_tracked_user SET devices_outdated = true WHERE user_id = ANY($1)
+`
+
+const markUsersOutdatedSQLiteQuery = `
+	UPDATE crypto_tracked_user SET devices_outdated = true WHERE user_id IN (%s)
+`
+
+const incrementErrorCountPostgresQuery = `
+	UPDATE crypto_tracked_user
+	SET last_attempt = $1, error_count = COALESCE(error_count, 0) + 1
+	WHERE user_id = ANY($2) AND devices_outdated = true
+`
+
+const incrementErrorCountSQLiteQuery = `
+	UPDATE crypto_tracked_user
+	SET last_attempt = $1, error_count = COALESCE(error_count, 0) + 1
+	WHERE user_id IN (%s) AND devices_outdated = true
+`
+
+const getOutdatedTrackedUsersPostgresQuery = `
+	SELECT user_id
+	FROM crypto_tracked_user
+	WHERE devices_outdated = true AND (error_count IS NULL OR error_count < 5 OR last_attempt + least(error_count*error_count*error_count, 10800) < $1)
+`
+
+var getOutdatedTrackedUsersSQLiteQuery = strings.ReplaceAll(getOutdatedTrackedUsersPostgresQuery, "least(", "min(")
+
+func (store *SQLCryptoStore) IncrementTrackedUsersErrorCount(ctx context.Context, users []id.UserID) (err error) {
+	for chunk := range slices.Chunk(users, 1000) {
+		if store.DB.Dialect == dbutil.Postgres && PostgresArrayWrapper != nil {
+			_, err = store.DB.Exec(ctx, incrementErrorCountPostgresQuery, time.Now().Unix(), PostgresArrayWrapper(chunk))
+		} else {
+			placeholders, params := userIDsToParams(chunk, time.Now().Unix())
+			_, err = store.DB.Exec(ctx, fmt.Sprintf(incrementErrorCountSQLiteQuery, placeholders), params...)
+		}
+		if err != nil {
+			return
+		}
+	}
+	var res sql.Result
+	res, err = store.DB.Exec(ctx, "DELETE FROM crypto_tracked_user WHERE devices_outdated = true AND error_count > 100")
+	if res != nil && err == nil {
+		affected, _ := res.RowsAffected()
+		if affected > 0 {
+			zerolog.Ctx(ctx).Debug().Int64("deleted_tracked_users", affected).
+				Msg("Deleted tracked users with too many errors")
+		}
+	}
+	return
+}
+
+// GetOutdatedTrackedUsers gets all tracked users whose devices need to be updated.
 func (store *SQLCryptoStore) GetOutdatedTrackedUsers(ctx context.Context) ([]id.UserID, error) {
-	rows, err := store.DB.Query(ctx, "SELECT user_id FROM crypto_tracked_user WHERE devices_outdated = TRUE")
+	query := getOutdatedTrackedUsersPostgresQuery
+	if store.DB.Dialect == dbutil.SQLite {
+		query = getOutdatedTrackedUsersSQLiteQuery
+	}
+	rows, err := store.DB.Query(ctx, query, time.Now().Unix())
 	return dbutil.NewRowIterWithError(rows, dbutil.ScanSingleColumn[id.UserID], err).AsList()
 }
 

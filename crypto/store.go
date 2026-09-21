@@ -133,6 +133,7 @@ type Store interface {
 	FilterTrackedUsers(context.Context, []id.UserID) ([]id.UserID, error)
 	// MarkTrackedUsersOutdated flags that the device list for given users are outdated.
 	MarkTrackedUsersOutdated(context.Context, []id.UserID) error
+	IncrementTrackedUsersErrorCount(context.Context, []id.UserID) error
 	// GetOutdatedTrackerUsers gets all tracked users whose devices need to be updated.
 	GetOutdatedTrackedUsers(context.Context) ([]id.UserID, error)
 
@@ -625,6 +626,17 @@ func (gs *MemoryStore) MarkTrackedUsersOutdated(_ context.Context, users []id.Us
 			gs.OutdatedUsers[userID] = struct{}{}
 		}
 	}
+	return nil
+}
+
+func (gs *MemoryStore) IncrementTrackedUsersErrorCount(_ context.Context, users []id.UserID) error {
+	//gs.lock.Lock()
+	//defer gs.lock.Unlock()
+	//for _, userID := range users {
+	//	if _, ok := gs.Devices[userID]; ok {
+	//		gs.OutdatedUsers[userID] = struct{}{}
+	//	}
+	//}
 	return nil
 }
 
