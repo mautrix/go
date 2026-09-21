@@ -9,7 +9,9 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 
+	"github.com/rs/zerolog"
 	"go.mau.fi/util/dbutil"
 
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -83,6 +85,60 @@ func (uq *UserLoginQuery) Insert(ctx context.Context, login *UserLogin) error {
 func (uq *UserLoginQuery) Update(ctx context.Context, login *UserLogin) error {
 	ensureBridgeIDMatches(&login.BridgeID, uq.BridgeID)
 	return uq.Exec(ctx, updateUserLoginQuery, login.ensureHasMetadata(uq.MetaType).sqlVariables()...)
+}
+
+func (uq *UserLoginQuery) UpdateProfileAndMetadata(ctx context.Context, login *UserLogin, profileJSON, metadataJSON []byte) error {
+	if login.BridgeID != uq.BridgeID {
+		return errors.New("bridge ID mismatch")
+	}
+	db := uq.GetDB()
+	if _, inTransaction := db.Execable(ctx).(dbutil.Transaction); inTransaction {
+		return errors.New("login metadata updates require committed database operations")
+	}
+	ctx = zerolog.Ctx(ctx).Level(zerolog.DebugLevel).WithContext(ctx)
+	result, err := db.Exec(ctx, "UPDATE user_login SET remote_name=$4,remote_profile=$5,metadata=$6 WHERE bridge_id=$1 AND user_mxid=$2 AND id=$3", login.BridgeID, login.UserMXID, login.ID, login.RemoteName, string(profileJSON), string(metadataJSON))
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count != 1 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+func (uq *UserLoginQuery) UpdateSpaceRoom(ctx context.Context, login *UserLogin, spaceRoom id.RoomID) error {
+	if login.BridgeID != uq.BridgeID {
+		return errors.New("bridge ID mismatch")
+	}
+	db := uq.GetDB()
+	if _, inTransaction := db.Execable(ctx).(dbutil.Transaction); inTransaction {
+		return errors.New("space room publication requires committed database operations")
+	}
+	ctx = zerolog.Ctx(ctx).Level(zerolog.DebugLevel).WithContext(ctx)
+	result, err := db.Exec(ctx, "UPDATE user_login SET space_room=$4 WHERE bridge_id=$1 AND user_mxid=$2 AND id=$3", login.BridgeID, login.UserMXID, login.ID, dbutil.StrPtr(spaceRoom))
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count != 1 {
+		return sql.ErrNoRows
+	}
+	var stored sql.NullString
+	err = db.QueryRow(ctx, "SELECT space_room FROM user_login WHERE bridge_id=$1 AND user_mxid=$2 AND id=$3", login.BridgeID, login.UserMXID, login.ID).Scan(&stored)
+	if err != nil {
+		return err
+	}
+	if stored.String != string(spaceRoom) {
+		return errors.New("space room persistence readback mismatch")
+	}
+	return nil
 }
 
 func (uq *UserLoginQuery) Delete(ctx context.Context, loginID networkid.UserLoginID) error {

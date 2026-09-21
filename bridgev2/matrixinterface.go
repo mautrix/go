@@ -225,6 +225,11 @@ type MatrixAPI interface {
 	GetEvent(ctx context.Context, roomID id.RoomID, eventID id.EventID) (*event.Event, error)
 }
 
+type MatrixAPIWithMediaLimit interface {
+	MatrixAPI
+	DownloadMediaWithLimit(ctx context.Context, uri id.ContentURIString, file *event.EncryptedFileInfo, maxBytes int64) ([]byte, error)
+}
+
 type StreamOrderReadingMatrixAPI interface {
 	MatrixAPI
 	MarkStreamOrderRead(ctx context.Context, roomID id.RoomID, streamOrder int64, ts time.Time) error

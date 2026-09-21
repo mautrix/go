@@ -1401,10 +1401,14 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 			// Hack to ensure the ghost row exists
 			// TODO move to better place (like login)
 			portal.Bridge.GetGhostByID(ctx, message.SenderID)
-			err = portal.Bridge.DB.Message.Insert(ctx, message)
-			if err != nil {
-				log.Err(err).Msg("Failed to save message to database")
-			} else if resp.PostSave != nil {
+			if message.RowID == 0 {
+				err = portal.Bridge.DB.Message.Insert(ctx, message)
+				if err != nil {
+					log.Err(err).Msg("Failed to save message to database")
+					return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w: failed to save message mapping: %w", ErrDatabaseError, err))
+				}
+			}
+			if resp.PostSave != nil {
 				resp.PostSave(ctx, message)
 			}
 			if resp.RemovePending != "" {
@@ -3776,11 +3780,14 @@ func (portal *Portal) handleRemoteMessageRemove(ctx context.Context, source *Use
 	dontRenderPlaceholderProvider, ok := evt.(RemoteMessageRemoveWithoutPlaceholder)
 	dontRenderPlaceholder := ok && dontRenderPlaceholderProvider.DontRenderPlaceholder()
 	res := portal.redactMessageParts(ctx, targetParts, intent, getEventTS(evt), "", dontRenderPlaceholder)
+	if !res.Success {
+		return res
+	}
 	err = portal.Bridge.DB.Message.DeleteAllParts(ctx, portal.Receiver, targetParts[0].ID)
 	if err != nil {
 		log.Err(err).Msg("Failed to delete target message from database")
 	}
-	return res
+	return res.WithError(err)
 }
 
 func (portal *Portal) redactMessageParts(

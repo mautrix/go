@@ -153,14 +153,14 @@ func (as *ASIntent) MarkRead(ctx context.Context, roomID id.RoomID, eventID id.E
 		req.FullyRead = eventID
 		req.BeeperFullyReadExtra = extraData
 	}
-	if as.Matrix.IsCustomPuppet && as.Connector.SpecVersions.Supports(mautrix.BeeperFeatureInboxState) && as.Connector.Config.Homeserver.Software != bridgeconfig.SoftwareHungry {
+	if as.Matrix.IsCustomPuppet && as.Connector.SpecVersions.Supports(mautrix.BeeperFeatureInboxState) {
 		err = as.Matrix.SetBeeperInboxState(ctx, roomID, &mautrix.ReqSetBeeperInboxState{
-			//MarkedUnread: ptr.Ptr(false),
-			ReadMarkers: &req,
+			MarkedUnread: new(bool),
+			ReadMarkers:  &req,
 		})
 	} else {
 		err = as.Matrix.SetReadMarkers(ctx, roomID, &req)
-		if err == nil && as.Matrix.IsCustomPuppet && as.Connector.Config.Homeserver.Software != bridgeconfig.SoftwareHungry {
+		if err == nil && as.Matrix.IsCustomPuppet {
 			err = as.Matrix.SetRoomAccountData(ctx, roomID, event.AccountDataMarkedUnread.Type, &event.MarkedUnreadEventContent{
 				Unread: false,
 			})

@@ -8,10 +8,12 @@ package bridgev2
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/dbutil"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2/database"
@@ -140,14 +142,38 @@ func (ul *UserLogin) GetSpaceRoom(ctx context.Context) (id.RoomID, error) {
 	if ul.SpaceRoom != "" {
 		return ul.SpaceRoom, nil
 	}
+	if _, inTransaction := ul.Bridge.DB.Execable(ctx).(dbutil.Transaction); inTransaction {
+		return "", errors.New("space room creation requires committed database operations")
+	}
+	if ul.pendingSpaceRoom == "" {
+		spaceRoom, err := ul.createSpaceRoom(ctx)
+		if err != nil {
+			return "", err
+		}
+		ul.pendingSpaceRoom = spaceRoom
+	}
+	if err := ul.Bridge.DB.UserLogin.UpdateSpaceRoom(ctx, ul.UserLogin, ul.pendingSpaceRoom); err != nil {
+		return "", fmt.Errorf("failed to save space room ID: %w", err)
+	}
+	ul.SpaceRoom, ul.pendingSpaceRoom = ul.pendingSpaceRoom, ""
+	return ul.SpaceRoom, nil
+}
+
+func (ul *UserLogin) createSpaceRoom(ctx context.Context) (id.RoomID, error) {
+	stored, err := ul.Bridge.DB.UserLogin.GetByID(ctx, ul.ID)
+	if err != nil {
+		return "", fmt.Errorf("failed to load login for space creation: %w", err)
+	}
+	if stored == nil || stored.BridgeID != ul.BridgeID || stored.UserMXID != ul.UserMXID || stored.ID != ul.ID {
+		return "", errors.New("space room login ownership mismatch")
+	}
 	netName := ul.Bridge.Network.GetName()
-	var err error
 	autoJoin := ul.Bridge.Matrix.GetCapabilities().AutoJoinInvites
 	doublePuppet := ul.User.DoublePuppet(ctx)
 	req := &mautrix.ReqCreateRoom{
 		Visibility: "private",
-		Name:       fmt.Sprintf("%s (%s)", netName.DisplayName, ul.RemoteName),
-		Topic:      fmt.Sprintf("Your %s bridged chats - %s", netName.DisplayName, ul.RemoteName),
+		Name:       fmt.Sprintf("%s (%s)", netName.DisplayName, stored.RemoteName),
+		Topic:      fmt.Sprintf("Your %s bridged chats - %s", netName.DisplayName, stored.RemoteName),
 		InitialState: []*event.Event{{
 			Type: event.StateRoomAvatar,
 			Content: event.Content{
@@ -193,19 +219,15 @@ func (ul *UserLogin) GetSpaceRoom(ctx context.Context) (id.RoomID, error) {
 	if ok {
 		pfc.CustomizePersonalFilteringSpace(req)
 	}
-	ul.SpaceRoom, err = ul.Bridge.Bot.CreateRoom(ctx, req)
+	spaceRoom, err := ul.Bridge.Bot.CreateRoom(ctx, req)
 	if err != nil {
 		return "", fmt.Errorf("failed to create space room: %w", err)
 	}
 	if !autoJoin && doublePuppet != nil {
-		err = doublePuppet.EnsureJoined(ctx, ul.SpaceRoom)
+		err = doublePuppet.EnsureJoined(ctx, spaceRoom)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to auto-join created space room with double puppet")
 		}
 	}
-	err = ul.Save(ctx)
-	if err != nil {
-		return "", fmt.Errorf("failed to save space room ID: %w", err)
-	}
-	return ul.SpaceRoom, nil
+	return spaceRoom, nil
 }

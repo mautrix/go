@@ -23,6 +23,7 @@ import (
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/bridgev2/status"
 	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/id"
 )
 
 type UserLogin struct {
@@ -36,9 +37,10 @@ type UserLogin struct {
 
 	inPortalCache *exsync.Set[networkid.PortalKey]
 
-	spaceCreateLock sync.Mutex
-	deleteLock      sync.Mutex
-	disconnectOnce  sync.Once
+	spaceCreateLock  sync.Mutex
+	pendingSpaceRoom id.RoomID
+	deleteLock       sync.Mutex
+	disconnectOnce   sync.Once
 }
 
 var ErrorOnUserLoginLoadFail = false
