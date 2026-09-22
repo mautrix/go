@@ -155,10 +155,8 @@ func (portal *Portal) doBackwardsBackfill(ctx context.Context, source *UserLogin
 		Int("message_count", len(resp.Messages)).
 		Msg("Fetched messages for backward backfill")
 	task.Cursor = resp.Cursor
-	if !resp.HasMore {
-		task.IsDone = true
-		task.QueueDone = true
-	}
+	task.IsDone = !resp.HasMore
+	task.QueueDone = task.IsDone
 	if len(resp.Messages) == 0 {
 		if !resp.HasMore {
 			log.Debug().Msg("No messages to backfill, marking backfill task as done")
