@@ -229,6 +229,9 @@ func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, params
 		if params.DontReuseExisting {
 			return nil, fmt.Errorf("login already exists")
 		}
+		if ul.Client != nil {
+			ul.Client.Disconnect()
+		}
 		doInsert = false
 		ul.RemoteName = data.RemoteName
 		ul.RemoteProfile = ul.RemoteProfile.Merge(data.RemoteProfile)
