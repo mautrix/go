@@ -70,6 +70,9 @@ type outgoingMessage struct {
 	handle    func(RemoteMessage, *database.Message) (bool, error)
 	ackedAt   time.Time
 	timeouted bool
+
+	disappearSetting  database.DisappearingSetting
+	scheduleDisappear func(context.Context, *database.Message, database.DisappearingSetting)
 }
 
 type Portal struct {
@@ -1346,6 +1349,23 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		ThreadRoot: threadRoot,
 		ReplyTo:    replyTo,
 	}
+	var disappearOnce sync.Once
+	wrappedMsgEvt.scheduleDisappear = func(ctx context.Context, message *database.Message, ds database.DisappearingSetting) {
+		disappearOnce.Do(func() {
+			if ds.Type == event.DisappearingTypeNone {
+				return
+			}
+			if ds.Type != event.DisappearingTypeAfterReadByRecipient {
+				ds = ds.StartingAt(message.Timestamp)
+			}
+			portal.Bridge.DisappearLoop.Add(ctx, &database.DisappearingMessage{
+				RoomID:              portal.MXID,
+				EventID:             message.MXID,
+				Timestamp:           message.Timestamp,
+				DisappearingSetting: ds,
+			})
+		})
+	}
 	if portal.Bridge.Config.DeduplicateMatrixMessages {
 		if part, err := portal.Bridge.DB.Message.GetPartByTxnID(ctx, portal.Receiver, evt.ID, wrappedMsgEvt.InputTransactionID); err != nil {
 			log.Err(err).Msg("Failed to check db if message is already sent")
@@ -1419,16 +1439,8 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 	if messageTimer != nil {
 		ds = database.DisappearingSettingFromEvent(messageTimer)
 	}
-	if ds.Type != event.DisappearingTypeNone {
-		if ds.Type != event.DisappearingTypeAfterReadByRecipient {
-			ds = ds.StartingAt(message.Timestamp)
-		}
-		portal.Bridge.DisappearLoop.Add(ctx, &database.DisappearingMessage{
-			RoomID:              portal.MXID,
-			EventID:             message.MXID,
-			Timestamp:           message.Timestamp,
-			DisappearingSetting: ds,
-		})
+	if !resp.Pending || !portal.Bridge.Config.OutgoingMessageReID {
+		wrappedMsgEvt.scheduleDisappear(ctx, message, ds)
 	}
 	if resp.Pending {
 		// Not exactly queued, but not finished either
@@ -1461,9 +1473,14 @@ func (evt *MatrixMessage) AddPendingToIgnore(txnID networkid.TransactionID) {
 // The provided function will be called when the message is encountered.
 func (evt *MatrixMessage) AddPendingToSave(message *database.Message, txnID networkid.TransactionID, handleEcho RemoteEchoHandler) {
 	pending := &outgoingMessage{
-		db:     evt.fillDBMessage(message),
-		evt:    evt.Event,
-		handle: handleEcho,
+		db:                evt.fillDBMessage(message),
+		evt:               evt.Event,
+		handle:            handleEcho,
+		disappearSetting:  evt.Portal.Disappear,
+		scheduleDisappear: evt.scheduleDisappear,
+	}
+	if evt.Content != nil && evt.Content.BeeperDisappearingTimer != nil {
+		pending.disappearSetting = database.DisappearingSettingFromEvent(evt.Content.BeeperDisappearingTimer)
 	}
 	evt.Portal.outgoingMessagesLock.Lock()
 	evt.Portal.outgoingMessages[txnID] = pending
@@ -3063,6 +3080,8 @@ func (portal *Portal) checkPendingMessage(ctx context.Context, evt RemoteMessage
 		err := portal.Bridge.DB.Message.Insert(ctx, pending.db)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to save message to database after receiving remote echo")
+		} else if pending.scheduleDisappear != nil {
+			pending.scheduleDisappear(ctx, pending.db, pending.disappearSetting)
 		}
 	}
 	if !errors.Is(statusErr, ErrNoStatus) {

@@ -1442,7 +1442,8 @@ type MatrixMessage struct {
 	ThreadRoot *database.Message
 	ReplyTo    *database.Message
 
-	pendingSaves []*outgoingMessage
+	pendingSaves      []*outgoingMessage
+	scheduleDisappear func(context.Context, *database.Message, database.DisappearingSetting)
 }
 
 type MatrixEdit struct {
