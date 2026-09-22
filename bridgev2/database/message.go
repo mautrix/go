@@ -291,7 +291,7 @@ func (m *Message) Scan(row dbutil.Scannable) (*Message, error) {
 	}
 	m.Timestamp = time.Unix(0, timestamp)
 	m.ThreadRoot = networkid.MessageID(threadRootID.String)
-	m.IsDoublePuppeted = doublePuppeted.Valid
+	m.IsDoublePuppeted = doublePuppeted.Bool
 	if replyToID.Valid {
 		m.ReplyTo.MessageID = networkid.MessageID(replyToID.String)
 		if replyToPartID.Valid {
