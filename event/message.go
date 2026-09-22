@@ -229,7 +229,7 @@ func (content *MessageEventContent) SetEdit(original id.EventID) {
 		if len(content.Body) > 10000 || len(content.FormattedBody) > 10000 {
 			content.FormattedBody = ""
 			content.Format = ""
-			content.Body = content.Body[:50] + "[edit fallback cut…]"
+			content.Body = content.Body[:min(len(content.Body), 50)] + "[edit fallback cut…]"
 		}
 	}
 }
