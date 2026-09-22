@@ -1439,7 +1439,7 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 	if messageTimer != nil {
 		ds = database.DisappearingSettingFromEvent(messageTimer)
 	}
-	if !resp.Pending || !portal.Bridge.Config.OutgoingMessageReID {
+	if !resp.Pending {
 		wrappedMsgEvt.scheduleDisappear(ctx, message, ds)
 	}
 	if resp.Pending {
