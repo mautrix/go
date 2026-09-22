@@ -1342,7 +1342,11 @@ func (cli *Client) GetRoomSummary(ctx context.Context, roomIDOrAlias string, via
 
 // GetDisplayName returns the display name of the user with the specified MXID. See https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3profileuseriddisplayname
 func (cli *Client) GetDisplayName(ctx context.Context, mxid id.UserID) (resp *RespUserDisplayName, err error) {
+	resp = &RespUserDisplayName{}
 	err = cli.GetProfileField(ctx, mxid, "displayname", &resp)
+	if errors.Is(err, MNotFound) {
+		err = nil
+	}
 	return
 }
 
@@ -1394,6 +1398,9 @@ func (cli *Client) GetAvatarURL(ctx context.Context, mxid id.UserID) (url id.Con
 		AvatarURL id.ContentURI `json:"avatar_url"`
 	}{}
 	err = cli.GetProfileField(ctx, mxid, "avatar_url", &s)
+	if errors.Is(err, MNotFound) {
+		err = nil
+	}
 	url = s.AvatarURL
 	return
 }
