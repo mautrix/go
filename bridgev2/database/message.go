@@ -330,8 +330,11 @@ const NetworkTxnMXIDPrefix = TxnMXIDPrefix + "network:"
 const RandomTxnMXIDPrefix = TxnMXIDPrefix + "random:"
 
 func (m *Message) SetFakeMXID() {
-	hash := sha256.Sum256([]byte(m.ID))
-	m.MXID = id.EventID(FakeMXIDPrefix + base64.RawURLEncoding.EncodeToString(hash[:]))
+	hasher := sha256.New()
+	hasher.Write([]byte(m.ID))
+	hasher.Write([]byte(m.PartID))
+	hasher.Write([]byte(m.Room.Receiver))
+	m.MXID = id.EventID(FakeMXIDPrefix + base64.RawURLEncoding.EncodeToString(hasher.Sum(nil)))
 }
 
 func (m *Message) HasFakeMXID() bool {
