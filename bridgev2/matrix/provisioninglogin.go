@@ -444,14 +444,19 @@ func (prov *ProvisioningAPI) executeStep(
 			var err error
 			var ok bool
 			if err, ok = v.(error); !ok {
-				err = fmt.Errorf("%v", err)
+				err = fmt.Errorf("%v", v)
 			}
 			zerolog.Ctx(ctx).
 				Err(err).
 				Bytes(zerolog.ErrorStackFieldName, debug.Stack()).
 				Msg("Panic in login step execution")
 			login.step.WithNonErroringLock(func(sm *stepManager) {
-				stepResult.err = err
+				if sm.err == nil {
+					sm.err = err
+				}
+				if stepResult != nil {
+					stepResult.err = err
+				}
 				sm.started = false
 				sm.stepCancel = nil
 				if sm.wait != nil {
