@@ -178,7 +178,8 @@ func (portal *PortalInternals) ApplyRelationMeta(ctx context.Context, content *e
 }
 
 func (portal *PortalInternals) SendConvertedMessage(ctx context.Context, source *UserLogin, id networkid.MessageID, intent MatrixAPI, senderID networkid.UserID, converted *ConvertedMessage, ts time.Time, streamOrder int64, logContext func(*zerolog.Event) *zerolog.Event, save bool) ([]*database.Message, EventHandlingResult) {
-	return (*Portal)(portal).sendConvertedMessage(ctx, source, id, intent, senderID, converted, ts, streamOrder, logContext, save)
+	messages, _, result := (*Portal)(portal).sendConvertedMessage(ctx, source, id, intent, senderID, converted, ts, streamOrder, logContext, save)
+	return messages, result
 }
 
 func (portal *PortalInternals) CheckPendingMessage(ctx context.Context, evt RemoteMessage) (bool, *database.Message) {

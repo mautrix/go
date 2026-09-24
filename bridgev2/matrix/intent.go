@@ -59,6 +59,7 @@ func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType
 			content.Raw["com.beeper.dont_render_redacted_placeholder"] = true
 		}
 		return as.Matrix.RedactEvent(ctx, roomID, parsedContent.Redacts, mautrix.ReqRedact{
+			TxnID:  extra.TransactionID,
 			Reason: parsedContent.Reason,
 			Extra:  content.Raw,
 		})
@@ -88,7 +89,7 @@ func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType
 			eventType = event.EventEncrypted
 		}
 	}
-	return as.Matrix.SendMessageEvent(ctx, roomID, eventType, content, mautrix.ReqSendEvent{Timestamp: extra.Timestamp.UnixMilli()})
+	return as.Matrix.SendMessageEvent(ctx, roomID, eventType, content, mautrix.ReqSendEvent{Timestamp: extra.Timestamp.UnixMilli(), TransactionID: extra.TransactionID})
 }
 
 func (as *ASIntent) fillMemberEvent(ctx context.Context, roomID id.RoomID, userID id.UserID, content *event.Content) {

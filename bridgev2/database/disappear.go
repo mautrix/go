@@ -110,6 +110,11 @@ const (
 	getUpcomingDisappearingMessagesQuery = `
 		SELECT bridge_id, mx_room, mxid, timestamp, type, timer, disappear_at
 		FROM disappearing_message WHERE bridge_id = $1 AND disappear_at IS NOT NULL AND disappear_at < $2
+		UNION ALL
+		SELECT v.bridge_id, p.mxid, v.mxid, v.viewed_at, v.type, 0, v.disappear_at
+		FROM view_limited_message v JOIN message m ON v.bridge_id=m.bridge_id AND v.mxid=m.mxid
+		JOIN portal p ON m.bridge_id=p.bridge_id AND m.room_id=p.id AND m.room_receiver=p.receiver
+		WHERE v.bridge_id=$1 AND v.disappear_at IS NOT NULL AND v.disappear_at<$2
 		ORDER BY disappear_at LIMIT $3
 	`
 	deleteDisappearingMessageQuery = `
@@ -119,6 +124,11 @@ const (
 
 func (dmq *DisappearingMessageQuery) Put(ctx context.Context, dm *DisappearingMessage) error {
 	ensureBridgeIDMatches(&dm.BridgeID, dmq.BridgeID)
+	if dm.IsViewLimited() {
+		return dmq.Exec(ctx, `UPDATE view_limited_message SET type=$3, disappear_at=$4, viewed_at=$5 WHERE bridge_id=$1 AND mxid=$2
+			AND (($3='view_limited_pending' AND state IN ('pending', 'apply') AND viewed_at=$5)
+			OR ($3='view_limited' AND (viewed_at=$5 OR state='ready')))`, dmq.BridgeID, dm.EventID, dm.Type, dm.DisappearAt.UnixNano(), dm.Timestamp.UnixNano())
+	}
 	return dmq.Exec(ctx, upsertDisappearingMessageQuery, dm.sqlVariables()...)
 }
 
@@ -154,4 +164,8 @@ func (d *DisappearingMessage) Scan(row dbutil.Scannable) (*DisappearingMessage, 
 
 func (d *DisappearingMessage) sqlVariables() []any {
 	return []any{d.BridgeID, d.RoomID, d.EventID, d.Timestamp.UnixNano(), d.Type, d.Timer, dbutil.ConvertedPtr(d.DisappearAt, time.Time.UnixNano)}
+}
+
+func (d *DisappearingMessage) IsViewLimited() bool {
+	return d.Type == "view_limited_pending" || d.Type == "view_limited"
 }

@@ -2945,7 +2945,7 @@ func (portal *Portal) sendConvertedMessage(
 	streamOrder int64,
 	logContext func(*zerolog.Event) *zerolog.Event,
 	save bool,
-) ([]*database.Message, EventHandlingResult) {
+) ([]*database.Message, map[string]*viewLimitedMediaState, EventHandlingResult) {
 	if logContext == nil {
 		logContext = func(e *zerolog.Event) *zerolog.Event {
 			return e
@@ -2956,6 +2956,7 @@ func (portal *Portal) sendConvertedMessage(
 		ctx, source, id, converted, false,
 	)
 	output := make([]*database.Message, 0, len(converted.Parts))
+	var limited map[string]*viewLimitedMediaState
 	var errorList []error
 	for i, part := range converted.Parts {
 		if ctx.Err() != nil {
@@ -2976,6 +2977,7 @@ func (portal *Portal) sendConvertedMessage(
 			Metadata:         part.DBMetadata,
 			IsDoublePuppeted: intent.IsDoublePuppet(),
 		}
+		var limitState *viewLimitedMediaState
 		if part.DontBridge {
 			dbMessage.SetFakeMXID()
 			logContext(log.Debug()).
@@ -2983,6 +2985,15 @@ func (portal *Portal) sendConvertedMessage(
 				Str("part_id", string(part.ID)).
 				Msg("Not bridging message part with DontBridge flag to Matrix")
 		} else {
+			if part.Type == event.EventMessage && (part.Content.BeeperViewLimited != nil || part.Extra["com.beeper.view_limited"] != nil) {
+				part.Content.AddPerMessageProfileFallback()
+			}
+			var err error
+			limitState, err = prepareViewLimitedMedia(&event.Content{Parsed: part.Content, Raw: part.Extra})
+			if err != nil {
+				errorList = append(errorList, fmt.Errorf("failed to prepare message part: %w", err))
+				continue
+			}
 			resp, err := intent.SendMessage(ctx, portal.MXID, part.Type, &event.Content{
 				Parsed: part.Content,
 				Raw:    part.Extra,
@@ -3005,10 +3016,19 @@ func (portal *Portal) sendConvertedMessage(
 		}
 		if save {
 			err := portal.Bridge.DB.Message.Insert(ctx, dbMessage)
+			if err == nil && !dbMessage.HasFakeMXID() {
+				err = portal.Bridge.saveViewLimitedMedia(ctx, dbMessage.MXID, limitState)
+			}
 			if err != nil {
 				logContext(log.Err(err)).Str("part_id", string(part.ID)).Msg("Failed to save message part to database")
 				errorList = append(errorList, fmt.Errorf("%w: failed to save message part to database: %w", ErrDatabaseError, err))
 			}
+		}
+		if !save && limitState != nil {
+			if limited == nil {
+				limited = make(map[string]*viewLimitedMediaState)
+			}
+			limited[string(dbMessage.MXID)] = limitState
 		}
 		if converted.Disappear.Type != event.DisappearingTypeNone && !dbMessage.HasFakeMXID() {
 			if converted.Disappear.Type == event.DisappearingTypeAfterSend && converted.Disappear.DisappearAt.IsZero() {
@@ -3027,9 +3047,9 @@ func (portal *Portal) sendConvertedMessage(
 		output = append(output, dbMessage)
 	}
 	if len(errorList) > 0 {
-		return output, EventHandlingResultFailed.WithError(errors.Join(errorList...))
+		return output, limited, EventHandlingResultFailed.WithError(errors.Join(errorList...))
 	}
-	return output, EventHandlingResultSuccess
+	return output, limited, EventHandlingResultSuccess
 }
 
 func (portal *Portal) checkPendingMessage(ctx context.Context, evt RemoteMessage) (bool, *database.Message) {
@@ -3175,7 +3195,7 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 			return EventHandlingResultFailed.WithError(err)
 		}
 	}
-	_, res = portal.sendConvertedMessage(ctx, source, evt.GetID(), intent, evt.GetSender().Sender, converted, ts, getStreamOrder(evt), nil, true)
+	_, _, res = portal.sendConvertedMessage(ctx, source, evt.GetID(), intent, evt.GetSender().Sender, converted, ts, getStreamOrder(evt), nil, true)
 	if portal.currentlyTypingGhosts.Pop(intent.GetMXID()) {
 		err = intent.MarkTyping(ctx, portal.MXID, TypingTypeText, 0)
 		if err != nil {
@@ -3280,6 +3300,7 @@ func (portal *Portal) sendConvertedEdit(
 	log := zerolog.Ctx(ctx)
 	var errorList []error
 	updatedParts := make([]*database.Message, 0, len(converted.ModifiedParts))
+	modifiedLimits := make(map[*database.Message]*viewLimitedMediaState)
 	for i, part := range converted.ModifiedParts {
 		if part.Content.Mentions == nil {
 			part.Content.Mentions = &event.Mentions{}
@@ -3307,6 +3328,19 @@ func (portal *Portal) sendConvertedEdit(
 			Raw:    part.TopLevelExtra,
 		}
 		if !part.DontBridge {
+			if part.Type == event.EventMessage {
+				part.Content.AddPerMessageProfileFallback()
+				currentContent := wrappedContent
+				if part.Content.NewContent != nil {
+					currentContent = &event.Content{Parsed: part.Content.NewContent, Raw: part.Extra}
+				}
+				state, err := prepareViewLimitedMedia(currentContent)
+				if err != nil {
+					errorList = append(errorList, fmt.Errorf("failed to prepare edited message part: %w", err))
+					continue
+				}
+				modifiedLimits[part.Part] = state
+			}
 			resp, err := intent.SendMessage(ctx, portal.MXID, part.Type, wrappedContent, &MatrixSendExtra{
 				Timestamp:   ts,
 				MessageMeta: part.Part,
@@ -3352,9 +3386,10 @@ func (portal *Portal) sendConvertedEdit(
 		deletedParts = append(deletedParts, part.RowID)
 	}
 	var addedParts []*database.Message
+	var addedLimits map[string]*viewLimitedMediaState
 	if converted.AddedParts != nil {
 		var res EventHandlingResult
-		addedParts, res = portal.sendConvertedMessage(ctx, source, targetID, intent, senderID, converted.AddedParts, ts, streamOrder, nil, false)
+		addedParts, addedLimits, res = portal.sendConvertedMessage(ctx, source, targetID, intent, senderID, converted.AddedParts, ts, streamOrder, nil, false)
 		if !res.Success {
 			errorList = append(errorList, res.Error)
 		}
@@ -3362,6 +3397,9 @@ func (portal *Portal) sendConvertedEdit(
 	saveErr := portal.Bridge.DB.DoTxn(ctx, nil, func(ctx context.Context) error {
 		for _, part := range updatedParts {
 			err := portal.Bridge.DB.Message.Update(ctx, part)
+			if err == nil && !part.HasFakeMXID() {
+				err = portal.Bridge.saveViewLimitedMedia(ctx, part.MXID, modifiedLimits[part])
+			}
 			if err != nil {
 				return fmt.Errorf("failed to update row %d (part %q) in database: %w", part.RowID, part.PartID, err)
 			}
@@ -3374,6 +3412,9 @@ func (portal *Portal) sendConvertedEdit(
 		}
 		for _, part := range addedParts {
 			err := portal.Bridge.DB.Message.Insert(ctx, part)
+			if err == nil && !part.HasFakeMXID() {
+				err = portal.Bridge.saveViewLimitedMedia(ctx, part.MXID, addedLimits[string(part.MXID)])
+			}
 			if err != nil {
 				return fmt.Errorf("failed to insert added part %q in database: %w", part.PartID, err)
 			}

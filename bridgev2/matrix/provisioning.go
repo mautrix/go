@@ -140,6 +140,7 @@ func (prov *ProvisioningAPI) Init() {
 	prov.Router.HandleFunc("POST /v3/create_dm/{identifier}", prov.PostCreateDM)
 	prov.Router.HandleFunc("POST /v3/create_group/{type}", prov.PostCreateGroup)
 	prov.Router.HandleFunc("POST /v3/backfill/{roomID}", prov.PostPaginate)
+	prov.Router.HandleFunc("POST /v3/view_limited_media/{eventID}", prov.PostViewLimitedMedia)
 	prov.Router.HandleFunc("GET /v3/image_pack/import", prov.ImportImagePack)
 	prov.Router.HandleFunc("POST /v3/image_pack/import", prov.ImportImagePack)
 	prov.Router.HandleFunc("GET /v3/image_pack/list", prov.ListImagePacks)

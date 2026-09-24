@@ -102,6 +102,7 @@ func (content *ReactionEventContent) SetRelatesTo(rel *RelatesTo) {
 //
 // https://spec.matrix.org/v1.2/client-server-api/#mroommessage
 type MessageEventContent struct {
+	BeeperViewLimited *BeeperViewLimitedMedia `json:"com.beeper.view_limited,omitempty"`
 	// Base m.room.message fields
 	MsgType MessageType `json:"msgtype,omitempty"`
 	Body    string      `json:"body"`

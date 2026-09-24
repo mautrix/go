@@ -19,6 +19,25 @@ tags:
 - name: snc
   description: Starting new chats
 paths:
+  /v3/view_limited_media/{eventID}:
+    post:
+      summary: Consume one view of view-limited media.
+      description: Pass the current count or millisecond time limit, preserving meta. A nonfinal count view emits a com.beeper.view_limited event referencing the original message; the final view or time expiry redacts it. Repeating a consumed request does not consume another view.
+      operationId: viewLimitedMedia
+      parameters:
+      - $ref: '#/components/parameters/loginID'
+      - {name: eventID, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+              schema: {type: object, required: [com.beeper.view_limited], additionalProperties: false, properties: {com.beeper.view_limited: {type: object}}}
+      responses:
+        200: {description: View consumed.}
+        400: {description: Invalid or stale view limit.}
+        401: {$ref: '#/components/responses/Unauthorized'}
+        404: {description: Message or login not found for this user.}
+        500: {$ref: '#/components/responses/InternalError'}
   /v3/whoami:
     get:
       tags: [ auth ]

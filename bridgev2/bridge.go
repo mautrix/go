@@ -212,7 +212,7 @@ func (br *Bridge) StartConnectors(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to start network connector: %w", err)
 	}
-	if br.Network.GetCapabilities().DisappearingMessages && !br.Background {
+	if !br.Background {
 		go br.DisappearLoop.Start()
 	}
 	return nil
