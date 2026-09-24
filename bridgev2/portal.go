@@ -906,6 +906,8 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 		return handleMatrixRoomMeta(portal, ctx, login, origSender, evt, isStateRequest, RoomAvatarHandlingNetworkAPI.HandleMatrixRoomAvatar)
 	case event.StateBeeperDisappearingTimer:
 		return handleMatrixRoomMeta(portal, ctx, login, origSender, evt, isStateRequest, DisappearTimerChangingNetworkAPI.HandleMatrixDisappearingTimer)
+	case event.StatePinnedEvents:
+		return portal.handleMatrixPinnedEvents(ctx, login, origSender, evt, isStateRequest)
 	case event.StateEncryption:
 		// TODO?
 		return EventHandlingResultIgnored
@@ -1891,6 +1893,221 @@ func handleMatrixRoomMeta[APIType any, ContentType any](
 	return EventHandlingResultSuccess.WithMSS()
 }
 
+// handleMatrixPinnedEvents handles an m.room.pinned_events state event from Matrix.
+//
+// It resolves the event IDs in the content (and in the previous content) to bridged messages
+// and passes the result to the network connector if it implements [PinHandlingNetworkAPI].
+func (portal *Portal) handleMatrixPinnedEvents(
+	ctx context.Context,
+	sender *UserLogin,
+	origSender *OrigSender,
+	evt *event.Event,
+	isStateRequest bool,
+) EventHandlingResult {
+	if evt.StateKey == nil || *evt.StateKey != "" {
+		return EventHandlingResultFailed.WithMSSError(ErrInvalidStateKey)
+	}
+	api, ok := sender.Client.(PinHandlingNetworkAPI)
+	if !ok {
+		return EventHandlingResultIgnored.WithMSSError(fmt.Errorf("%w of type %s", ErrRoomMetadataNotSupported, evt.Type))
+	}
+	log := zerolog.Ctx(ctx)
+	content, ok := evt.Content.Parsed.(*event.PinnedEventsEventContent)
+	if !ok {
+		log.Error().Type("content_type", evt.Content.Parsed).Msg("Unexpected parsed content type")
+		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
+	}
+	var prevContent *event.PinnedEventsEventContent
+	if evt.Unsigned.PrevContent != nil {
+		_ = evt.Unsigned.PrevContent.ParseRaw(evt.Type)
+		prevContent, _ = evt.Unsigned.PrevContent.Parsed.(*event.PinnedEventsEventContent)
+	}
+	if prevContent == nil {
+		prevContent = &event.PinnedEventsEventContent{}
+	}
+
+	pinned := portal.resolvePinnedEvents(ctx, content.Pinned)
+	prevPinned := portal.resolvePinnedEvents(ctx, prevContent.Pinned)
+	added, removed := diffPinnedMessages(prevPinned, pinned)
+	if len(added) == 0 && len(removed) == 0 {
+		portal.sendSuccessStatus(ctx, evt, 0, "")
+		return EventHandlingResultIgnored
+	}
+
+	changed, err := api.HandleMatrixPinnedEvents(ctx, &MatrixRoomPinnedEvents{
+		MatrixRoomMeta: MatrixRoomMeta[*event.PinnedEventsEventContent]{
+			MatrixEventBase: MatrixEventBase[*event.PinnedEventsEventContent]{
+				Event:      evt,
+				Content:    content,
+				Portal:     portal,
+				OrigSender: origSender,
+
+				InputTransactionID: portal.parseInputTransactionID(origSender, evt),
+			},
+			IsStateRequest: isStateRequest,
+			PrevContent:    prevContent,
+		},
+		Pinned:  pinned,
+		Added:   added,
+		Removed: removed,
+	})
+	if err != nil {
+		log.Err(err).Msg("Failed to handle Matrix pinned events change")
+		return EventHandlingResultFailed.WithMSSError(err)
+	}
+	if changed {
+		err = portal.Save(ctx)
+		if err != nil {
+			log.Err(err).Msg("Failed to save portal after updating pinned events")
+		}
+	}
+	return EventHandlingResultSuccess.WithMSS()
+}
+
+// resolvePinnedEvents maps Matrix event IDs to bridged messages, dropping ones that aren't
+// bridged messages (e.g. state events, or messages from before the portal existed).
+func (portal *Portal) resolvePinnedEvents(ctx context.Context, eventIDs []id.EventID) []*database.Message {
+	messages := make([]*database.Message, 0, len(eventIDs))
+	seen := make(map[networkid.MessageID]struct{}, len(eventIDs))
+	for _, eventID := range eventIDs {
+		msg, err := portal.Bridge.DB.Message.GetPartByMXID(ctx, eventID)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Stringer("event_id", eventID).
+				Msg("Failed to get pinned message from database")
+			continue
+		} else if msg == nil {
+			continue
+		} else if _, ok := seen[msg.ID]; ok {
+			continue
+		}
+		seen[msg.ID] = struct{}{}
+		messages = append(messages, msg)
+	}
+	return messages
+}
+
+func diffPinnedMessages(old, new []*database.Message) (added, removed []*database.Message) {
+	oldIDs := make(map[networkid.MessageID]struct{}, len(old))
+	for _, msg := range old {
+		oldIDs[msg.ID] = struct{}{}
+	}
+	newIDs := make(map[networkid.MessageID]struct{}, len(new))
+	for _, msg := range new {
+		newIDs[msg.ID] = struct{}{}
+		if _, ok := oldIDs[msg.ID]; !ok {
+			added = append(added, msg)
+		}
+	}
+	for _, msg := range old {
+		if _, ok := newIDs[msg.ID]; !ok {
+			removed = append(removed, msg)
+		}
+	}
+	return
+}
+
+// handleRemotePinnedMessages bridges a pinned message change from the remote network into
+// an m.room.pinned_events state event.
+func (portal *Portal) handleRemotePinnedMessages(ctx context.Context, source *UserLogin, evt RemoteEvent) EventHandlingResult {
+	log := zerolog.Ctx(ctx)
+	if portal.MXID == "" {
+		return EventHandlingResultIgnored
+	}
+	current, err := portal.getCurrentPinnedEvents(ctx)
+	if err != nil {
+		log.Err(err).Msg("Failed to get current pinned events")
+		return EventHandlingResultFailed.WithError(err)
+	}
+	var newPinned []id.EventID
+	deltaEvt, isDelta := evt.(RemotePinnedMessagesDelta)
+	fullEvt, isFull := evt.(RemotePinnedMessages)
+	if isDelta && (!isFull || deltaEvt.IsPinnedMessagesDelta()) {
+		pinned, unpinned, err := deltaEvt.GetPinnedMessageChanges(ctx)
+		if err != nil {
+			log.Err(err).Msg("Failed to get pinned message changes from remote event")
+			return EventHandlingResultFailed.WithError(err)
+		}
+		newPinned = applyPinnedEventDelta(
+			current,
+			portal.pinnedMessagesToEventIDs(ctx, pinned),
+			portal.pinnedMessagesToEventIDs(ctx, unpinned),
+		)
+	} else if isFull {
+		msgIDs, err := fullEvt.GetPinnedMessages(ctx)
+		if err != nil {
+			log.Err(err).Msg("Failed to get pinned messages from remote event")
+			return EventHandlingResultFailed.WithError(err)
+		}
+		newPinned = portal.pinnedMessagesToEventIDs(ctx, msgIDs)
+	} else {
+		log.Error().Type("event_type", evt).Msg("Unexpected event type in pinned messages handler")
+		return EventHandlingResultFailed
+	}
+	if slices.Equal(current, newPinned) {
+		return EventHandlingResultIgnored
+	}
+	// Pins are a room-level thing, so they're always sent with the bridge bot like other state.
+	if !portal.sendRoomMeta(ctx, nil, time.Time{}, event.StatePinnedEvents, "", &event.PinnedEventsEventContent{
+		Pinned: newPinned,
+	}, false, nil) {
+		return EventHandlingResultFailed
+	}
+	return EventHandlingResultSuccess
+}
+
+func (portal *Portal) pinnedMessagesToEventIDs(ctx context.Context, msgIDs []networkid.MessageID) []id.EventID {
+	eventIDs := make([]id.EventID, 0, len(msgIDs))
+	for _, msgID := range msgIDs {
+		msg, err := portal.Bridge.DB.Message.GetFirstPartByID(ctx, portal.Receiver, msgID)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Str("message_id", string(msgID)).
+				Msg("Failed to get pinned message from database")
+			continue
+		} else if msg == nil {
+			zerolog.Ctx(ctx).Debug().Str("message_id", string(msgID)).
+				Msg("Ignoring pinned message that isn't bridged")
+			continue
+		}
+		eventIDs = append(eventIDs, msg.MXID)
+	}
+	return eventIDs
+}
+
+func (portal *Portal) getCurrentPinnedEvents(ctx context.Context) ([]id.EventID, error) {
+	stateGetter, ok := portal.Bridge.Matrix.(MatrixConnectorWithArbitraryRoomState)
+	if !ok {
+		return nil, ErrArbitraryRoomStateNotSupported
+	}
+	evt, err := stateGetter.GetStateEvent(ctx, portal.MXID, event.StatePinnedEvents, "")
+	if err != nil {
+		if errors.Is(err, mautrix.MNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	} else if evt == nil {
+		return nil, nil
+	}
+	content, ok := evt.Content.Parsed.(*event.PinnedEventsEventContent)
+	if !ok {
+		return nil, nil
+	}
+	return content.Pinned, nil
+}
+
+// applyPinnedEventDelta applies a pin/unpin delta to the current list of pinned events.
+// Newly pinned events are prepended, so the newest pin is first.
+func applyPinnedEventDelta(current, pinned, unpinned []id.EventID) []id.EventID {
+	result := make([]id.EventID, 0, len(current)+len(pinned))
+	result = append(result, pinned...)
+	for _, eventID := range current {
+		if slices.Contains(unpinned, eventID) || slices.Contains(pinned, eventID) {
+			continue
+		}
+		result = append(result, eventID)
+	}
+	return result
+}
+
 func handleMatrixAccountData[APIType any, ContentType any](
 	portal *Portal, ctx context.Context, sender *UserLogin, evt *event.Event,
 	fn func(APIType, context.Context, *MatrixRoomMeta[ContentType]) error,
@@ -2705,6 +2922,8 @@ func (portal *Portal) handleRemoteEvent(ctx context.Context, source *UserLogin, 
 		res = portal.handleRemoteChatDelete(ctx, source, evt.(RemoteChatDelete))
 	case RemoteEventBackfill:
 		res = portal.HandleRemoteBackfill(ctx, source, evt.(RemoteBackfill))
+	case RemoteEventPinnedMessages:
+		res = portal.handleRemotePinnedMessages(ctx, source, evt)
 	default:
 		log.Warn().Msg("Got remote event with unknown type")
 	}
