@@ -75,6 +75,7 @@ func (prov *ProvisioningAPI) PostLoginClientHTTP(w http.ResponseWriter, r *http.
 					Int("header_count", len(resp.Headers)).
 					Int("body_length", len(resp.Body)).
 					Str("error_msg", resp.Error).
+					Str("used_fingerprint", resp.Fingerprint).
 					Msg("Submitted client HTTP response")
 			default:
 				return fmt.Errorf("pendingHTTP channel unexpectedly didn't accept response")
@@ -123,6 +124,12 @@ func (prov *ProvisioningAPI) PostLoginClientHTTP(w http.ResponseWriter, r *http.
 	}
 }
 
+func (p *ProvLogin) SetFingerprint(fingerprint string) {
+	p.HTTPLock.Lock()
+	defer p.HTTPLock.Unlock()
+	p.fingerprint = fingerprint
+}
+
 func (p *ProvLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 	log := zerolog.Ctx(req.Context()).With().Str("login_id", p.ID).Logger()
 	var body []byte
@@ -156,11 +163,12 @@ func (p *ProvLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 			StepID: reqID,
 			TxnID:  txnID,
 			ClientHTTPParams: &bridgev2.LoginClientHTTPParams{
-				RequestID: reqID,
-				Method:    req.Method,
-				URL:       req.URL.String(),
-				Headers:   req.Header,
-				Body:      body,
+				RequestID:   reqID,
+				Method:      req.Method,
+				URL:         req.URL.String(),
+				Headers:     req.Header,
+				Body:        body,
+				Fingerprint: p.fingerprint,
 			},
 		}
 		sm.pendingHTTP = ch

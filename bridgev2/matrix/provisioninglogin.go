@@ -70,7 +70,8 @@ type ProvLogin struct {
 	step     *stepManager
 	Override *bridgev2.UserLogin
 
-	HTTPLock sync.Mutex
+	HTTPLock    sync.Mutex
+	fingerprint string
 
 	Ctx       context.Context
 	CancelCtx context.CancelFunc
@@ -123,7 +124,7 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 		Str("login_id", loginID).
 		Msg("Created login process, now starting")
 
-	var rt http.RoundTripper
+	var rt bridgev2.FingerprintingRoundTripper
 	if r.URL.Query().Get("client_http") == "1" {
 		rt = provLogin
 	}
