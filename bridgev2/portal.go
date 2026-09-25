@@ -743,7 +743,7 @@ func (portal *Portal) sendSuccessStatus(ctx context.Context, evt *event.Event, s
 	}
 	ms := &MessageStatus{Status: event.MessageStatusSuccess}
 	if disappear != nil {
-		ms.BeeperDisappearingTimer = disappear.ToEventContent()
+		ms.DisappearingTimer = disappear.ToEventContent()
 	}
 	portal.Bridge.Matrix.SendMessageStatus(ctx, ms, info)
 }
