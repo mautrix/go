@@ -1049,7 +1049,8 @@ type WebPushConfig struct {
 }
 
 type FCMPushConfig struct {
-	SenderID string `json:"sender_id"`
+	SenderID  string          `json:"sender_id"`
+	LegacyIID json.RawMessage `json:"legacy_iid,omitempty"`
 }
 
 type APNsPushConfig struct {
