@@ -19,6 +19,25 @@ tags:
 - name: snc
   description: Starting new chats
 paths:
+  /v3/view_limited_media/{eventID}:
+    post:
+      summary: Consume one view of view-limited media.
+      description: Pass only com.beeper.view_limited from the current message. A remaining count sends a com.beeper.view_limited event with remaining_count and an m.reference to the original message. The final view redacts immediately or queues redaction after the viewing timer.
+      operationId: viewLimitedMedia
+      parameters:
+      - $ref: '#/components/parameters/loginID'
+      - {name: eventID, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+              schema: {type: object, required: [com.beeper.view_limited], properties: {com.beeper.view_limited: {type: object}}}
+      responses:
+        200: {description: View consumed.}
+        400: {description: Invalid view limit.}
+        401: {$ref: '#/components/responses/Unauthorized'}
+        404: {description: Message or login not found for this user.}
+        500: {$ref: '#/components/responses/InternalError'}
   /v3/whoami:
     get:
       tags: [ auth ]

@@ -151,6 +151,7 @@ type MessageEventContent struct {
 	MSC3245Voice *MSC3245Voice `json:"org.matrix.msc3245.voice,omitempty"`
 
 	MSC4391BotCommand *MSC4391BotCommandInput `json:"org.matrix.msc4391.command,omitempty"`
+	BeeperViewLimited *BeeperViewLimitedMedia `json:"com.beeper.view_limited,omitempty"`
 }
 
 func (content *MessageEventContent) GetCapMsgType() CapabilityMsgType {

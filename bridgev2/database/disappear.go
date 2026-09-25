@@ -88,7 +88,15 @@ const (
 	upsertDisappearingMessageQuery = `
 		INSERT INTO disappearing_message (bridge_id, mx_room, mxid, timestamp, type, timer, disappear_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		ON CONFLICT (bridge_id, mxid) DO UPDATE SET timer=excluded.timer, disappear_at=excluded.disappear_at
+		ON CONFLICT (bridge_id, mxid) DO UPDATE SET
+			timer=excluded.timer,
+			type=CASE WHEN excluded.type='view_limited' THEN excluded.type ELSE disappearing_message.type END,
+			disappear_at=CASE
+				WHEN (excluded.type='view_limited' OR disappearing_message.type='view_limited')
+					AND disappearing_message.disappear_at IS NOT NULL
+					AND (excluded.disappear_at IS NULL OR disappearing_message.disappear_at<=excluded.disappear_at)
+				THEN disappearing_message.disappear_at
+				ELSE excluded.disappear_at END
 	`
 	startDisappearingMessagesQuery = `
 		UPDATE disappearing_message
