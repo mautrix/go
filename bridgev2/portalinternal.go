@@ -54,7 +54,7 @@ func (portal *PortalInternals) UnwrapBeeperSendState(ctx context.Context, evt *e
 }
 
 func (portal *PortalInternals) SendSuccessStatus(ctx context.Context, evt *event.Event, streamOrder int64, newEventID id.EventID) {
-	(*Portal)(portal).sendSuccessStatus(ctx, evt, streamOrder, newEventID)
+	(*Portal)(portal).sendSuccessStatus(ctx, evt, streamOrder, newEventID, nil)
 }
 
 func (portal *PortalInternals) SendErrorStatus(ctx context.Context, evt *event.Event, err error) {

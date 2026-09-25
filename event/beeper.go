@@ -59,6 +59,8 @@ type BeeperMessageStatusEventContent struct {
 
 	MutateEventKey string `json:"mutate_event_key,omitempty"`
 
+	DisappearingTimer *BeeperDisappearingTimer `json:"disappearing_timer,omitempty"`
+
 	// Indicates the set of users to whom the event was delivered. If nil, then
 	// the client should not expect delivered status at any later point. If not
 	// nil (even if empty), this field indicates which users the event was
