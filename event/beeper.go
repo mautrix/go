@@ -57,7 +57,8 @@ type BeeperMessageStatusEventContent struct {
 
 	TargetTxnID string `json:"relates_to_txn_id,omitempty"`
 
-	MutateEventKey string `json:"mutate_event_key,omitempty"`
+	MutateEventKey          string                   `json:"mutate_event_key,omitempty"`
+	BeeperDisappearingTimer *BeeperDisappearingTimer `json:"com.beeper.disappearing_timer,omitempty"`
 
 	// Indicates the set of users to whom the event was delivered. If nil, then
 	// the client should not expect delivered status at any later point. If not

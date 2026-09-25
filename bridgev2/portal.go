@@ -597,7 +597,7 @@ func (portal *Portal) handleSingleEvent(ctx context.Context, rawEvt any, doneCal
 			if res.Error != nil {
 				portal.sendErrorStatus(ctx, evt.evt, res.Error)
 			} else {
-				portal.sendSuccessStatus(ctx, evt.evt, 0, "")
+				portal.sendSuccessStatus(ctx, evt.evt, 0, "", nil)
 			}
 		}
 		if !isStateRequest && res.Error != nil && evt.evt.StateKey != nil {
@@ -735,13 +735,17 @@ func (portal *Portal) waitForReceiverLogin(ctx context.Context, login *UserLogin
 	}
 }
 
-func (portal *Portal) sendSuccessStatus(ctx context.Context, evt *event.Event, streamOrder int64, newEventID id.EventID) {
+func (portal *Portal) sendSuccessStatus(ctx context.Context, evt *event.Event, streamOrder int64, newEventID id.EventID, disappear *database.DisappearingSetting) {
 	info := StatusEventInfoFromEvent(evt)
 	info.StreamOrder = streamOrder
 	if newEventID != evt.ID {
 		info.NewEventID = newEventID
 	}
-	portal.Bridge.Matrix.SendMessageStatus(ctx, &MessageStatus{Status: event.MessageStatusSuccess}, info)
+	ms := &MessageStatus{Status: event.MessageStatusSuccess}
+	if disappear != nil {
+		ms.BeeperDisappearingTimer = disappear.ToEventContent()
+	}
+	portal.Bridge.Matrix.SendMessageStatus(ctx, ms, info)
 }
 
 func (portal *Portal) sendErrorStatus(ctx context.Context, evt *event.Event, err error) {
@@ -1415,11 +1419,14 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 				portal.outgoingMessagesLock.Unlock()
 			}
 		}
-		portal.sendSuccessStatus(ctx, evt, resp.StreamOrder, message.MXID)
+		portal.sendSuccessStatus(ctx, evt, resp.StreamOrder, message.MXID, resp.Disappear)
 	}
 	ds := portal.Disappear
 	if messageTimer != nil {
 		ds = database.DisappearingSettingFromEvent(messageTimer)
+	}
+	if resp.Disappear != nil {
+		ds = *resp.Disappear
 	}
 	if !resp.Pending {
 		portal.scheduleOutgoingDisappearingMessage(ctx, message, ds)
@@ -1435,7 +1442,7 @@ func (portal *Portal) scheduleOutgoingDisappearingMessage(ctx context.Context, m
 	if ds.Type == event.DisappearingTypeNone {
 		return
 	}
-	if ds.Type != event.DisappearingTypeAfterReadByRecipient {
+	if ds.Type != event.DisappearingTypeAfterReadByRecipient && ds.DisappearAt.IsZero() {
 		ds = ds.StartingAt(message.Timestamp)
 	}
 	portal.Bridge.DisappearLoop.Add(ctx, &database.DisappearingMessage{
@@ -1641,7 +1648,7 @@ func (portal *Portal) handleMatrixEdit(
 		log.Err(err).Msg("Failed to save message to database after editing")
 	}
 	// TODO allow returning stream order from HandleMatrixEdit
-	portal.sendSuccessStatus(ctx, evt, 0, "")
+	portal.sendSuccessStatus(ctx, evt, 0, "", nil)
 	return EventHandlingResultSuccess
 }
 
@@ -1699,7 +1706,7 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 	defer func() {
 		// Do this in a defer so that it happens after any potential defer calls to removeOutdatedReaction
 		if handleRes.Success {
-			portal.sendSuccessStatus(ctx, evt, 0, deterministicID)
+			portal.sendSuccessStatus(ctx, evt, 0, deterministicID, nil)
 		}
 	}()
 	removeOutdatedReaction := func(oldReact *database.Reaction, deleteDB bool) {
@@ -1728,7 +1735,7 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 	} else if existing != nil {
 		if existing.EmojiID != "" || existing.Emoji == preResp.Emoji {
 			log.Debug().Msg("Ignoring duplicate reaction")
-			portal.sendSuccessStatus(ctx, evt, 0, deterministicID)
+			portal.sendSuccessStatus(ctx, evt, 0, deterministicID, nil)
 			return EventHandlingResultIgnored.WithEventID(deterministicID)
 		}
 		react.ReactionToOverride = existing
@@ -1831,17 +1838,17 @@ func handleMatrixRoomMeta[APIType any, ContentType any](
 	switch typedContent := evt.Content.Parsed.(type) {
 	case *event.RoomNameEventContent:
 		if typedContent.Name == portal.Name {
-			portal.sendSuccessStatus(ctx, evt, 0, "")
+			portal.sendSuccessStatus(ctx, evt, 0, "", nil)
 			return EventHandlingResultIgnored
 		}
 	case *event.TopicEventContent:
 		if typedContent.Topic == portal.Topic {
-			portal.sendSuccessStatus(ctx, evt, 0, "")
+			portal.sendSuccessStatus(ctx, evt, 0, "", nil)
 			return EventHandlingResultIgnored
 		}
 	case *event.RoomAvatarEventContent:
 		if typedContent.URL == portal.AvatarMXC {
-			portal.sendSuccessStatus(ctx, evt, 0, "")
+			portal.sendSuccessStatus(ctx, evt, 0, "", nil)
 			return EventHandlingResultIgnored
 		}
 	case *event.BeeperDisappearingTimer:
@@ -1850,7 +1857,7 @@ func handleMatrixRoomMeta[APIType any, ContentType any](
 			typedContent.Timer.Duration = 0
 		}
 		if typedContent.Type == portal.Disappear.Type && typedContent.Timer.Duration == portal.Disappear.Timer {
-			portal.sendSuccessStatus(ctx, evt, 0, "")
+			portal.sendSuccessStatus(ctx, evt, 0, "", nil)
 			return EventHandlingResultIgnored
 		}
 		if !sender.Client.GetCapabilities(ctx, portal).DisappearingTimer.Supports(typedContent) {
@@ -3084,7 +3091,7 @@ func (portal *Portal) checkPendingMessage(ctx context.Context, evt RemoteMessage
 		if statusErr != nil {
 			portal.sendErrorStatus(ctx, pending.evt, statusErr)
 		} else {
-			portal.sendSuccessStatus(ctx, pending.evt, getStreamOrder(evt), pending.evt.ID)
+			portal.sendSuccessStatus(ctx, pending.evt, getStreamOrder(evt), pending.evt.ID, nil)
 		}
 	}
 	zerolog.Ctx(ctx).Debug().Stringer("event_id", pending.evt.ID).Msg("Received remote echo for message")

@@ -65,6 +65,8 @@ type MessageStatus struct {
 	InternalError error  // Internal error to be tracked in message checkpoints
 	Message       string // Human-readable message shown to users
 
+	BeeperDisappearingTimer *event.BeeperDisappearingTimer
+
 	ErrorAsMessage bool
 	IsCertain      bool
 	SendNotice     bool
@@ -210,6 +212,10 @@ func (ms *MessageStatus) ToMSSEvent(evt *MessageStatusEventInfo) *event.BeeperMe
 	}
 	if ms.DeliveredTo != nil {
 		content.DeliveredToUsers = &ms.DeliveredTo
+	}
+	if ms.Status == event.MessageStatusSuccess && ms.BeeperDisappearingTimer != nil {
+		content.BeeperDisappearingTimer = ms.BeeperDisappearingTimer
+		content.MutateEventKey = "com.beeper.disappearing_timer"
 	}
 	return content
 }
