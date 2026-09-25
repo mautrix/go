@@ -15,7 +15,19 @@ type BeeperViewLimitedMedia struct {
 	Meta  json.RawMessage `json:"meta,omitempty"`
 }
 
-type BeeperViewLimitedUpdateEventContent struct {
-	RelatesTo RelatesTo `json:"m.relates_to"`
+type BeeperViewLimitedMediaUpdateContent struct {
 	Count     int       `json:"count"`
+	RelatesTo RelatesTo `json:"m.relates_to"`
+}
+
+func (content *BeeperViewLimitedMediaUpdateContent) GetRelatesTo() *RelatesTo {
+	return &content.RelatesTo
+}
+
+func (content *BeeperViewLimitedMediaUpdateContent) OptionalGetRelatesTo() *RelatesTo {
+	return &content.RelatesTo
+}
+
+func (content *BeeperViewLimitedMediaUpdateContent) SetRelatesTo(rel *RelatesTo) {
+	content.RelatesTo = *rel
 }

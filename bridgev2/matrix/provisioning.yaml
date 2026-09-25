@@ -22,7 +22,7 @@ paths:
   /v3/view_limited_media/{eventID}:
     post:
       summary: Consume one view of view-limited media.
-      description: Pass the current count or millisecond time limit, preserving meta. A nonfinal count view emits a com.beeper.view_limited event referencing the original message; the final view or time expiry redacts it. Repeating a consumed request does not consume another view.
+      description: Pass only com.beeper.view_limited from the current message. A remaining count sends a com.beeper.view_limited event with the new count and an m.reference to the original message. The final view redacts immediately or queues redaction after the viewing timer.
       operationId: viewLimitedMedia
       parameters:
       - $ref: '#/components/parameters/loginID'
@@ -31,10 +31,10 @@ paths:
         required: true
         content:
           application/json:
-              schema: {type: object, required: [com.beeper.view_limited], additionalProperties: false, properties: {com.beeper.view_limited: {type: object}}}
+              schema: {type: object, required: [com.beeper.view_limited], properties: {com.beeper.view_limited: {type: object}}}
       responses:
         200: {description: View consumed.}
-        400: {description: Invalid or stale view limit.}
+        400: {description: Invalid view limit.}
         401: {$ref: '#/components/responses/Unauthorized'}
         404: {description: Message or login not found for this user.}
         500: {$ref: '#/components/responses/InternalError'}

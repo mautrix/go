@@ -88,7 +88,15 @@ const (
 	upsertDisappearingMessageQuery = `
 		INSERT INTO disappearing_message (bridge_id, mx_room, mxid, timestamp, type, timer, disappear_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		ON CONFLICT (bridge_id, mxid) DO UPDATE SET timer=excluded.timer, disappear_at=excluded.disappear_at
+		ON CONFLICT (bridge_id, mxid) DO UPDATE SET
+			timer=excluded.timer,
+			type=CASE WHEN excluded.type='view_limited' THEN excluded.type ELSE disappearing_message.type END,
+			disappear_at=CASE
+				WHEN (excluded.type='view_limited' OR disappearing_message.type='view_limited')
+					AND disappearing_message.disappear_at IS NOT NULL
+					AND (excluded.disappear_at IS NULL OR disappearing_message.disappear_at<=excluded.disappear_at)
+				THEN disappearing_message.disappear_at
+				ELSE excluded.disappear_at END
 	`
 	startDisappearingMessagesQuery = `
 		UPDATE disappearing_message
@@ -110,25 +118,23 @@ const (
 	getUpcomingDisappearingMessagesQuery = `
 		SELECT bridge_id, mx_room, mxid, timestamp, type, timer, disappear_at
 		FROM disappearing_message WHERE bridge_id = $1 AND disappear_at IS NOT NULL AND disappear_at < $2
-		UNION ALL
-		SELECT v.bridge_id, p.mxid, v.mxid, v.viewed_at, v.type, 0, v.disappear_at
-		FROM view_limited_message v JOIN message m ON v.bridge_id=m.bridge_id AND v.mxid=m.mxid
-		JOIN portal p ON m.bridge_id=p.bridge_id AND m.room_id=p.id AND m.room_receiver=p.receiver
-		WHERE v.bridge_id=$1 AND v.disappear_at IS NOT NULL AND v.disappear_at<$2
 		ORDER BY disappear_at LIMIT $3
 	`
+	getDisappearingMessageQuery = `
+		SELECT bridge_id, mx_room, mxid, timestamp, type, timer, disappear_at
+		FROM disappearing_message WHERE bridge_id=$1 AND mxid=$2
+	`
 	deleteDisappearingMessageQuery = `
-		DELETE FROM disappearing_message WHERE bridge_id=$1 AND mxid=$2
+		DELETE FROM disappearing_message WHERE bridge_id=$1 AND mxid=$2 AND type=$3 AND disappear_at=$4
+	`
+	retryDisappearingMessageQuery = `
+		UPDATE disappearing_message SET disappear_at=$5
+		WHERE bridge_id=$1 AND mxid=$2 AND type=$3 AND disappear_at=$4
 	`
 )
 
 func (dmq *DisappearingMessageQuery) Put(ctx context.Context, dm *DisappearingMessage) error {
 	ensureBridgeIDMatches(&dm.BridgeID, dmq.BridgeID)
-	if dm.IsViewLimited() {
-		return dmq.Exec(ctx, `UPDATE view_limited_message SET type=$3, disappear_at=$4, viewed_at=$5 WHERE bridge_id=$1 AND mxid=$2
-			AND (($3='view_limited_pending' AND state IN ('pending', 'apply') AND viewed_at=$5)
-			OR ($3='view_limited' AND (viewed_at=$5 OR state='ready')))`, dmq.BridgeID, dm.EventID, dm.Type, dm.DisappearAt.UnixNano(), dm.Timestamp.UnixNano())
-	}
 	return dmq.Exec(ctx, upsertDisappearingMessageQuery, dm.sqlVariables()...)
 }
 
@@ -144,8 +150,16 @@ func (dmq *DisappearingMessageQuery) GetUpcoming(ctx context.Context, duration t
 	return dmq.QueryMany(ctx, getUpcomingDisappearingMessagesQuery, dmq.BridgeID, time.Now().Add(duration).UnixNano(), limit)
 }
 
-func (dmq *DisappearingMessageQuery) Delete(ctx context.Context, eventID id.EventID) error {
-	return dmq.Exec(ctx, deleteDisappearingMessageQuery, dmq.BridgeID, eventID)
+func (dmq *DisappearingMessageQuery) Get(ctx context.Context, eventID id.EventID) (*DisappearingMessage, error) {
+	return dmq.QueryOne(ctx, getDisappearingMessageQuery, dmq.BridgeID, eventID)
+}
+
+func (dmq *DisappearingMessageQuery) Delete(ctx context.Context, dm *DisappearingMessage) error {
+	return dmq.Exec(ctx, deleteDisappearingMessageQuery, dmq.BridgeID, dm.EventID, dm.Type, dm.DisappearAt.UnixNano())
+}
+
+func (dmq *DisappearingMessageQuery) Retry(ctx context.Context, dm *DisappearingMessage, at time.Time) error {
+	return dmq.Exec(ctx, retryDisappearingMessageQuery, dmq.BridgeID, dm.EventID, dm.Type, dm.DisappearAt.UnixNano(), at.UnixNano())
 }
 
 func (d *DisappearingMessage) Scan(row dbutil.Scannable) (*DisappearingMessage, error) {
@@ -164,8 +178,4 @@ func (d *DisappearingMessage) Scan(row dbutil.Scannable) (*DisappearingMessage, 
 
 func (d *DisappearingMessage) sqlVariables() []any {
 	return []any{d.BridgeID, d.RoomID, d.EventID, d.Timestamp.UnixNano(), d.Type, d.Timer, dbutil.ConvertedPtr(d.DisappearAt, time.Time.UnixNano)}
-}
-
-func (d *DisappearingMessage) IsViewLimited() bool {
-	return d.Type == "view_limited_pending" || d.Type == "view_limited"
 }

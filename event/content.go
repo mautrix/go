@@ -67,12 +67,12 @@ var TypeMap = map[Type]reflect.Type{
 	EventUnstablePollStart:    reflect.TypeFor[PollStartEventContent](),
 	EventUnstablePollResponse: reflect.TypeFor[PollResponseEventContent](),
 
-	BeeperMessageStatus:        reflect.TypeFor[BeeperMessageStatusEventContent](),
-	BeeperTranscription:        reflect.TypeFor[BeeperTranscriptionEventContent](),
-	BeeperDeleteChat:           reflect.TypeFor[BeeperChatDeleteEventContent](),
-	BeeperAcceptMessageRequest: reflect.TypeFor[BeeperAcceptMessageRequestEventContent](),
-	BeeperSendState:            reflect.TypeFor[BeeperSendStateEventContent](),
-	BeeperViewLimitedUpdate:    reflect.TypeFor[BeeperViewLimitedUpdateEventContent](),
+	BeeperMessageStatus:          reflect.TypeFor[BeeperMessageStatusEventContent](),
+	BeeperTranscription:          reflect.TypeFor[BeeperTranscriptionEventContent](),
+	BeeperViewLimitedMediaUpdate: reflect.TypeFor[BeeperViewLimitedMediaUpdateContent](),
+	BeeperDeleteChat:             reflect.TypeFor[BeeperChatDeleteEventContent](),
+	BeeperAcceptMessageRequest:   reflect.TypeFor[BeeperAcceptMessageRequestEventContent](),
+	BeeperSendState:              reflect.TypeFor[BeeperSendStateEventContent](),
 
 	AccountDataRoomTags:           reflect.TypeFor[TagEventContent](),
 	AccountDataDirectChats:        reflect.TypeFor[DirectChatsEventContent](),

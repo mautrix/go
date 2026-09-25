@@ -787,6 +787,14 @@ func (as *ASIntent) GetEvent(ctx context.Context, roomID id.RoomID, eventID id.E
 	return evt, nil
 }
 
+func (as *ASIntent) IsEventRedacted(ctx context.Context, roomID id.RoomID, eventID id.EventID) (bool, error) {
+	evt, err := as.Matrix.Client.GetEvent(ctx, roomID, eventID)
+	if err != nil {
+		return false, err
+	}
+	return evt.Unsigned.RedactedBecause != nil || len(evt.Content.Raw) == 0, nil
+}
+
 func (as *ASIntent) GetStateEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string) (*event.Event, error) {
 	return as.Matrix.FullStateEvent(ctx, roomID, eventType, stateKey)
 }

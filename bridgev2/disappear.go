@@ -14,9 +14,9 @@ import (
 	"github.com/rs/zerolog"
 	"golang.org/x/exp/slices"
 
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
-	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -113,7 +113,7 @@ func (dl *DisappearLoop) start(ctx context.Context, startedMessages []*database.
 	}
 }
 
-func (dl *DisappearLoop) Add(ctx context.Context, dm *database.DisappearingMessage) {
+func (dl *DisappearLoop) Add(ctx context.Context, dm *database.DisappearingMessage) error {
 	copy := *dm
 	dm = &copy
 	err := dl.br.DB.DisappearingMessage.Put(ctx, dm)
@@ -121,10 +121,21 @@ func (dl *DisappearLoop) Add(ctx context.Context, dm *database.DisappearingMessa
 		zerolog.Ctx(ctx).Err(err).
 			Stringer("event_id", dm.EventID).
 			Msg("Failed to save disappearing message")
+		return err
+	}
+	if dm.Type == "view_limited" {
+		dm, err = dl.br.DB.DisappearingMessage.Get(ctx, dm.EventID)
+		if err != nil {
+			return err
+		}
+		if dm == nil {
+			return nil
+		}
 	}
 	if !dm.DisappearAt.IsZero() && dm.DisappearAt.Before(dl.GetNextCheck()) {
 		go dl.sleepAndDisappear(zerolog.Ctx(ctx).WithContext(dl.br.BackgroundCtx), dm)
 	}
+	return nil
 }
 
 func (dl *DisappearLoop) sleepAndDisappear(ctx context.Context, dms ...*database.DisappearingMessage) {
@@ -141,58 +152,54 @@ func (dl *DisappearLoop) sleepAndDisappear(ctx context.Context, dms ...*database
 				return
 			}
 		}
-		if msg.IsViewLimited() {
-			var claimed bool
-			err := dl.br.DB.DoTxn(ctx, nil, func(ctx context.Context) error {
-				var err error
-				claimed, err = dl.br.DB.ExpireViewLimited(ctx, msg.EventID, msg.DisappearAt, msg.Timestamp, msg.Type == "view_limited_pending")
-				if err != nil || !claimed {
-					return err
-				}
-				msg.Type = "view_limited"
-				return dl.br.DB.DisappearingMessage.Put(ctx, msg)
-			})
-			if err != nil || !claimed {
-				continue
+		portal, portalErr := dl.br.GetPortalByMXID(ctx, msg.RoomID)
+		if portal != nil {
+			portal.viewLimitedLock.Lock()
+		}
+		current, err := dl.br.DB.DisappearingMessage.Get(ctx, msg.EventID)
+		if err != nil {
+			if portal != nil {
+				portal.viewLimitedLock.Unlock()
 			}
+			zerolog.Ctx(ctx).Err(err).Stringer("event_id", msg.EventID).Msg("Failed to reload disappearing message")
+			continue
 		}
-		if !msg.IsViewLimited() {
-			if _, err := dl.br.DB.Exec(ctx, `UPDATE view_limited_message SET limit_json='{}', content_hash='', request='', state='done', disappear_at=NULL WHERE bridge_id=$1 AND mxid=$2`, dl.br.ID, msg.EventID); err != nil {
-				continue
+		if current == nil || current.DisappearAt.IsZero() || current.DisappearAt.After(time.Now()) {
+			if portal != nil {
+				portal.viewLimitedLock.Unlock()
 			}
+			continue
 		}
-		content := &event.Content{
-			Parsed: &event.RedactionEventContent{
-				Redacts: msg.EventID,
-				Reason:  "Message disappeared",
-			},
+		msg = current
+		var resp *mautrix.RespSendEvent
+		if msg.Type == "view_limited" {
+			if portalErr != nil {
+				err = portalErr
+			} else if portal == nil {
+				err = mautrix.MNotFound
+			} else {
+				resp, err = dl.br.sendDisappearRedaction(ctx, msg.RoomID, msg.EventID, true)
+			}
+		} else {
+			resp, err = dl.br.sendDisappearRedaction(ctx, msg.RoomID, msg.EventID, false)
 		}
-		var extra *MatrixSendExtra
-		if msg.IsViewLimited() {
-			content.Raw = map[string]any{"com.beeper.view_limited": true}
-			extra = &MatrixSendExtra{TransactionID: "disappear_" + string(msg.EventID)}
+		if portal != nil {
+			portal.viewLimitedLock.Unlock()
 		}
-		resp, err := dl.br.Bot.SendMessage(ctx, msg.RoomID, event.EventRedaction, content, extra)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Stringer("target_event_id", msg.EventID).Msg("Failed to disappear message")
-			if msg.IsViewLimited() {
-				msg.DisappearAt = time.Now().Add(time.Minute)
-				if retryErr := dl.br.DB.DisappearingMessage.Put(ctx, msg); retryErr != nil {
-					zerolog.Ctx(ctx).Err(retryErr).Msg("Failed to postpone disappearing message retry")
-				}
-				continue
+			retryAt := time.Now().Add(2 * DisappearCheckInterval)
+			if retryErr := dl.br.DB.DisappearingMessage.Retry(ctx, msg, retryAt); retryErr != nil {
+				zerolog.Ctx(ctx).Err(retryErr).Stringer("event_id", msg.EventID).Msg("Failed to reschedule disappearing message")
 			}
+			continue
 		} else {
 			zerolog.Ctx(ctx).Debug().
 				Stringer("target_event_id", msg.EventID).
 				Stringer("redaction_event_id", resp.EventID).
 				Msg("Disappeared message")
 		}
-		if msg.IsViewLimited() {
-			_, err = dl.br.DB.Exec(ctx, `UPDATE view_limited_message SET disappear_at=NULL WHERE bridge_id=$1 AND mxid=$2`, dl.br.ID, msg.EventID)
-		} else {
-			err = dl.br.DB.DisappearingMessage.Delete(ctx, msg.EventID)
-		}
+		err = dl.br.DB.DisappearingMessage.Delete(ctx, msg)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).
 				Stringer("event_id", msg.EventID).

@@ -542,20 +542,18 @@ func (portal *Portal) sendBatch(ctx context.Context, source *UserLogin, messages
 	if markRead {
 		req.MarkReadBy = source.UserMXID
 	}
-	limited := make(map[id.EventID]*viewLimitedMediaState)
-	for _, evt := range out.Events {
-		state, err := prepareViewLimitedMedia(&evt.Content)
-		if err != nil {
-			return err
-		}
-		if state != nil {
-			limited[evt.ID] = state
-		}
-	}
 	_, err := portal.Bridge.Matrix.BatchSend(ctx, portal.MXID, req, out.Extras)
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to send backfill messages")
 		return err
+	}
+	if len(out.Disappear) > 0 {
+		// TODO mass insert disappearing messages
+		go func() {
+			for _, msg := range out.Disappear {
+				portal.Bridge.DisappearLoop.Add(ctx, msg)
+			}
+		}()
 	}
 	// TODO mass insert db messages
 	for _, msg := range out.DBMessages {
@@ -569,23 +567,6 @@ func (portal *Portal) sendBatch(ctx context.Context, source *UserLogin, messages
 				Str("portal_receiver", string(msg.Room.Receiver)).
 				Msg("Failed to insert backfilled message to database")
 		}
-	}
-	var saveErr error
-	for mxid, state := range limited {
-		if err = portal.Bridge.saveViewLimitedMedia(ctx, mxid, state); err != nil {
-			saveErr = errors.Join(saveErr, err)
-		}
-	}
-	if len(out.Disappear) > 0 {
-		// TODO mass insert disappearing messages
-		go func() {
-			for _, msg := range out.Disappear {
-				portal.Bridge.DisappearLoop.Add(ctx, msg)
-			}
-		}()
-	}
-	if saveErr != nil {
-		return saveErr
 	}
 	// TODO mass insert db reactions
 	for _, react := range out.DBReactions {
@@ -613,7 +594,7 @@ func (portal *Portal) sendLegacyBackfill(ctx context.Context, source *UserLogin,
 		if !ok {
 			continue
 		}
-		dbMessages, _, res := portal.sendConvertedMessage(ctx, source, msg.ID, intent, msg.Sender.Sender, msg.ConvertedMessage, msg.Timestamp, msg.StreamOrder, func(z *zerolog.Event) *zerolog.Event {
+		dbMessages, res := portal.sendConvertedMessage(ctx, source, msg.ID, intent, msg.Sender.Sender, msg.ConvertedMessage, msg.Timestamp, msg.StreamOrder, func(z *zerolog.Event) *zerolog.Event {
 			return z.
 				Str("message_id", string(msg.ID)).
 				Any("sender_id", msg.Sender).
