@@ -120,16 +120,8 @@ const (
 		FROM disappearing_message WHERE bridge_id = $1 AND disappear_at IS NOT NULL AND disappear_at < $2
 		ORDER BY disappear_at LIMIT $3
 	`
-	getDisappearingMessageQuery = `
-		SELECT bridge_id, mx_room, mxid, timestamp, type, timer, disappear_at
-		FROM disappearing_message WHERE bridge_id=$1 AND mxid=$2
-	`
 	deleteDisappearingMessageQuery = `
-		DELETE FROM disappearing_message WHERE bridge_id=$1 AND mxid=$2 AND type=$3 AND disappear_at=$4
-	`
-	retryDisappearingMessageQuery = `
-		UPDATE disappearing_message SET disappear_at=$5
-		WHERE bridge_id=$1 AND mxid=$2 AND type=$3 AND disappear_at=$4
+		DELETE FROM disappearing_message WHERE bridge_id=$1 AND mxid=$2
 	`
 )
 
@@ -150,16 +142,8 @@ func (dmq *DisappearingMessageQuery) GetUpcoming(ctx context.Context, duration t
 	return dmq.QueryMany(ctx, getUpcomingDisappearingMessagesQuery, dmq.BridgeID, time.Now().Add(duration).UnixNano(), limit)
 }
 
-func (dmq *DisappearingMessageQuery) Get(ctx context.Context, eventID id.EventID) (*DisappearingMessage, error) {
-	return dmq.QueryOne(ctx, getDisappearingMessageQuery, dmq.BridgeID, eventID)
-}
-
-func (dmq *DisappearingMessageQuery) Delete(ctx context.Context, dm *DisappearingMessage) error {
-	return dmq.Exec(ctx, deleteDisappearingMessageQuery, dmq.BridgeID, dm.EventID, dm.Type, dm.DisappearAt.UnixNano())
-}
-
-func (dmq *DisappearingMessageQuery) Retry(ctx context.Context, dm *DisappearingMessage, at time.Time) error {
-	return dmq.Exec(ctx, retryDisappearingMessageQuery, dmq.BridgeID, dm.EventID, dm.Type, dm.DisappearAt.UnixNano(), at.UnixNano())
+func (dmq *DisappearingMessageQuery) Delete(ctx context.Context, eventID id.EventID) error {
+	return dmq.Exec(ctx, deleteDisappearingMessageQuery, dmq.BridgeID, eventID)
 }
 
 func (d *DisappearingMessage) Scan(row dbutil.Scannable) (*DisappearingMessage, error) {

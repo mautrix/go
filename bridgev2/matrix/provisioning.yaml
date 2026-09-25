@@ -22,7 +22,7 @@ paths:
   /v3/view_limited_media/{eventID}:
     post:
       summary: Consume one view of view-limited media.
-      description: Pass only com.beeper.view_limited from the current message. A remaining count sends a com.beeper.view_limited event with the new count and an m.reference to the original message. The final view redacts immediately or queues redaction after the viewing timer.
+      description: Pass only com.beeper.view_limited from the current message. A remaining count sends a com.beeper.view_limited event with remaining_count and an m.reference to the original message. The final view redacts immediately or queues redaction after the viewing timer.
       operationId: viewLimitedMedia
       parameters:
       - $ref: '#/components/parameters/loginID'

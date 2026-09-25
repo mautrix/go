@@ -14,7 +14,6 @@ import (
 	"github.com/rs/zerolog"
 	"golang.org/x/exp/slices"
 
-	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/id"
@@ -26,7 +25,7 @@ type DisappearLoop struct {
 	stop      atomic.Pointer[context.CancelFunc]
 }
 
-const DisappearCheckInterval = 1 * time.Minute
+const DisappearCheckInterval = 1 * time.Hour
 
 func (dl *DisappearLoop) Start() {
 	log := dl.br.Log.With().Str("component", "disappear loop").Logger()
@@ -114,23 +113,12 @@ func (dl *DisappearLoop) start(ctx context.Context, startedMessages []*database.
 }
 
 func (dl *DisappearLoop) Add(ctx context.Context, dm *database.DisappearingMessage) error {
-	copy := *dm
-	dm = &copy
 	err := dl.br.DB.DisappearingMessage.Put(ctx, dm)
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).
 			Stringer("event_id", dm.EventID).
 			Msg("Failed to save disappearing message")
 		return err
-	}
-	if dm.Type == "view_limited" {
-		dm, err = dl.br.DB.DisappearingMessage.Get(ctx, dm.EventID)
-		if err != nil {
-			return err
-		}
-		if dm == nil {
-			return nil
-		}
 	}
 	if !dm.DisappearAt.IsZero() && dm.DisappearAt.Before(dl.GetNextCheck()) {
 		go dl.sleepAndDisappear(zerolog.Ctx(ctx).WithContext(dl.br.BackgroundCtx), dm)
@@ -152,46 +140,9 @@ func (dl *DisappearLoop) sleepAndDisappear(ctx context.Context, dms ...*database
 				return
 			}
 		}
-		portal, portalErr := dl.br.GetPortalByMXID(ctx, msg.RoomID)
-		if portal != nil {
-			portal.viewLimitedLock.Lock()
-		}
-		current, err := dl.br.DB.DisappearingMessage.Get(ctx, msg.EventID)
-		if err != nil {
-			if portal != nil {
-				portal.viewLimitedLock.Unlock()
-			}
-			zerolog.Ctx(ctx).Err(err).Stringer("event_id", msg.EventID).Msg("Failed to reload disappearing message")
-			continue
-		}
-		if current == nil || current.DisappearAt.IsZero() || current.DisappearAt.After(time.Now()) {
-			if portal != nil {
-				portal.viewLimitedLock.Unlock()
-			}
-			continue
-		}
-		msg = current
-		var resp *mautrix.RespSendEvent
-		if msg.Type == "view_limited" {
-			if portalErr != nil {
-				err = portalErr
-			} else if portal == nil {
-				err = mautrix.MNotFound
-			} else {
-				resp, err = dl.br.sendDisappearRedaction(ctx, msg.RoomID, msg.EventID, true)
-			}
-		} else {
-			resp, err = dl.br.sendDisappearRedaction(ctx, msg.RoomID, msg.EventID, false)
-		}
-		if portal != nil {
-			portal.viewLimitedLock.Unlock()
-		}
+		resp, err := dl.br.sendDisappearRedaction(ctx, msg.RoomID, msg.EventID, msg.Type == "view_limited")
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Stringer("target_event_id", msg.EventID).Msg("Failed to disappear message")
-			retryAt := time.Now().Add(2 * DisappearCheckInterval)
-			if retryErr := dl.br.DB.DisappearingMessage.Retry(ctx, msg, retryAt); retryErr != nil {
-				zerolog.Ctx(ctx).Err(retryErr).Stringer("event_id", msg.EventID).Msg("Failed to reschedule disappearing message")
-			}
 			continue
 		} else {
 			zerolog.Ctx(ctx).Debug().
@@ -199,7 +150,7 @@ func (dl *DisappearLoop) sleepAndDisappear(ctx context.Context, dms ...*database
 				Stringer("redaction_event_id", resp.EventID).
 				Msg("Disappeared message")
 		}
-		err = dl.br.DB.DisappearingMessage.Delete(ctx, msg)
+		err = dl.br.DB.DisappearingMessage.Delete(ctx, msg.EventID)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).
 				Stringer("event_id", msg.EventID).

@@ -78,6 +78,29 @@ type BeeperTranscriptionEventContent struct {
 	RelatesTo BeeperRelatesTo  `json:"com.beeper.relates_to"`
 }
 
+type BeeperViewLimitedMedia struct {
+	Type  string `json:"type"`
+	Count int    `json:"count,omitzero"`
+	Time  int64  `json:"time,omitzero"`
+}
+
+type BeeperViewLimitedMediaUpdateContent struct {
+	RemainingCount int       `json:"remaining_count"`
+	RelatesTo      RelatesTo `json:"m.relates_to"`
+}
+
+func (content *BeeperViewLimitedMediaUpdateContent) GetRelatesTo() *RelatesTo {
+	return &content.RelatesTo
+}
+
+func (content *BeeperViewLimitedMediaUpdateContent) OptionalGetRelatesTo() *RelatesTo {
+	return &content.RelatesTo
+}
+
+func (content *BeeperViewLimitedMediaUpdateContent) SetRelatesTo(rel *RelatesTo) {
+	content.RelatesTo = *rel
+}
+
 type BeeperRetryMetadata struct {
 	OriginalEventID id.EventID `json:"original_event_id"`
 	RetryCount      int        `json:"retry_count"`

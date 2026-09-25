@@ -88,7 +88,6 @@ type Portal struct {
 
 	outgoingMessages     map[networkid.TransactionID]*outgoingMessage
 	outgoingMessagesLock sync.Mutex
-	viewLimitedLock      sync.Mutex
 
 	roomCreateLock   sync.Mutex
 	cancelRoomCreate atomic.Pointer[context.CancelFunc]

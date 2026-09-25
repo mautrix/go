@@ -102,7 +102,6 @@ func (content *ReactionEventContent) SetRelatesTo(rel *RelatesTo) {
 //
 // https://spec.matrix.org/v1.2/client-server-api/#mroommessage
 type MessageEventContent struct {
-	BeeperViewLimited *BeeperViewLimitedMedia `json:"com.beeper.view_limited,omitempty"`
 	// Base m.room.message fields
 	MsgType MessageType `json:"msgtype,omitempty"`
 	Body    string      `json:"body"`
@@ -152,6 +151,7 @@ type MessageEventContent struct {
 	MSC3245Voice *MSC3245Voice `json:"org.matrix.msc3245.voice,omitempty"`
 
 	MSC4391BotCommand *MSC4391BotCommandInput `json:"org.matrix.msc4391.command,omitempty"`
+	BeeperViewLimited *BeeperViewLimitedMedia `json:"com.beeper.view_limited,omitempty"`
 }
 
 func (content *MessageEventContent) GetCapMsgType() CapabilityMsgType {

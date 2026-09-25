@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/pprof"
 	"strings"
@@ -32,6 +33,7 @@ import (
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/bridgev2/provisionutil"
 	"maunium.net/go/mautrix/bridgev2/status"
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/federation"
 	"maunium.net/go/mautrix/id"
 )
@@ -471,6 +473,26 @@ func RespondWithError(w http.ResponseWriter, err error, message string) {
 	} else {
 		mautrix.MUnknown.WithMessage(message).WithInternalError(err).Write(w)
 	}
+}
+
+func (prov *ProvisioningAPI) PostViewLimitedMedia(w http.ResponseWriter, r *http.Request) {
+	login := prov.GetLoginForRequest(w, r)
+	if login == nil {
+		return
+	}
+	var request struct {
+		Limit *event.BeeperViewLimitedMedia `json:"com.beeper.view_limited"`
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64*1024))
+	if decoder.Decode(&request) != nil || decoder.Decode(new(any)) != io.EOF {
+		mautrix.MBadJSON.WithMessage("Invalid media open request").Write(w)
+		return
+	}
+	if err := prov.br.Bridge.ViewLimitedMedia(r.Context(), login, id.EventID(r.PathValue("eventID")), request.Limit); err != nil {
+		RespondWithError(w, err, "Failed to open media")
+		return
+	}
+	exhttp.WriteEmptyJSONResponse(w, http.StatusOK)
 }
 
 func (prov *ProvisioningAPI) doResolveIdentifier(w http.ResponseWriter, r *http.Request, createChat bool) {
