@@ -142,7 +142,7 @@ func (br *Bridge) ReIDPortal(ctx context.Context, source, target networkid.Porta
 			return c.Stringer("target_portal_mxid", targetPortal.MXID)
 		})
 		log.Info().Msg("Both target and source portals have Matrix rooms, tombstoning source portal")
-		sourcePortal.removeInPortalCache(ctx)
+		sourcePortal.removeInPortalCache(ctx, false)
 		acquireCacheLock()
 		defer br.cacheLock.Unlock()
 		err = sourcePortal.unlockedDelete(ctx)

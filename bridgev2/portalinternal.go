@@ -358,7 +358,7 @@ func (portal *PortalInternals) RemoveMXID(ctx context.Context, alreadyLocked boo
 }
 
 func (portal *PortalInternals) RemoveInPortalCache(ctx context.Context) {
-	(*Portal)(portal).removeInPortalCache(ctx)
+	(*Portal)(portal).removeInPortalCache(ctx, false)
 }
 
 func (portal *PortalInternals) UnlockedDelete(ctx context.Context) error {
