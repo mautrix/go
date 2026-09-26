@@ -2438,7 +2438,7 @@ func (portal *Portal) UpdateMatrixRoomID(
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to update in_space flag for user portals before updating portal MXID")
 	}
-	portal.removeInPortalCache(ctx)
+	portal.removeInPortalCache(ctx, false)
 	log := zerolog.Ctx(ctx)
 	portal.Bridge.cacheLock.Lock()
 	// Wrap unlock in a sync.OnceFunc because we want to both defer it to catch early returns
@@ -5606,7 +5606,7 @@ func (portal *Portal) Delete(ctx context.Context) error {
 	if portal.backgroundCtx.Err() != nil {
 		return nil
 	}
-	portal.removeInPortalCache(ctx)
+	portal.removeInPortalCache(ctx, false)
 	err := portal.safeDBDelete(ctx)
 	if err != nil {
 		return err
@@ -5647,7 +5647,7 @@ func (portal *Portal) removeMXID(ctx context.Context, alreadyLocked bool) error 
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to update in_space flag for user portals after removing portal MXID")
 	}
-	portal.removeInPortalCache(ctx)
+	portal.removeInPortalCache(ctx, alreadyLocked)
 	if !alreadyLocked {
 		portal.Bridge.cacheLock.Lock()
 		defer portal.Bridge.cacheLock.Unlock()
@@ -5656,9 +5656,15 @@ func (portal *Portal) removeMXID(ctx context.Context, alreadyLocked bool) error 
 	return nil
 }
 
-func (portal *Portal) removeInPortalCache(ctx context.Context) {
+func (portal *Portal) removeInPortalCache(ctx context.Context, alreadyLocked bool) {
+	getLogin := portal.Bridge.GetCachedUserLoginByID
+	if alreadyLocked {
+		getLogin = func(id networkid.UserLoginID) *UserLogin {
+			return portal.Bridge.userLoginsByID[id]
+		}
+	}
 	if portal.Receiver != "" {
-		login := portal.Bridge.GetCachedUserLoginByID(portal.Receiver)
+		login := getLogin(portal.Receiver)
 		if login != nil {
 			login.inPortalCache.Remove(portal.PortalKey)
 		}
@@ -5669,7 +5675,7 @@ func (portal *Portal) removeInPortalCache(ctx context.Context) {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to get user logins in portal to remove user portal cache")
 	} else {
 		for _, up := range userPortals {
-			login := portal.Bridge.GetCachedUserLoginByID(up.LoginID)
+			login := getLogin(up.LoginID)
 			if login != nil {
 				login.inPortalCache.Remove(portal.PortalKey)
 			}
