@@ -172,14 +172,19 @@ func (mt *ManualBackfill) Do(ctx context.Context) {
 		}
 	}()
 	var task *database.BackfillTask
+	var dispatched bool
 	updateTask := false
 	task, err = mt.Portal.Bridge.DB.BackfillTask.GetNextForPortal(ctx, mt.Portal.PortalKey, mt.Data != nil)
 	if err != nil {
 		log.Err(err).Msg("Failed to get backfill task from database")
 	} else if task == nil {
 		log.Warn().Msg("No backfill task found for portal")
-	} else if err = mt.Portal.Bridge.DB.BackfillTask.MarkDispatched(ctx, task); err != nil {
+	} else if dispatched, err = mt.Portal.Bridge.DB.BackfillTask.MarkDispatched(ctx, task); err != nil {
 		log.Err(err).Msg("Failed to mark backfill task as dispatched")
+	} else if !dispatched {
+		completed = true
+		err = errors.New("backfill task changed before dispatch")
+		log.Debug().Msg("Backfill task changed before dispatch")
 	} else if completed, err = mt.Portal.doBackfillTask(ctx, mt.Source, task, mt.Data); err != nil {
 		log.Err(err).Msg("Failed to do backwards backfill from event")
 		updateTask = errors.Is(err, errNoMessagesLeftAfterCutoff)
@@ -209,10 +214,13 @@ func (br *Bridge) DoBackfillTask(ctx context.Context, task *database.BackfillTas
 		}
 	}()
 	ctx = log.WithContext(ctx)
-	err := br.DB.BackfillTask.MarkDispatched(ctx, task)
+	dispatched, err := br.DB.BackfillTask.MarkDispatched(ctx, task)
 	if err != nil {
 		log.Err(err).Msg("Failed to mark backfill task as dispatched")
 		time.Sleep(BackfillQueueErrorBackoff)
+		return
+	} else if !dispatched {
+		log.Debug().Msg("Backfill task changed before dispatch")
 		return
 	}
 	updateTask := true

@@ -75,16 +75,20 @@ const (
 	markBackfillDispatchedQuery = `
 		UPDATE backfill_task SET dispatched_at=$4, completed_at=NULL, next_dispatch_min_ts=$5
 		WHERE bridge_id = $1 AND portal_id = $2 AND portal_receiver = $3
+			AND (dispatched_at=$6 OR (dispatched_at IS NULL AND $6 IS NULL))
+			AND next_dispatch_min_ts=$7 AND user_login_id=$8
 	`
 	updateBackfillQueueQuery = `
 		UPDATE backfill_task
 		SET user_login_id=$4, batch_count=$5, is_done=$6, queue_done=$7, cursor=$8, oldest_message_id=$9,
 			dispatched_at=$10, completed_at=$11, next_dispatch_min_ts=$12
 		WHERE bridge_id = $1 AND portal_id = $2 AND portal_receiver = $3
+			AND (dispatched_at=$10 OR (dispatched_at IS NULL AND $10 IS NULL))
 	`
 	markBackfillTaskNotDoneQuery = `
 		UPDATE backfill_task
-		SET is_done = false, queue_done = false
+		SET is_done = false, queue_done = false, dispatched_at=NULL,
+			completed_at=NULL, next_dispatch_min_ts=$5
 		WHERE bridge_id = $1 AND portal_id = $2 AND portal_receiver = $3 AND user_login_id = $4
 	`
 	getNextBackfillQuery = `
@@ -119,16 +123,27 @@ func (btq *BackfillTaskQuery) Upsert(ctx context.Context, bq *BackfillTask) erro
 
 const UnfinishedBackfillBackoff = 1 * time.Hour
 
-func (btq *BackfillTaskQuery) MarkDispatched(ctx context.Context, bq *BackfillTask) error {
+func (btq *BackfillTaskQuery) MarkDispatched(ctx context.Context, bq *BackfillTask) (bool, error) {
 	ensureBridgeIDMatches(&bq.BridgeID, btq.BridgeID)
-	bq.DispatchedAt = time.Now()
-	bq.CompletedAt = time.Time{}
-	bq.NextDispatchMinTS = bq.DispatchedAt.Add(UnfinishedBackfillBackoff)
-	return btq.Exec(
+	dispatchedAt := time.Now()
+	nextDispatchMinTS := dispatchedAt.Add(UnfinishedBackfillBackoff)
+	result, err := btq.GetDB().Exec(
 		ctx, markBackfillDispatchedQuery,
 		bq.BridgeID, bq.PortalKey.ID, bq.PortalKey.Receiver,
-		bq.DispatchedAt.UnixNano(), bq.NextDispatchMinTS.UnixNano(),
+		dispatchedAt.UnixNano(), nextDispatchMinTS.UnixNano(),
+		dbutil.ConvertedPtr(bq.DispatchedAt, time.Time.UnixNano), bq.NextDispatchMinTS.UnixNano(), bq.UserLoginID,
 	)
+	if err != nil {
+		return false, err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil || rows != 1 {
+		return false, err
+	}
+	bq.DispatchedAt = dispatchedAt
+	bq.CompletedAt = time.Time{}
+	bq.NextDispatchMinTS = nextDispatchMinTS
+	return true, nil
 }
 
 func (btq *BackfillTaskQuery) Update(ctx context.Context, bq *BackfillTask) error {
@@ -137,7 +152,7 @@ func (btq *BackfillTaskQuery) Update(ctx context.Context, bq *BackfillTask) erro
 }
 
 func (btq *BackfillTaskQuery) MarkNotDone(ctx context.Context, portalKey networkid.PortalKey, userLoginID networkid.UserLoginID) error {
-	return btq.Exec(ctx, markBackfillTaskNotDoneQuery, btq.BridgeID, portalKey.ID, portalKey.Receiver, userLoginID)
+	return btq.Exec(ctx, markBackfillTaskNotDoneQuery, btq.BridgeID, portalKey.ID, portalKey.Receiver, userLoginID, time.Now().UnixNano())
 }
 
 func (btq *BackfillTaskQuery) GetNext(ctx context.Context) (*BackfillTask, error) {
