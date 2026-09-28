@@ -20,8 +20,8 @@ type shortEmphasisExtender struct{}
 
 func (s *shortEmphasisExtender) Extend(m goldmark.Markdown) {
 	m.Parser().AddOptions(parser.WithInlineParsers(
-		util.Prioritized(&italicsParser{}, 500),
-		util.Prioritized(&boldParser{}, 500),
+		util.Prioritized(&italicsParser{}, 490),
+		util.Prioritized(&boldParser{}, 490),
 	))
 }
 
