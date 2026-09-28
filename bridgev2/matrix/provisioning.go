@@ -304,6 +304,7 @@ func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {
 			mautrix.MForbidden.WithMessage("User does not have login permissions").Write(w)
 			return
 		}
+		r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
 
 		ctx := context.WithValue(r.Context(), ProvisioningKeyRequest, r)
 		ctx = context.WithValue(ctx, provisioningUserKey, user)
