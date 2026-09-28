@@ -1164,6 +1164,9 @@ func (portal *Portal) periodicTypingUpdater() {
 }
 
 func (portal *Portal) checkMessageContentCaps(caps *event.RoomFeatures, content *event.MessageEventContent) error {
+	if content.BeeperViewOnce && !content.MsgType.IsMedia() {
+		return ErrViewOnceNotAllowed
+	}
 	switch content.MsgType {
 	case event.MsgText, event.MsgNotice, event.MsgEmote:
 		// No checks for now, message length is safer to check after conversion inside connector
@@ -1176,6 +1179,9 @@ func (portal *Portal) checkMessageContentCaps(caps *event.RoomFeatures, content 
 		feat, ok := caps.File[capMsgType]
 		if !ok {
 			return ErrUnsupportedMessageType
+		}
+		if content.BeeperViewOnce && !feat.ViewOnce {
+			return ErrViewOnceNotAllowed
 		}
 		if content.MsgType != event.CapMsgSticker &&
 			content.FileName != "" &&
@@ -1610,6 +1616,9 @@ func (portal *Portal) handleMatrixEdit(
 	} else if !caps.Edit.Partial() {
 		log.Debug().Msg("Ignoring edit as room doesn't support edits")
 		return EventHandlingResultIgnored.WithMSSError(ErrEditsNotSupportedInPortal)
+	} else if content.BeeperViewOnce {
+		// Connectors send edited media as normal media, so don't let an edit turn into a non-view-once copy
+		return EventHandlingResultFailed.WithMSSError(ErrViewOnceNotAllowed)
 	} else if err := portal.checkMessageContentCaps(caps, content); err != nil {
 		return EventHandlingResultFailed.WithMSSError(err)
 	}

@@ -146,6 +146,7 @@ type MessageEventContent struct {
 	BeeperStream                 *BeeperStreamInfo        `json:"com.beeper.stream,omitempty"`
 	BeeperDisappearingTimer      *BeeperDisappearingTimer `json:"com.beeper.disappearing_timer,omitempty"`
 	BeeperBroadcastOutsideThread bool                     `json:"com.beeper.broadcast_outside_thread,omitzero"`
+	BeeperViewOnce               bool                     `json:"com.beeper.view_once,omitzero"`
 
 	MSC1767Audio *MSC1767Audio `json:"org.matrix.msc1767.audio,omitempty"`
 	MSC3245Voice *MSC3245Voice `json:"org.matrix.msc3245.voice,omitempty"`
