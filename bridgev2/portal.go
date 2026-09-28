@@ -3509,7 +3509,7 @@ func (portal *Portal) handleRemoteReactionSync(ctx context.Context, source *User
 			},
 		)
 	}
-	doRemoveReaction := func(old *database.Reaction, intent MatrixAPI, deleteRow bool) {
+	doRemoveReaction := func(old *database.Reaction, intent MatrixAPI, deleteRow bool) bool {
 		if intent == nil && old.SenderMXID != "" {
 			intent, err = portal.getIntentForMXID(ctx, old.SenderMXID)
 			if err != nil {
@@ -3532,21 +3532,25 @@ func (portal *Portal) handleRemoteReactionSync(ctx context.Context, source *User
 		}, &MatrixSendExtra{Timestamp: eventTS})
 		if err != nil {
 			log.Err(err).Msg("Failed to redact old reaction")
+			return false
 		}
 		if deleteRow {
 			err = portal.Bridge.DB.Reaction.Delete(ctx, old)
 			if err != nil {
 				log.Err(err).Msg("Failed to delete old reaction row")
+				return false
 			}
 		}
+		return true
 	}
 	doOverwriteReaction := func(new *BackfillReaction, old *database.Reaction) {
 		intent, ok := portal.GetIntentFor(ctx, new.Sender, source, RemoteEventReactionSync)
 		if !ok {
 			return
 		}
-		doRemoveReaction(old, intent, false)
-		doAddReaction(new, intent)
+		if doRemoveReaction(old, intent, false) {
+			doAddReaction(new, intent)
+		}
 	}
 
 	newData := evt.GetReactions()
