@@ -3650,7 +3650,6 @@ func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogi
 		}, &MatrixSendExtra{Timestamp: ts})
 		if err != nil {
 			log.Err(err).Msg("Failed to redact old reaction")
-			return EventHandlingResultFailed.WithError(err)
 		}
 	}
 	return portal.sendConvertedReaction(ctx, evt.GetSender().Sender, intent, targetMessage, emojiID, emoji, ts, dbMetadata, extra, nil)
