@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exerrors"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
@@ -53,14 +54,9 @@ func (proc *Processor[MetaType]) Process(ctx context.Context, evt *event.Event) 
 	defer func() {
 		panicErr := recover()
 		if panicErr != nil {
-			logEvt := log.Error().
-				Bytes(zerolog.ErrorStackFieldName, debug.Stack())
-			if realErr, ok := panicErr.(error); ok {
-				logEvt = logEvt.Err(realErr)
-			} else {
-				logEvt = logEvt.Any(zerolog.ErrorFieldName, panicErr)
-			}
-			logEvt.Msg("Panic in command handler")
+			log.Err(exerrors.RecoverToError(panicErr)).
+				Bytes(zerolog.ErrorStackFieldName, debug.Stack()).
+				Msg("Panic in command handler")
 			_, err := proc.Client.SendReaction(ctx, evt.RoomID, evt.ID, "💥")
 			if err != nil {
 				log.Err(err).Msg("Failed to send reaction after panic")

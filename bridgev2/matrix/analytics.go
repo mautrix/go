@@ -26,7 +26,7 @@ func (br *Connector) trackSync(userID id.UserID, event string, properties map[st
 		return err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, br.Config.Analytics.URL, &buf)
+	req, err := http.NewRequestWithContext(br.Bridge.BackgroundCtx, http.MethodPost, br.Config.Analytics.URL, &buf)
 	if err != nil {
 		return err
 	}

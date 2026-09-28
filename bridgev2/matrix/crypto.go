@@ -21,6 +21,7 @@ import (
 	"github.com/lib/pq"
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/dbutil"
+	"go.mau.fi/util/exerrors"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/beeperstream"
@@ -580,10 +581,9 @@ func (syncer *cryptoSyncer) ProcessResponse(ctx context.Context, resp *mautrix.R
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
-				syncer.Log.Error().
+				syncer.Log.Err(exerrors.RecoverToError(err)).
 					Str("since", since).
-					Interface("error", err).
-					Str("stack", string(debug.Stack())).
+					Bytes(zerolog.ErrorStackFieldName, debug.Stack()).
 					Msg("Processing sync response panicked")
 			}
 			done <- struct{}{}

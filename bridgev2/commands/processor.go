@@ -15,6 +15,7 @@ import (
 	"unsafe"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exerrors"
 
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/status"
@@ -86,14 +87,9 @@ func (proc *Processor) Handle(ctx context.Context, roomID id.RoomID, eventID id.
 		}
 		err := recover()
 		if err != nil {
-			logEvt := log.Error().
-				Bytes(zerolog.ErrorStackFieldName, debug.Stack())
-			if realErr, ok := err.(error); ok {
-				logEvt = logEvt.Err(realErr)
-			} else {
-				logEvt = logEvt.Any(zerolog.ErrorFieldName, err)
-			}
-			logEvt.Msg("Panic in Matrix command handler")
+			log.Err(exerrors.RecoverToError(err)).
+				Bytes(zerolog.ErrorStackFieldName, debug.Stack()).
+				Msg("Panic in Matrix command handler")
 			ms.Status = event.MessageStatusFail
 			ms.IsCertain = true
 			if realErr, ok := err.(error); ok {

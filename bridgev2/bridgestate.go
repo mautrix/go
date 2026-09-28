@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exerrors"
 	"go.mau.fi/util/exfmt"
 
 	"maunium.net/go/mautrix/bridgev2/status"
@@ -108,9 +109,8 @@ func (bsq *BridgeStateQueue) loop() {
 		defer func() {
 			err := recover()
 			if err != nil {
-				bsq.login.Log.Error().
+				bsq.login.Log.Err(exerrors.RecoverToError(err)).
 					Bytes(zerolog.ErrorStackFieldName, debug.Stack()).
-					Any(zerolog.ErrorFieldName, err).
 					Msg("Panic in bridge state loop")
 			}
 		}()

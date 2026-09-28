@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exerrors"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
@@ -90,9 +91,8 @@ func (ep *EventProcessor) OnDeviceList(handler DeviceListHandler) {
 func (ep *EventProcessor) recoverFunc(data any) {
 	if err := recover(); err != nil {
 		d, _ := json.Marshal(data)
-		ep.as.Log.Error().
-			Str(zerolog.ErrorStackFieldName, string(debug.Stack())).
-			Interface(zerolog.ErrorFieldName, err).
+		ep.as.Log.Err(exerrors.RecoverToError(err)).
+			Bytes(zerolog.ErrorStackFieldName, debug.Stack()).
 			Str("event_content", string(d)).
 			Msg("Panic in Matrix event handler")
 	}

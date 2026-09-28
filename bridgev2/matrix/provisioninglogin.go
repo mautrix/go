@@ -19,6 +19,7 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exerrors"
 	"go.mau.fi/util/exhttp"
 
 	"maunium.net/go/mautrix"
@@ -442,11 +443,7 @@ func (prov *ProvisioningAPI) executeStep(
 	defer func() {
 		v := recover()
 		if v != nil {
-			var err error
-			var ok bool
-			if err, ok = v.(error); !ok {
-				err = fmt.Errorf("%v", v)
-			}
+			err := exerrors.RecoverToError(v)
 			zerolog.Ctx(ctx).
 				Err(err).
 				Bytes(zerolog.ErrorStackFieldName, debug.Stack()).

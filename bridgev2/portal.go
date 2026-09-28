@@ -20,6 +20,7 @@ import (
 	"unsafe"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exerrors"
 	"go.mau.fi/util/exfmt"
 	"go.mau.fi/util/exmaps"
 	"go.mau.fi/util/exslices"
@@ -551,19 +552,11 @@ func (portal *Portal) handleSingleEvent(ctx context.Context, rawEvt any, doneCal
 	var res EventHandlingResult
 	defer func() {
 		doneCallback(res)
-		if err := recover(); err != nil {
-			logEvt := log.Error()
-			var errorString string
-			if realErr, ok := err.(error); ok {
-				logEvt = logEvt.Err(realErr)
-				errorString = realErr.Error()
-			} else {
-				logEvt = logEvt.Any(zerolog.ErrorFieldName, err)
-				errorString = fmt.Sprintf("%v", err)
-			}
+		if v := recover(); v != nil {
+			err := exerrors.RecoverToError(v)
 			stack := debug.Stack()
-			logEvt.
-				Bytes("stack", stack).
+			log.Err(err).
+				Bytes(zerolog.ErrorStackFieldName, stack).
 				Msg("Event handling panicked")
 			switch evt := rawEvt.(type) {
 			case *portalMatrixEvent:
@@ -574,7 +567,7 @@ func (portal *Portal) handleSingleEvent(ctx context.Context, rawEvt any, doneCal
 				evt.cb(fmt.Errorf("portal creation panicked"))
 			}
 			portal.Bridge.TrackAnalytics("", "Bridge Event Handler Panic", map[string]any{
-				"error":        errorString,
+				"error":        err.Error(),
 				"stack":        string(stack),
 				"handler_type": fmt.Sprintf("%T", rawEvt),
 			})
