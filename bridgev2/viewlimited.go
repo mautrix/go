@@ -9,7 +9,6 @@ package bridgev2
 import (
 	"context"
 	"fmt"
-	"math"
 	"time"
 
 	"maunium.net/go/mautrix"
@@ -25,10 +24,9 @@ func (br *Bridge) ViewLimitedMedia(ctx context.Context, login *UserLogin, mxid i
 	if limit == nil {
 		return mautrix.MInvalidParam.WithMessage("Invalid view limit")
 	}
-	maxTime := time.Until(time.Unix(0, math.MaxInt64).Add(-time.Minute)).Milliseconds()
-	validCount := limit.Type == "count" && limit.Count > 0 && limit.Time >= 0
-	validTime := limit.Type == "time" && limit.Count == 0 && limit.Time > 0
-	if (!validCount && !validTime) || limit.Time > maxTime {
+	validCount := limit.Type == "count" && limit.Count > 0 && limit.Time.Duration >= 0
+	validTime := limit.Type == "time" && limit.Count == 0 && limit.Time.Duration > 0
+	if (!validCount && !validTime) || limit.Time.Duration > 24*time.Hour {
 		return mautrix.MInvalidParam.WithMessage("Invalid view limit")
 	}
 	msg, err := br.DB.Message.GetPartByMXID(ctx, mxid)
@@ -60,12 +58,12 @@ func (br *Bridge) ViewLimitedMedia(ctx context.Context, login *UserLogin, mxid i
 	if limit.Count > 1 {
 		return br.sendViewLimitedUpdate(ctx, portal.MXID, mxid, limit.Count-1)
 	}
-	if limit.Time > 0 {
+	if limit.Time.Duration > 0 {
 		now := time.Now()
 		return br.DisappearLoop.Add(ctx, &database.DisappearingMessage{
 			RoomID: portal.MXID, EventID: mxid, Timestamp: now,
 			DisappearingSetting: database.DisappearingSetting{
-				Type: "view_limited", DisappearAt: now.Add(time.Duration(limit.Time) * time.Millisecond),
+				Type: "view_limited", DisappearAt: now.Add(limit.Time.Duration),
 			},
 		})
 	}

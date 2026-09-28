@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"go.mau.fi/util/jsonbytes"
+	"go.mau.fi/util/jsontime"
 
 	"maunium.net/go/mautrix/id"
 )
@@ -79,9 +80,9 @@ type BeeperTranscriptionEventContent struct {
 }
 
 type BeeperViewLimitedMedia struct {
-	Type  string `json:"type"`
-	Count int    `json:"count,omitzero"`
-	Time  int64  `json:"time,omitzero"`
+	Type  string                `json:"type"`
+	Count int                   `json:"count,omitzero"`
+	Time  jsontime.Milliseconds `json:"time,omitzero"`
 }
 
 type BeeperViewLimitedMediaUpdateContent struct {

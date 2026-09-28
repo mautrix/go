@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/pprof"
 	"strings"
@@ -483,9 +482,10 @@ func (prov *ProvisioningAPI) PostViewLimitedMedia(w http.ResponseWriter, r *http
 	var request struct {
 		Limit *event.BeeperViewLimitedMedia `json:"com.beeper.view_limited"`
 	}
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64*1024))
-	if decoder.Decode(&request) != nil || decoder.Decode(new(any)) != io.EOF {
-		mautrix.MBadJSON.WithMessage("Invalid media open request").Write(w)
+	err := json.NewDecoder(r.Body).Decode(&request)
+	if err != nil {
+		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to decode request body")
+		mautrix.MNotJSON.WithMessage("Failed to decode request body").Write(w)
 		return
 	}
 	if err := prov.br.Bridge.ViewLimitedMedia(r.Context(), login, id.EventID(r.PathValue("eventID")), request.Limit); err != nil {
