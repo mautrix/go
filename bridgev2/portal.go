@@ -3795,9 +3795,13 @@ func (portal *Portal) handleRemoteMessageRemove(ctx context.Context, source *Use
 	dontRenderPlaceholderProvider, ok := evt.(RemoteMessageRemoveWithoutPlaceholder)
 	dontRenderPlaceholder := ok && dontRenderPlaceholderProvider.DontRenderPlaceholder()
 	res := portal.redactMessageParts(ctx, targetParts, intent, getEventTS(evt), "", dontRenderPlaceholder)
+	if !res.Success {
+		return res
+	}
 	err = portal.Bridge.DB.Message.DeleteAllParts(ctx, portal.Receiver, targetParts[0].ID)
 	if err != nil {
 		log.Err(err).Msg("Failed to delete target message from database")
+		return EventHandlingResultFailed.WithError(err)
 	}
 	return res
 }
