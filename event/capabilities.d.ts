@@ -164,7 +164,13 @@ export interface FileFeatures {
 	max_duration?: seconds
 
 	/** Can this type of file be sent as view-once media? */
-	view_once?: boolean
+	view_limited_types?: ViewLimitedCapability[]
+}
+
+export interface ViewLimitedCapability {
+	type: "time" | "count"
+	count?: integer
+	time?: milliseconds
 }
 
 export enum DisappearingType {

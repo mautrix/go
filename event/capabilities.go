@@ -273,7 +273,7 @@ type FileFeatures struct {
 	MaxHeight   int               `json:"max_height,omitzero"`
 	MaxDuration *jsontime.Seconds `json:"max_duration,omitzero"`
 
-	ViewOnce bool `json:"view_once,omitzero"`
+	ViewLimitedTypes []*BeeperViewLimitedMedia `json:"view_limited_types,omitzero"`
 }
 
 func (ff *FileFeatures) GetMimeSupport(inputType string) CapabilitySupportLevel {
@@ -300,6 +300,18 @@ func (ff *FileFeatures) GetMimeSupport(inputType string) CapabilitySupportLevel 
 		return match
 	}
 	return CapLevelRejected
+}
+
+func (ff *FileFeatures) SupportsViewLimitedType(vlt *BeeperViewLimitedMedia) bool {
+	if vlt == nil {
+		return true
+	}
+	for _, supported := range ff.ViewLimitedTypes {
+		if *supported == *vlt {
+			return true
+		}
+	}
+	return false
 }
 
 type hashable interface {
@@ -413,7 +425,9 @@ func (ff *FileFeatures) Hash() []byte {
 	hashInt(hasher, "max_width", ff.MaxWidth)
 	hashInt(hasher, "max_height", ff.MaxHeight)
 	hashInt(hasher, "max_duration", ff.MaxDuration.Get())
-	hashBool(hasher, "view_once", ff.ViewOnce)
+	for _, vlt := range ff.ViewLimitedTypes {
+		hashValue(hasher, "view_limited_type", vlt)
+	}
 	return hasher.Sum(nil)
 }
 
@@ -424,5 +438,10 @@ func (ff *FileFeatures) Clone() *FileFeatures {
 	clone := *ff
 	clone.MimeTypes = maps.Clone(clone.MimeTypes)
 	clone.MaxDuration = ptr.Clone(clone.MaxDuration)
+	vlt := make([]*BeeperViewLimitedMedia, len(clone.ViewLimitedTypes))
+	for i, v := range clone.ViewLimitedTypes {
+		vlt[i] = ptr.Clone(v)
+	}
+	clone.ViewLimitedTypes = vlt
 	return &clone
 }

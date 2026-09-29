@@ -7,6 +7,7 @@
 package event
 
 import (
+	"crypto/sha256"
 	"encoding/base32"
 	"encoding/binary"
 	"encoding/json"
@@ -83,6 +84,17 @@ type BeeperViewLimitedMedia struct {
 	Type  string                `json:"type"`
 	Count int                   `json:"count,omitzero"`
 	Time  jsontime.Milliseconds `json:"time,omitzero"`
+}
+
+func (b *BeeperViewLimitedMedia) Hash() []byte {
+	if b == nil || (b.Type == "" && b.Count == 0 && b.Time.IsZero()) {
+		return nil
+	}
+	hasher := sha256.New()
+	hasher.Write([]byte(b.Type))
+	hashInt(hasher, "count", b.Count)
+	hashInt(hasher, "time", b.Time.Milliseconds())
+	return hasher.Sum(nil)
 }
 
 type BeeperViewLimitedMediaUpdateContent struct {
