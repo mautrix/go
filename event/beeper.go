@@ -7,6 +7,7 @@
 package event
 
 import (
+	"crypto/sha256"
 	"encoding/base32"
 	"encoding/binary"
 	"encoding/json"
@@ -17,6 +18,7 @@ import (
 	"strings"
 
 	"go.mau.fi/util/jsonbytes"
+	"go.mau.fi/util/jsontime"
 
 	"maunium.net/go/mautrix/id"
 )
@@ -78,6 +80,40 @@ type BeeperTranscriptionEventContent struct {
 	Text      []ExtensibleText `json:"m.text,omitempty"`
 	Model     string           `json:"com.beeper.transcription.model,omitempty"`
 	RelatesTo BeeperRelatesTo  `json:"com.beeper.relates_to"`
+}
+
+type BeeperViewLimitedMedia struct {
+	Type  string                `json:"type"`
+	Count int                   `json:"count,omitzero"`
+	Time  jsontime.Milliseconds `json:"time,omitzero"`
+}
+
+func (b *BeeperViewLimitedMedia) Hash() []byte {
+	if b == nil || (b.Type == "" && b.Count == 0 && b.Time.IsZero()) {
+		return nil
+	}
+	hasher := sha256.New()
+	hasher.Write([]byte(b.Type))
+	hashInt(hasher, "count", b.Count)
+	hashInt(hasher, "time", b.Time.Milliseconds())
+	return hasher.Sum(nil)
+}
+
+type BeeperViewLimitedMediaUpdateContent struct {
+	RemainingCount int       `json:"remaining_count"`
+	RelatesTo      RelatesTo `json:"m.relates_to"`
+}
+
+func (content *BeeperViewLimitedMediaUpdateContent) GetRelatesTo() *RelatesTo {
+	return &content.RelatesTo
+}
+
+func (content *BeeperViewLimitedMediaUpdateContent) OptionalGetRelatesTo() *RelatesTo {
+	return &content.RelatesTo
+}
+
+func (content *BeeperViewLimitedMediaUpdateContent) SetRelatesTo(rel *RelatesTo) {
+	content.RelatesTo = *rel
 }
 
 type BeeperRetryMetadata struct {

@@ -16,7 +16,6 @@ import (
 
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
-	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -113,16 +112,18 @@ func (dl *DisappearLoop) start(ctx context.Context, startedMessages []*database.
 	}
 }
 
-func (dl *DisappearLoop) Add(ctx context.Context, dm *database.DisappearingMessage) {
+func (dl *DisappearLoop) Add(ctx context.Context, dm *database.DisappearingMessage) error {
 	err := dl.br.DB.DisappearingMessage.Put(ctx, dm)
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).
 			Stringer("event_id", dm.EventID).
 			Msg("Failed to save disappearing message")
+		return err
 	}
 	if !dm.DisappearAt.IsZero() && dm.DisappearAt.Before(dl.GetNextCheck()) {
 		go dl.sleepAndDisappear(zerolog.Ctx(ctx).WithContext(dl.br.BackgroundCtx), dm)
 	}
+	return nil
 }
 
 func (dl *DisappearLoop) sleepAndDisappear(ctx context.Context, dms ...*database.DisappearingMessage) {
@@ -139,14 +140,10 @@ func (dl *DisappearLoop) sleepAndDisappear(ctx context.Context, dms ...*database
 				return
 			}
 		}
-		resp, err := dl.br.Bot.SendMessage(ctx, msg.RoomID, event.EventRedaction, &event.Content{
-			Parsed: &event.RedactionEventContent{
-				Redacts: msg.EventID,
-				Reason:  "Message disappeared",
-			},
-		}, nil)
+		resp, err := dl.br.sendDisappearRedaction(ctx, msg.RoomID, msg.EventID, msg.Type == "view_limited")
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Stringer("target_event_id", msg.EventID).Msg("Failed to disappear message")
+			continue
 		} else {
 			zerolog.Ctx(ctx).Debug().
 				Stringer("target_event_id", msg.EventID).

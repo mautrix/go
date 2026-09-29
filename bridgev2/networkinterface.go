@@ -675,6 +675,11 @@ type ReadReceiptHandlingNetworkAPI interface {
 	HandleMatrixReadReceipt(ctx context.Context, msg *MatrixReadReceipt) error
 }
 
+type ViewLimitedMediaHandlingNetworkAPI interface {
+	NetworkAPI
+	HandleMatrixViewLimitedMedia(context.Context, *MatrixViewLimitedMedia) error
+}
+
 // ChatViewingNetworkAPI is an optional interface that network connectors can implement to handle viewing chat status.
 type ChatViewingNetworkAPI interface {
 	NetworkAPI
@@ -1517,6 +1522,12 @@ type MatrixReadReceipt struct {
 	Receipt event.ReadReceipt
 	// Whether the receipt is implicit, i.e. triggered by an incoming timeline event rather than an explicit receipt.
 	Implicit bool
+}
+
+type MatrixViewLimitedMedia struct {
+	Portal  *Portal
+	Message *database.Message
+	Content *event.BeeperViewLimitedMedia
 }
 
 type MatrixTyping struct {
