@@ -19,6 +19,7 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exerrors"
 	"go.mau.fi/util/exhttp"
 
 	"maunium.net/go/mautrix"
@@ -40,8 +41,11 @@ func (prov *ProvisioningAPI) PostLoginClientHTTP(w http.ResponseWriter, r *http.
 		mautrix.MNotFound.WithMessage("Login not found").Write(w)
 		return
 	}
+	// Bypass the size limit set in auth middleware, because the client HTTP response may be large.
+	body := exerrors.Must(r.GetBody())
+	body = http.MaxBytesReader(w, body, 10*1024*1024)
 	var resp bridgev2.LoginClientHTTPResponse
-	err := json.NewDecoder(r.Body).Decode(&resp)
+	err := json.NewDecoder(body).Decode(&resp)
 	if err != nil {
 		log.Err(err).Msg("Failed to decode request body")
 		mautrix.MNotJSON.WithMessage("Failed to decode request body").Write(w)
