@@ -415,6 +415,17 @@ func (portal *Portal) eventLoop() {
 	}
 }
 
+func blockBubblingEventError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return errors.Is(err, mautrix.MForbidden) ||
+		errors.Is(err, mautrix.MNotFound) ||
+		errors.Is(err, mautrix.MBadJSON) ||
+		errors.Is(err, mautrix.MInvalidParam) ||
+		errors.Is(err, mautrix.MBadState)
+}
+
 func (portal *Portal) handleSingleEventWithDelayLogging(idx int, rawEvt any) (outerRes EventHandlingResult) {
 	ctx := portal.getEventCtxWithLog(rawEvt, idx)
 	log := zerolog.Ctx(ctx)
@@ -428,6 +439,13 @@ func (portal *Portal) handleSingleEventWithDelayLogging(idx int, rawEvt any) (ou
 		// If the portal was deleted, ignore errors.
 		// The bridge background ctx check distinguishes bridge stops from portal deletions.
 		if res.Error != nil && portal.backgroundCtx.Err() != nil && portal.Bridge.BackgroundCtx.Err() == nil {
+			log.Debug().Err(res.Error).Msg("Not bubbling up error from event handler because portal is deleted")
+			res = EventHandlingResultIgnored
+		}
+		// Sometimes the homeserver is expected to refuse events. We don't want to bubble those up,
+		// because any bubbled errors will disconnect the remote client if the portal event buffer is 0.
+		if !res.Ignored && blockBubblingEventError(res.Error) {
+			log.Debug().Err(res.Error).Msg("Not bubbling up Matrix error from event handler")
 			res = EventHandlingResultIgnored
 		}
 		outerRes = res
