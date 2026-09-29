@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"runtime/debug"
 	"time"
 
@@ -183,7 +184,11 @@ func (mt *ManualBackfill) Do(ctx context.Context) {
 		log.Err(err).Msg("Failed to mark backfill task as dispatched")
 	} else if !dispatched {
 		completed = true
-		err = errors.New("backfill task changed before dispatch")
+		err = RespError{
+			ErrCode:    "FI.MAU.BRIDGEV2_BACKFILL_TASK_CONFLICT",
+			Err:        "Backfill task changed before dispatch",
+			StatusCode: http.StatusConflict,
+		}
 		log.Debug().Msg("Backfill task changed before dispatch")
 	} else if completed, err = mt.Portal.doBackfillTask(ctx, mt.Source, task, mt.Data); err != nil {
 		log.Err(err).Msg("Failed to do backwards backfill from event")
