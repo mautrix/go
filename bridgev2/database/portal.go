@@ -102,7 +102,7 @@ const (
 			bridge_id, id, receiver, mxid,
 			parent_id, parent_receiver, relay_login_id, other_user_id,
 			name, topic, avatar_id, avatar_hash, avatar_mxc,
-			name_set, avatar_set, topic_set, name_is_custom, in_space, message_request,
+			name_set, topic_set, avatar_set, name_is_custom, in_space, message_request,
 			room_type, disappear_type, disappear_timer, cap_state,
 			metadata, relay_bridge_id
 		) VALUES (
@@ -115,7 +115,7 @@ const (
 		SET mxid=$4, parent_id=$5, parent_receiver=$6,
 		    relay_login_id=cast($7 AS TEXT), relay_bridge_id=CASE WHEN cast($7 AS TEXT) IS NULL THEN NULL ELSE bridge_id END,
 		    other_user_id=$8, name=$9, topic=$10, avatar_id=$11, avatar_hash=$12, avatar_mxc=$13,
-		    name_set=$14, avatar_set=$15, topic_set=$16, name_is_custom=$17, in_space=$18, message_request=$19,
+		    name_set=$14, topic_set=$15, avatar_set=$16, name_is_custom=$17, in_space=$18, message_request=$19,
 		    room_type=$20, disappear_type=$21, disappear_timer=$22, cap_state=$23, metadata=$24
 		WHERE bridge_id=$1 AND id=$2 AND receiver=$3
 	`
