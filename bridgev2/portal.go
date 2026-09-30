@@ -1374,7 +1374,8 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 				Stringer("message_mxid", part.MXID).
 				Stringer("input_event_id", evt.ID).
 				Msg("Message already sent, ignoring")
-			return EventHandlingResultIgnored
+			portal.sendSuccessStatus(ctx, evt, 0, part.MXID, nil)
+			return EventHandlingResultIgnored.WithEventID(part.MXID)
 		}
 	}
 
