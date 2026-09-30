@@ -44,10 +44,9 @@ type portalMatrixEvent struct {
 }
 
 type portalRemoteEvent struct {
-	evt      RemoteEvent
-	source   *UserLogin
-	evtType  RemoteEventType
-	callback func(EventHandlingResult)
+	evt     RemoteEvent
+	source  *UserLogin
+	evtType RemoteEventType
 }
 
 type portalCreateEvent struct {
@@ -570,8 +569,8 @@ func (portal *Portal) handleSingleEvent(ctx context.Context, rawEvt any, doneCal
 	log := zerolog.Ctx(ctx)
 	var res EventHandlingResult
 	defer func() {
+		doneCallback(res)
 		if v := recover(); v != nil {
-			res = EventHandlingResultFailed.WithError(ErrPanicInEventHandler)
 			err := exerrors.RecoverToError(v)
 			stack := debug.Stack()
 			log.Err(err).
@@ -590,10 +589,6 @@ func (portal *Portal) handleSingleEvent(ctx context.Context, rawEvt any, doneCal
 				"stack":        string(stack),
 				"handler_type": fmt.Sprintf("%T", rawEvt),
 			})
-		}
-		doneCallback(res)
-		if evt, ok := rawEvt.(*portalRemoteEvent); ok && evt.callback != nil {
-			evt.callback(res)
 		}
 	}()
 	switch evt := rawEvt.(type) {
@@ -5732,6 +5727,10 @@ func (portal *Portal) unlockedDeleteCache() {
 		delete(portal.Bridge.portalsByMXID, portal.MXID)
 	}
 	portal.cancelBackground()
+	if portal.events != nil {
+		// TODO there's a small risk of this racing with a queueEvent call
+		close(portal.events)
+	}
 }
 
 func (portal *Portal) Save(ctx context.Context) error {
