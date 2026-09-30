@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -231,7 +232,28 @@ func (ul *UserLogin) QueueRemoteEvent(evt RemoteEvent) EventHandlingResult {
 	return ul.Bridge.QueueRemoteEvent(ul, evt)
 }
 
+func (ul *UserLogin) QueueRemoteEventWithCallback(evt RemoteEvent, callback func(EventHandlingResult)) EventHandlingResult {
+	return ul.Bridge.QueueRemoteEventWithCallback(ul, evt, callback)
+}
+
 func (br *Bridge) QueueRemoteEvent(login *UserLogin, evt RemoteEvent) EventHandlingResult {
+	return br.QueueRemoteEventWithCallback(login, evt, nil)
+}
+
+func (br *Bridge) QueueRemoteEventWithCallback(login *UserLogin, evt RemoteEvent, callback func(EventHandlingResult)) (res EventHandlingResult) {
+	var complete func(EventHandlingResult)
+	var forwarded bool
+	if callback != nil {
+		var once sync.Once
+		complete = func(result EventHandlingResult) {
+			once.Do(func() { callback(result) })
+		}
+		defer func() {
+			if !forwarded {
+				complete(res)
+			}
+		}()
+	}
 	log := login.Log
 	ctx := log.WithContext(br.BackgroundCtx)
 	maybeUncertain, ok := evt.(RemoteEventWithUncertainPortalReceiver)
@@ -268,8 +290,24 @@ func (br *Bridge) QueueRemoteEvent(login *UserLogin, evt RemoteEvent) EventHandl
 	}
 	// TODO put this in a better place, and maybe cache to avoid constant db queries
 	login.MarkInPortal(ctx, portal)
+	if complete != nil {
+		notify := complete
+		stop := context.AfterFunc(portal.backgroundCtx, func() {
+			err := ErrPortalIsDeleted
+			if br.BackgroundCtx.Err() != nil {
+				err = context.Cause(br.BackgroundCtx)
+			}
+			notify(EventHandlingResultFailed.WithError(err))
+		})
+		complete = func(result EventHandlingResult) {
+			stop()
+			notify(result)
+		}
+	}
+	forwarded = true
 	return portal.queueEvent(ctx, &portalRemoteEvent{
-		evt:    evt,
-		source: login,
+		evt:      evt,
+		source:   login,
+		callback: complete,
 	})
 }
