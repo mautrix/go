@@ -70,6 +70,7 @@ type Portal struct {
 	NameIsCustom   bool
 	InSpace        bool
 	MessageRequest bool
+	UserBlocked    bool
 	RoomType       RoomType
 	Disappear      DisappearingSetting
 	CapState       CapabilityState
@@ -80,7 +81,7 @@ const (
 	getPortalBaseQuery = `
 		SELECT bridge_id, id, receiver, mxid, parent_id, parent_receiver, relay_login_id, other_user_id,
 		       name, topic, avatar_id, avatar_hash, avatar_mxc,
-		       name_set, topic_set, avatar_set, name_is_custom, in_space, message_request,
+		       name_set, topic_set, avatar_set, name_is_custom, in_space, message_request, user_blocked,
 		       room_type, disappear_type, disappear_timer, cap_state,
 		       metadata
 		FROM portal
@@ -102,11 +103,11 @@ const (
 			bridge_id, id, receiver, mxid,
 			parent_id, parent_receiver, relay_login_id, other_user_id,
 			name, topic, avatar_id, avatar_hash, avatar_mxc,
-			name_set, topic_set, avatar_set, name_is_custom, in_space, message_request,
+			name_set, topic_set, avatar_set, name_is_custom, in_space, message_request, user_blocked,
 			room_type, disappear_type, disappear_timer, cap_state,
 			metadata, relay_bridge_id
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, cast($7 AS TEXT), $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24,
+			$1, $2, $3, $4, $5, $6, cast($7 AS TEXT), $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25,
 			CASE WHEN cast($7 AS TEXT) IS NULL THEN NULL ELSE $1 END
 		)
 	`
@@ -115,8 +116,8 @@ const (
 		SET mxid=$4, parent_id=$5, parent_receiver=$6,
 		    relay_login_id=cast($7 AS TEXT), relay_bridge_id=CASE WHEN cast($7 AS TEXT) IS NULL THEN NULL ELSE bridge_id END,
 		    other_user_id=$8, name=$9, topic=$10, avatar_id=$11, avatar_hash=$12, avatar_mxc=$13,
-		    name_set=$14, topic_set=$15, avatar_set=$16, name_is_custom=$17, in_space=$18, message_request=$19,
-		    room_type=$20, disappear_type=$21, disappear_timer=$22, cap_state=$23, metadata=$24
+		    name_set=$14, topic_set=$15, avatar_set=$16, name_is_custom=$17, in_space=$18, message_request=$19, user_blocked=$20,
+		    room_type=$21, disappear_type=$22, disappear_timer=$23, cap_state=$24, metadata=$25
 		WHERE bridge_id=$1 AND id=$2 AND receiver=$3
 	`
 	deletePortalQuery = `
@@ -242,7 +243,7 @@ func (p *Portal) Scan(row dbutil.Scannable) (*Portal, error) {
 		&p.BridgeID, &p.ID, &p.Receiver, &mxid,
 		&parentID, &parentReceiver, &relayLoginID, &otherUserID,
 		&p.Name, &p.Topic, &p.AvatarID, &avatarHash, &p.AvatarMXC,
-		&p.NameSet, &p.TopicSet, &p.AvatarSet, &p.NameIsCustom, &p.InSpace, &p.MessageRequest,
+		&p.NameSet, &p.TopicSet, &p.AvatarSet, &p.NameIsCustom, &p.InSpace, &p.MessageRequest, &p.UserBlocked,
 		&p.RoomType, &disappearType, &disappearTimer,
 		dbutil.JSON{Data: &p.CapState}, dbutil.JSON{Data: p.Metadata},
 	)
@@ -289,7 +290,7 @@ func (p *Portal) sqlVariables() []any {
 		p.BridgeID, p.ID, p.Receiver, dbutil.StrPtr(p.MXID),
 		dbutil.StrPtr(p.ParentKey.ID), p.ParentKey.Receiver, dbutil.StrPtr(p.RelayLoginID), dbutil.StrPtr(p.OtherUserID),
 		p.Name, p.Topic, p.AvatarID, avatarHash, p.AvatarMXC,
-		p.NameSet, p.TopicSet, p.AvatarSet, p.NameIsCustom, p.InSpace, p.MessageRequest,
+		p.NameSet, p.TopicSet, p.AvatarSet, p.NameIsCustom, p.InSpace, p.MessageRequest, p.UserBlocked,
 		p.RoomType, dbutil.StrPtr(p.Disappear.Type), dbutil.NumPtr(p.Disappear.Timer),
 		dbutil.JSON{Data: p.CapState}, dbutil.JSON{Data: p.Metadata},
 	}

@@ -153,6 +153,7 @@ func (br *Connector) Init(bridge *bridgev2.Bridge) {
 		event.StateTombstone,
 		event.StateBeeperDisappearingTimer,
 		event.BeeperDeleteChat,
+		event.BeeperBlockUser,
 		event.BeeperAcceptMessageRequest,
 	} {
 		br.EventProcessor.On(evtType, br.handleRoomEvent)

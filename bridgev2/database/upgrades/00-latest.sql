@@ -1,4 +1,4 @@
--- v0 -> v30 (compatible with v9+): Latest revision
+-- v0 -> v31 (compatible with v9+): Latest revision
 CREATE TABLE "user" (
 	bridge_id       TEXT NOT NULL,
 	mxid            TEXT NOT NULL,
@@ -49,6 +49,7 @@ CREATE TABLE portal (
 	name_is_custom  BOOLEAN NOT NULL DEFAULT false,
 	in_space        BOOLEAN NOT NULL,
 	message_request BOOLEAN NOT NULL DEFAULT false,
+	user_blocked    BOOLEAN NOT NULL DEFAULT false,
 	room_type       TEXT    NOT NULL,
 	disappear_type  TEXT,
 	disappear_timer BIGINT,

@@ -768,6 +768,14 @@ type MessageRequestAcceptingNetworkAPI interface {
 	HandleMatrixAcceptMessageRequest(ctx context.Context, msg *MatrixAcceptMessageRequest) error
 }
 
+// UserBlockingNetworkAPI is an optional interface that network connectors
+// can implement to block and unblock users on the remote network.
+type UserBlockingNetworkAPI interface {
+	NetworkAPI
+	// HandleMatrixBlockUser is called when the user blocks a remote user.
+	HandleMatrixBlockUser(ctx context.Context, msg *MatrixBlockUser) error
+}
+
 type ResolveIdentifierResponse struct {
 	// Ghost is the ghost of the user that the identifier resolves to.
 	// This field should be set whenever possible. However, it is not required,
@@ -1542,6 +1550,7 @@ type MatrixViewingChat struct {
 }
 
 type MatrixDeleteChat = MatrixEventBase[*event.BeeperChatDeleteEventContent]
+type MatrixBlockUser = MatrixEventBase[*event.BeeperBlockUserEventContent]
 type MatrixAcceptMessageRequest = MatrixEventBase[*event.BeeperAcceptMessageRequestEventContent]
 type MatrixMarkedUnread = MatrixRoomMeta[*event.MarkedUnreadEventContent]
 type MatrixMute = MatrixRoomMeta[*event.BeeperMuteEventContent]
