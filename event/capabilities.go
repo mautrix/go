@@ -68,6 +68,8 @@ type RoomFeatures struct {
 	MarkAsUnread          bool `json:"mark_as_unread,omitzero"`
 	DeleteChat            bool `json:"delete_chat,omitzero"`
 	DeleteChatForEveryone bool `json:"delete_chat_for_everyone,omitzero"`
+	BlockUser             bool `json:"block_user,omitzero"`
+	ReportSpam            bool `json:"report_spam,omitzero"`
 
 	MessageRequest *MessageRequestFeatures `json:"message_request,omitzero"`
 
@@ -395,6 +397,8 @@ func (rf *RoomFeatures) Hash() []byte {
 	hashBool(hasher, "mark_as_unread", rf.MarkAsUnread)
 	hashBool(hasher, "delete_chat", rf.DeleteChat)
 	hashBool(hasher, "delete_chat_for_everyone", rf.DeleteChatForEveryone)
+	hashBool(hasher, "block_user", rf.BlockUser)
+	hashBool(hasher, "report_spam", rf.ReportSpam)
 	hashValue(hasher, "message_request", rf.MessageRequest)
 
 	return hasher.Sum(nil)

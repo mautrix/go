@@ -93,6 +93,10 @@ export interface RoomFeatures {
 	delete_chat?: boolean
 	/** Whether deleting the chat for all participants is supported. */
 	delete_chat_for_everyone?: boolean
+	/** Whether blocking/unblocking the user is supported. Only applicable to DMs. */
+	block_user?: boolean
+	/** Whether block requests can also report the chat as spam. */
+	report_spam?: boolean
 	/** What can be done with message requests? */
 	message_request?: {
 		accept_with_message?: CapabilitySupportLevel
