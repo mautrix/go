@@ -2612,6 +2612,32 @@ func (cli *Client) RTCTransports(ctx context.Context) (resp *RespRTCTransports, 
 	return
 }
 
+func (cli *Client) RTCLivekitGetToken(ctx context.Context, req *ReqRTCLivekitGetToken) (resp *RespRTCLivekitGetToken, err error) {
+	var urlPath string
+	if cli.SpecVersions.Supports(FeatureUnstableMatrixRTC) {
+		urlPath = cli.BuildClientURL("unstable", "io.element.msc4195", "rtc", "livekit", "get_token")
+	} else if cli.SpecVersions.Supports(FeatureStableMatrixRTC) {
+		urlPath = cli.BuildClientURL("v1", "rtc", "livekit", "get_token")
+	} else {
+		return nil, fmt.Errorf("server does not advertise MatrixRTC support")
+	}
+	_, err = cli.MakeRequest(ctx, http.MethodPost, urlPath, req, &resp)
+	return
+}
+
+func (cli *Client) RTCLivekitDelegateDelayedLeave(ctx context.Context, req *ReqRTCLivekitDelegateDelayedLeave) (resp *RespRTCLivekitDelegateDelayedLeave, err error) {
+	var urlPath string
+	if cli.SpecVersions.Supports(FeatureUnstableMatrixRTC) {
+		urlPath = cli.BuildClientURL("unstable", "io.element.msc4195", "rtc", "livekit", "delegate_delayed_leave")
+	} else if cli.SpecVersions.Supports(FeatureStableMatrixRTC) {
+		urlPath = cli.BuildClientURL("v1", "rtc", "livekit", "delegate_delayed_leave")
+	} else {
+		return nil, fmt.Errorf("server does not advertise MatrixRTC support")
+	}
+	_, err = cli.MakeRequest(ctx, http.MethodPost, urlPath, req, &resp)
+	return
+}
+
 func (cli *Client) CreateAlias(ctx context.Context, alias id.RoomAlias, roomID id.RoomID) (resp *RespAliasCreate, err error) {
 	urlPath := cli.BuildClientURL("v3", "directory", "room", alias)
 	_, err = cli.MakeRequest(ctx, http.MethodPut, urlPath, &ReqAliasCreate{RoomID: roomID}, &resp)

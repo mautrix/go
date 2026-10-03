@@ -778,3 +778,19 @@ type ReqAckWebPusher struct {
 	AppID    PusherAppID `json:"app_id"`
 	AckToken string      `json:"ack_token"`
 }
+
+type ReqRTCLivekitGetToken struct {
+	ServerName string    `json:"server_name,omitempty"`
+	URL        string    `json:"url"`
+	RoomID     id.RoomID `json:"room_id"`
+	SlotID     string    `json:"slot_id"`
+	MemberID   string    `json:"member_id"`
+}
+
+type ReqRTCLivekitDelegateDelayedLeave struct {
+	URL      string     `json:"url"`
+	RoomID   id.RoomID  `json:"room_id"`
+	SlotID   string     `json:"slot_id"`
+	MemberID string     `json:"member_id"`
+	DelayID  id.DelayID `json:"delay_id"`
+}

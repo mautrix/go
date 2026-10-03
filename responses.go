@@ -479,6 +479,12 @@ type RespRTCTransports struct {
 	RTCTransports []*RTCTransport `json:"rtc_transports"`
 }
 
+type RespRTCLivekitGetToken struct {
+	JWT string `json:"jwt"`
+}
+
+type RespRTCLivekitDelegateDelayedLeave struct{}
+
 type RTCTransportType string
 
 const (
