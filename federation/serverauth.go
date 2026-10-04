@@ -102,7 +102,7 @@ func ParseXMatrixAuth(auth string) (xma XMatrixAuth) {
 }
 
 func (sa *ServerAuth) GetKeysWithCache(ctx context.Context, serverName string, keyID id.KeyID, maxBackoff time.Duration) (*ServerKeyResponse, error) {
-	res, err := sa.Keys.LoadKeys(serverName, maxBackoff)
+	res, err := sa.Keys.LoadKeys(ctx, serverName, maxBackoff)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read cache: %w", err)
 	} else if res.HasKey(keyID) {
@@ -119,13 +119,15 @@ func (sa *ServerAuth) GetKeysWithCache(ctx context.Context, serverName string, k
 
 	lock.Lock()
 	defer lock.Unlock()
-	res, err = sa.Keys.LoadKeys(serverName, maxBackoff)
+	res, err = sa.Keys.LoadKeys(ctx, serverName, maxBackoff)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read cache: %w", err)
 	} else if res != nil {
 		if res.HasKey(keyID) {
 			return res, nil
-		} else if !sa.Keys.ShouldReQuery(serverName) {
+		} else if ok, err = sa.Keys.ShouldReQuery(ctx, serverName); err != nil {
+			return nil, fmt.Errorf("failed to check if should re-query keys: %w", err)
+		} else if !ok {
 			zerolog.Ctx(ctx).Trace().
 				Str("server_name", serverName).
 				Stringer("key_id", keyID).
@@ -135,10 +137,20 @@ func (sa *ServerAuth) GetKeysWithCache(ctx context.Context, serverName string, k
 	}
 	res, err = sa.Client.ServerKeys(ctx, serverName)
 	if err != nil {
-		sa.Keys.StoreFetchError(serverName, err)
+		err = sa.Keys.StoreFetchError(ctx, serverName, err)
+		if err != nil {
+			zerolog.Ctx(ctx).Warn().Err(err).
+				Str("server_name", serverName).
+				Msg("Failed to store server key fetch error in cache")
+		}
 		return nil, err
 	}
-	sa.Keys.StoreKeys(res)
+	err = sa.Keys.StoreKeys(ctx, res)
+	if err != nil {
+		zerolog.Ctx(ctx).Warn().Err(err).
+			Str("server_name", serverName).
+			Msg("Failed to store server keys in cache")
+	}
 	return res, nil
 }
 

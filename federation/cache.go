@@ -7,6 +7,7 @@
 package federation
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -16,17 +17,17 @@ import (
 
 // ResolutionCache is an interface for caching resolved server names.
 type ResolutionCache interface {
-	StoreResolution(*ResolvedServerName)
+	StoreResolution(context.Context, *ResolvedServerName) error
 	// LoadResolution loads a resolved server name from the cache.
 	// Expired entries MUST NOT be returned.
-	LoadResolution(serverName string) (*ResolvedServerName, error)
+	LoadResolution(ctx context.Context, serverName string) (*ResolvedServerName, error)
 }
 
 type KeyCache interface {
-	StoreKeys(*ServerKeyResponse)
-	StoreFetchError(serverName string, err error)
-	ShouldReQuery(serverName string) bool
-	LoadKeys(serverName string, maxBackoff time.Duration) (*ServerKeyResponse, error)
+	StoreKeys(context.Context, *ServerKeyResponse) error
+	StoreFetchError(ctx context.Context, serverName string, err error) error
+	ShouldReQuery(ctx context.Context, serverName string) (bool, error)
+	LoadKeys(ctx context.Context, serverName string, maxBackoff time.Duration) (*ServerKeyResponse, error)
 }
 
 type InMemoryCache struct {
@@ -55,13 +56,14 @@ func NewInMemoryCache() *InMemoryCache {
 	}
 }
 
-func (c *InMemoryCache) StoreResolution(resolution *ResolvedServerName) {
+func (c *InMemoryCache) StoreResolution(_ context.Context, resolution *ResolvedServerName) error {
 	c.resolutionsLock.Lock()
 	defer c.resolutionsLock.Unlock()
 	c.resolutions[resolution.ServerName] = resolution
+	return nil
 }
 
-func (c *InMemoryCache) LoadResolution(serverName string) (*ResolvedServerName, error) {
+func (c *InMemoryCache) LoadResolution(_ context.Context, serverName string) (*ResolvedServerName, error) {
 	c.resolutionsLock.RLock()
 	defer c.resolutionsLock.RUnlock()
 	resolution, ok := c.resolutions[serverName]
@@ -71,11 +73,12 @@ func (c *InMemoryCache) LoadResolution(serverName string) (*ResolvedServerName, 
 	return resolution, nil
 }
 
-func (c *InMemoryCache) StoreKeys(keys *ServerKeyResponse) {
+func (c *InMemoryCache) StoreKeys(_ context.Context, keys *ServerKeyResponse) error {
 	c.keysLock.Lock()
 	defer c.keysLock.Unlock()
 	c.keys[keys.ServerName] = keys
 	delete(c.lastError, keys.ServerName)
+	return nil
 }
 
 type resolutionErrorCache struct {
@@ -94,7 +97,7 @@ func (rec *resolutionErrorCache) ShouldRetry(maxBackoff time.Duration) bool {
 
 var ErrRecentKeyQueryFailed = errors.New("last retry was too recent")
 
-func (c *InMemoryCache) LoadKeys(serverName string, maxBackoff time.Duration) (*ServerKeyResponse, error) {
+func (c *InMemoryCache) LoadKeys(_ context.Context, serverName string, maxBackoff time.Duration) (*ServerKeyResponse, error) {
 	c.keysLock.RLock()
 	defer c.keysLock.RUnlock()
 	keys, ok := c.keys[serverName]
@@ -114,7 +117,7 @@ func (c *InMemoryCache) LoadKeys(serverName string, maxBackoff time.Duration) (*
 	return keys, nil
 }
 
-func (c *InMemoryCache) StoreFetchError(serverName string, err error) {
+func (c *InMemoryCache) StoreFetchError(_ context.Context, serverName string, err error) error {
 	c.keysLock.Lock()
 	defer c.keysLock.Unlock()
 	errorCache, ok := c.lastError[serverName]
@@ -125,27 +128,32 @@ func (c *InMemoryCache) StoreFetchError(serverName string, err error) {
 	} else {
 		c.lastError[serverName] = &resolutionErrorCache{Error: err, Time: time.Now(), Count: 1}
 	}
+	return nil
 }
 
-func (c *InMemoryCache) ShouldReQuery(serverName string) bool {
+func (c *InMemoryCache) ShouldReQuery(_ context.Context, serverName string) (bool, error) {
 	c.keysLock.Lock()
 	defer c.keysLock.Unlock()
 	lastQuery, ok := c.lastReQueryAt[serverName]
 	if ok && time.Since(lastQuery) < c.MinKeyRefetchDelay {
-		return false
+		return false, nil
 	}
 	c.lastReQueryAt[serverName] = time.Now()
-	return true
+	return true, nil
 }
 
 type noopCache struct{}
 
-func (*noopCache) StoreKeys(*ServerKeyResponse)                               {}
-func (*noopCache) LoadKeys(string, time.Duration) (*ServerKeyResponse, error) { return nil, nil }
-func (*noopCache) StoreFetchError(string, error)                              {}
-func (*noopCache) ShouldReQuery(string) bool                                  { return true }
-func (*noopCache) StoreResolution(*ResolvedServerName)                        {}
-func (*noopCache) LoadResolution(string) (*ResolvedServerName, error)         { return nil, nil }
+func (*noopCache) LoadKeys(context.Context, string, time.Duration) (*ServerKeyResponse, error) {
+	return nil, nil
+}
+func (*noopCache) StoreKeys(context.Context, *ServerKeyResponse) error        { return nil }
+func (*noopCache) StoreFetchError(context.Context, string, error) error       { return nil }
+func (*noopCache) ShouldReQuery(context.Context, string) (bool, error)        { return true, nil }
+func (*noopCache) StoreResolution(context.Context, *ResolvedServerName) error { return nil }
+func (*noopCache) LoadResolution(context.Context, string) (*ResolvedServerName, error) {
+	return nil, nil
+}
 
 var (
 	_ ResolutionCache = (*noopCache)(nil)
