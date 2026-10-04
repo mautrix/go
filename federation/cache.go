@@ -26,7 +26,7 @@ type KeyCache interface {
 	StoreKeys(*ServerKeyResponse)
 	StoreFetchError(serverName string, err error)
 	ShouldReQuery(serverName string) bool
-	LoadKeys(serverName string) (*ServerKeyResponse, error)
+	LoadKeys(serverName string, maxBackoff time.Duration) (*ServerKeyResponse, error)
 }
 
 type InMemoryCache struct {
@@ -84,25 +84,27 @@ type resolutionErrorCache struct {
 	Count int
 }
 
-const MaxBackoff = 7 * 24 * time.Hour
-
-func (rec *resolutionErrorCache) ShouldRetry() bool {
+func (rec *resolutionErrorCache) ShouldRetry(maxBackoff time.Duration) bool {
+	if maxBackoff < 0 {
+		return true
+	}
 	backoff := time.Duration(math.Exp(float64(rec.Count))) * time.Second
-	return time.Since(rec.Time) > backoff
+	return time.Since(rec.Time) > min(backoff, maxBackoff)
 }
 
 var ErrRecentKeyQueryFailed = errors.New("last retry was too recent")
 
-func (c *InMemoryCache) LoadKeys(serverName string) (*ServerKeyResponse, error) {
+func (c *InMemoryCache) LoadKeys(serverName string, maxBackoff time.Duration) (*ServerKeyResponse, error) {
 	c.keysLock.RLock()
 	defer c.keysLock.RUnlock()
 	keys, ok := c.keys[serverName]
 	if !ok || time.Until(keys.ValidUntilTS.Time) < 0 {
 		err, ok := c.lastError[serverName]
-		if ok && !err.ShouldRetry() {
+		if ok && !err.ShouldRetry(maxBackoff) {
 			return nil, fmt.Errorf(
-				"%w (%s ago) and failed with %w",
+				"%w (%d errors most recently %s ago) and failed with %w",
 				ErrRecentKeyQueryFailed,
+				err.Count,
 				time.Since(err.Time).String(),
 				err.Error,
 			)
@@ -138,12 +140,12 @@ func (c *InMemoryCache) ShouldReQuery(serverName string) bool {
 
 type noopCache struct{}
 
-func (*noopCache) StoreKeys(_ *ServerKeyResponse)                       {}
-func (*noopCache) LoadKeys(_ string) (*ServerKeyResponse, error)        { return nil, nil }
-func (*noopCache) StoreFetchError(_ string, _ error)                    {}
-func (*noopCache) ShouldReQuery(_ string) bool                          { return true }
-func (*noopCache) StoreResolution(_ *ResolvedServerName)                {}
-func (*noopCache) LoadResolution(_ string) (*ResolvedServerName, error) { return nil, nil }
+func (*noopCache) StoreKeys(*ServerKeyResponse)                               {}
+func (*noopCache) LoadKeys(string, time.Duration) (*ServerKeyResponse, error) { return nil, nil }
+func (*noopCache) StoreFetchError(string, error)                              {}
+func (*noopCache) ShouldReQuery(string) bool                                  { return true }
+func (*noopCache) StoreResolution(*ResolvedServerName)                        {}
+func (*noopCache) LoadResolution(string) (*ResolvedServerName, error)         { return nil, nil }
 
 var (
 	_ ResolutionCache = (*noopCache)(nil)

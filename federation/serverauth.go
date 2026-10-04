@@ -18,6 +18,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog"
 
@@ -100,8 +101,8 @@ func ParseXMatrixAuth(auth string) (xma XMatrixAuth) {
 	return
 }
 
-func (sa *ServerAuth) GetKeysWithCache(ctx context.Context, serverName string, keyID id.KeyID) (*ServerKeyResponse, error) {
-	res, err := sa.Keys.LoadKeys(serverName)
+func (sa *ServerAuth) GetKeysWithCache(ctx context.Context, serverName string, keyID id.KeyID, maxBackoff time.Duration) (*ServerKeyResponse, error) {
+	res, err := sa.Keys.LoadKeys(serverName, maxBackoff)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read cache: %w", err)
 	} else if res.HasKey(keyID) {
@@ -118,7 +119,7 @@ func (sa *ServerAuth) GetKeysWithCache(ctx context.Context, serverName string, k
 
 	lock.Lock()
 	defer lock.Unlock()
-	res, err = sa.Keys.LoadKeys(serverName)
+	res, err = sa.Keys.LoadKeys(serverName, maxBackoff)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read cache: %w", err)
 	} else if res != nil {
@@ -159,6 +160,10 @@ func (l *fixedLimitedReader) Read(p []byte) (n int, err error) {
 	return
 }
 
+const (
+	requestAuthResolutionMaxBackoff = 5 * time.Minute
+)
+
 func (sa *ServerAuth) Authenticate(r *http.Request) (*http.Request, *mautrix.RespError) {
 	defer func() {
 		_ = r.Body.Close()
@@ -186,7 +191,7 @@ func (sa *ServerAuth) Authenticate(r *http.Request) (*http.Request, *mautrix.Res
 			Msg("Invalid destination in X-Matrix header")
 		return nil, &errInvalidDestination
 	}
-	resp, err := sa.GetKeysWithCache(r.Context(), parsed.Origin, parsed.KeyID)
+	resp, err := sa.GetKeysWithCache(r.Context(), parsed.Origin, parsed.KeyID, requestAuthResolutionMaxBackoff)
 	if err != nil {
 		if !errors.Is(err, ErrRecentKeyQueryFailed) {
 			log.Err(err).
