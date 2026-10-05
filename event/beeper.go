@@ -133,6 +133,11 @@ type BeeperChatDeleteEventContent struct {
 	FromMessageRequest bool `json:"from_message_request,omitzero"`
 }
 
+type BeeperBlockUserEventContent struct {
+	Block      bool `json:"block"`
+	ReportSpam bool `json:"report_spam,omitzero"`
+}
+
 type BeeperAcceptMessageRequestEventContent struct {
 	// Whether this was triggered by a message rather than an explicit event
 	IsImplicit bool `json:"-"`

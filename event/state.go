@@ -252,6 +252,7 @@ type BridgeInfoSection struct {
 
 	Receiver       string `json:"fi.mau.receiver,omitempty"`
 	MessageRequest bool   `json:"com.beeper.message_request,omitzero"`
+	UserBlocked    bool   `json:"com.beeper.user_blocked,omitzero"`
 }
 
 // BridgeEventContent represents the content of a m.bridge state event.
