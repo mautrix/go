@@ -195,6 +195,9 @@ type NewLoginParams struct {
 func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, params *NewLoginParams) (*UserLogin, error) {
 	user.Bridge.cacheLock.Lock()
 	defer user.Bridge.cacheLock.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	data.BridgeID = user.BridgeID
 	data.UserMXID = user.MXID
 	if data.Metadata == nil {
@@ -212,6 +215,9 @@ func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, params
 	ul, err := user.Bridge.unlockedGetExistingUserLoginByID(ctx, data.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check if login already exists: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	var doInsert bool
 	if ul != nil && ul.UserMXID != user.MXID {
