@@ -59,7 +59,12 @@ func getClientForStartingChat[T bridgev2.NetworkAPI](ce *Event, thing string) (l
 	}
 	if login == nil || login.UserMXID != ce.User.MXID {
 		remainingArgs = ce.Args
-		login = ce.User.GetDefaultLogin()
+		if ce.Portal != nil && ce.Portal.Receiver != "" {
+			login = ce.Bridge.GetCachedUserLoginByID(ce.Portal.Receiver)
+		}
+		if login == nil || login.UserMXID != ce.User.MXID {
+			login = ce.User.GetDefaultLogin()
+		}
 		if login == nil {
 			ce.Reply("You're not logged in")
 			return
