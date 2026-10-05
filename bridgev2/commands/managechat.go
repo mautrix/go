@@ -14,6 +14,7 @@ import (
 
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
+	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/format"
@@ -274,6 +275,51 @@ func fnDeleteChat(ce *Event) {
 	if err != nil {
 		ce.Reply("Failed to delete chat: %v", err)
 	} else {
+		ce.React("✅️")
+	}
+}
+
+var CommandBlockUser = &FullHandler{
+	Func:    fnBlockUser,
+	Name:    "block-user",
+	Aliases: []string{"unblock-user"},
+	Help: HelpMeta{
+		Section:     HelpSectionChats,
+		Description: "Block the recipient of the current DM chat on the remote network",
+		Args:        "[--report-spam]",
+	},
+	RequiresPortal: true,
+	RequiresLogin:  true,
+	NetworkAPI:     NetworkAPIImplements[bridgev2.UserBlockingNetworkAPI],
+}
+
+func fnBlockUser(ce *Event) {
+	if ce.Portal == nil || ce.Portal.RoomType != database.RoomTypeDM {
+		ce.Reply("This command can only be used in DM portals")
+		return
+	}
+	_, api, _ := getClientForStartingChat[bridgev2.UserBlockingNetworkAPI](ce, "blocking users")
+	reportSpam := slices.Contains(ce.Args, "--report-spam")
+	doBlock := ce.Command != "unblock-user" && !slices.Contains(ce.Args, "--unblock")
+	err := api.HandleMatrixBlockUser(ce.Ctx, &bridgev2.MatrixBlockUser{
+		Event: nil,
+		Content: &event.BeeperBlockUserEventContent{
+			Block:      doBlock,
+			ReportSpam: reportSpam,
+		},
+		Portal: ce.Portal,
+	})
+	if err != nil {
+		ce.Reply("Failed to block user: %v", err)
+	} else {
+		if ce.Portal.UserBlocked != doBlock {
+			ce.Portal.UserBlocked = doBlock
+			ce.Portal.UpdateBridgeInfo(ce.Ctx)
+			err = ce.Portal.Save(ce.Ctx)
+			if err != nil {
+				ce.Log.Err(err).Msg("Failed to save portal after block event")
+			}
+		}
 		ce.React("✅️")
 	}
 }
