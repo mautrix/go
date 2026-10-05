@@ -218,20 +218,22 @@ func (content *MessageEventContent) SetRelatesTo(rel *RelatesTo) {
 
 func (content *MessageEventContent) SetEdit(original id.EventID) {
 	newContent := *content
-	content.NewContent = &newContent
-	content.RelatesTo = (&RelatesTo{}).SetReplace(original)
+	*content = MessageEventContent{
+		MsgType:    content.MsgType,
+		Body:       content.Body,
+		GeoURI:     content.GeoURI,
+		URL:        content.URL,
+		File:       content.File,
+		FileName:   content.FileName,
+		Mentions:   &Mentions{},
+		NewContent: &newContent,
+		RelatesTo:  (&RelatesTo{}).SetReplace(original),
+	}
 	if content.MsgType == MsgText || content.MsgType == MsgNotice {
 		content.Body = "* " + content.Body
-		content.Mentions = &Mentions{}
-		if content.Format == FormatHTML && len(content.FormattedBody) > 0 {
-			content.FormattedBody = "* " + content.FormattedBody
-		}
-		// If the message is long, remove most of the useless edit fallback to avoid event size issues.
-		if len(content.Body) > 10000 || len(content.FormattedBody) > 10000 {
-			content.FormattedBody = ""
-			content.Format = ""
-			content.Body = content.Body[:min(len(content.Body), 50)] + "[edit fallback cut…]"
-		}
+	}
+	if len(content.Body) > 100 {
+		content.Body = content.Body[:min(len(content.Body), 50)] + "[edit fallback cut…]"
 	}
 }
 
