@@ -399,7 +399,7 @@ func (br *Bridge) StartLoginsForUsers(ctx context.Context, users []*User) {
 	}
 	if !startedAny {
 		br.Log.Info().Msg("No user logins found")
-		br.SendGlobalBridgeState(status.BridgeState{StateEvent: status.StateUnconfigured})
+		br.SendGlobalBridgeState(ctx, status.BridgeState{StateEvent: status.StateUnconfigured})
 	}
 	if !br.Background {
 		go br.RunBackfillQueue()
