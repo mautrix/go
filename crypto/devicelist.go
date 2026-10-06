@@ -356,11 +356,17 @@ func (mach *OlmMachine) validateDevice(userID id.UserID, deviceID id.DeviceID, d
 		return nil, ErrNoIdentityKeyFound
 	}
 
-	// Changing identity keys is allowed as long as the object is signed by the signing key,
-	// though in practice no implementation rotates its identity keys currently.
 	if existing != nil && existing.SigningKey != signingKey {
 		existing.Trust = id.TrustStateDeviceKeyMismatch
 		return existing, fmt.Errorf("%w (expected %s, got %s)", ErrMismatchingSigningKey, existing.SigningKey, signingKey)
+	} else if existing != nil && existing.IdentityKey != identityKey {
+		mach.Log.Warn().
+			Stringer("user_id", userID).
+			Stringer("device_id", deviceID).
+			Stringer("signing_key", signingKey).
+			Stringer("old_identity_key", existing.IdentityKey).
+			Stringer("new_identity_key", identityKey).
+			Msg("Identity key change detected. This will likely be forbidden in the future")
 	}
 
 	ok, err := signatures.VerifySignatureJSON(deviceKeys, userID, deviceID.String(), signingKey)
