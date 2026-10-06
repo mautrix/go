@@ -49,6 +49,8 @@ func (portal *Portal) doForwardBackfill(ctx context.Context, source *UserLogin, 
 	if limit <= 0 {
 		return
 	}
+	portal.backfillLock.Lock()
+	defer portal.backfillLock.Unlock()
 	log.Info().Str("latest_message_id", latestMessageID).Msg("Fetching messages for forward backfill")
 	resp, err := api.FetchMessages(ctx, FetchMessagesParams{
 		Portal:        portal,
@@ -244,10 +246,7 @@ func (portal *Portal) doThreadBackfill(ctx context.Context, source *UserLogin, t
 }
 
 func (portal *Portal) cutoffMessages(ctx context.Context, messages []*BackfillMessage, aggressiveDedup, forward bool, lastMessage *database.Message) []*BackfillMessage {
-	if lastMessage == nil {
-		return messages
-	}
-	if forward {
+	if lastMessage != nil && forward {
 		cutoff := -1
 		var cutoffIDs []networkid.MessageID
 		for i, msg := range messages {
@@ -267,7 +266,7 @@ func (portal *Portal) cutoffMessages(ctx context.Context, messages []*BackfillMe
 				Msg("Cutting off forward backfill messages older than latest bridged message")
 			messages = messages[cutoff+1:]
 		}
-	} else {
+	} else if lastMessage != nil {
 		cutoff := -1
 		var cutoffIDs []networkid.MessageID
 		for i, message := range slices.Backward(messages) {
