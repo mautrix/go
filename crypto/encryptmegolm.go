@@ -18,6 +18,7 @@ import (
 	"github.com/tidwall/gjson"
 	"go.mau.fi/util/exgjson"
 	"go.mau.fi/util/exzerolog"
+	"go.mau.fi/util/ptr"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
@@ -57,7 +58,7 @@ func getRelatesTo(content any, plaintext json.RawMessage) *event.RelatesTo {
 	}
 	relatable, ok := content.(event.Relatable)
 	if ok {
-		return relatable.OptionalGetRelatesTo()
+		return ptr.Clone(relatable.OptionalGetRelatesTo())
 	}
 	return getRawJSON[event.RelatesTo](plaintext, "content", "m.relates_to")
 }
@@ -181,6 +182,8 @@ func (mach *OlmMachine) EncryptMegolmEventWithStateKey(ctx context.Context, room
 		if evtType == event.EventReaction || encrypted.RelatesTo.Type == "" {
 			encrypted.RelatesTo = nil
 		}
+	} else if encrypted.RelatesTo != nil && encrypted.RelatesTo.InReplyTo != nil && encrypted.RelatesTo.InReplyTo.BeeperQuote != nil {
+		encrypted.RelatesTo.InReplyTo.BeeperQuote = nil
 	}
 	if mach.PlaintextMentions {
 		encrypted.Mentions = getMentions(content)
