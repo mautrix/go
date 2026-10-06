@@ -283,6 +283,31 @@ func TestStoreDevices(t *testing.T) {
 	}
 }
 
+func TestStoreDevicesReusedDeviceID(t *testing.T) {
+	stores := getCryptoStores(t)
+	for storeName, store := range stores {
+		t.Run(storeName, func(t *testing.T) {
+			oldAcc := NewOlmAccount()
+			err := store.PutDevices(context.TODO(), "user1", map[id.DeviceID]*id.Device{
+				"dev": {UserID: "user1", DeviceID: "dev", IdentityKey: oldAcc.IdentityKey(), SigningKey: oldAcc.SigningKey()},
+			})
+			require.NoError(t, err, "Error storing original device")
+
+			// The device disappears from the device list, then its ID comes back with a new identity.
+			err = store.PutDevices(context.TODO(), "user1", map[id.DeviceID]*id.Device{})
+			require.NoError(t, err, "Error storing empty device list")
+			newAcc := NewOlmAccount()
+			newDevice := &id.Device{UserID: "user1", DeviceID: "dev", IdentityKey: newAcc.IdentityKey(), SigningKey: newAcc.SigningKey()}
+			err = store.PutDevices(context.TODO(), "user1", map[id.DeviceID]*id.Device{"dev": newDevice})
+			require.NoError(t, err, "Error storing device with reused ID")
+
+			dev, err := store.GetDevice(context.TODO(), "user1", "dev")
+			require.NoError(t, err, "Error getting device")
+			assert.Equal(t, newDevice, dev, "Stored device should have the new identity and signing keys")
+		})
+	}
+}
+
 func TestStoreSecrets(t *testing.T) {
 	stores := getCryptoStores(t)
 	for storeName, store := range stores {
