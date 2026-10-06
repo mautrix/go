@@ -805,7 +805,15 @@ ON CONFLICT (user_id, device_id) DO UPDATE
     SET identity_key=excluded.identity_key, deleted=excluded.deleted, trust=excluded.trust, name=excluded.name
 `
 
-var deviceMassInsertTemplate = strings.ReplaceAll(deviceInsertQuery, "($1, $2, $3, $4, $5, $6, $7)", "%s")
+type massInsertDevice id.Device
+
+func (mid *massInsertDevice) GetMassInsertValues() [6]any {
+	return [6]any{mid.DeviceID, mid.IdentityKey, mid.SigningKey, mid.Trust, mid.Deleted, mid.Name}
+}
+
+var deviceMassInsertBuilder = dbutil.NewMassInsertBuilder[*massInsertDevice, [1]any](
+	deviceInsertQuery, "($1, $%d, $%d, $%d, $%d, $%d, $%d)",
+)
 
 // PutDevice stores a single device for a user, replacing it if it exists already.
 func (store *SQLCryptoStore) PutDevice(ctx context.Context, userID id.UserID, device *id.Device) error {
@@ -838,31 +846,15 @@ func (store *SQLCryptoStore) PutDevices(ctx context.Context, userID id.UserID, d
 		if len(devices) == 0 {
 			return nil
 		}
-		deviceBatchLen := 5 // how many devices will be inserted per query
-		deviceIDs := make([]id.DeviceID, 0, len(devices))
-		for deviceID := range devices {
-			deviceIDs = append(deviceIDs, deviceID)
+		midDevices := make([]*massInsertDevice, len(devices))
+		i := 0
+		for _, device := range devices {
+			midDevices[i] = (*massInsertDevice)(device)
+			i++
 		}
-		const valueStringFormat = "($1, $%d, $%d, $%d, $%d, $%d, $%d)"
-		for batchDeviceIdx := 0; batchDeviceIdx < len(deviceIDs); batchDeviceIdx += deviceBatchLen {
-			var batchDevices []id.DeviceID
-			if batchDeviceIdx+deviceBatchLen < len(deviceIDs) {
-				batchDevices = deviceIDs[batchDeviceIdx : batchDeviceIdx+deviceBatchLen]
-			} else {
-				batchDevices = deviceIDs[batchDeviceIdx:]
-			}
-			values := make([]any, 1, len(devices)*6+1)
-			values[0] = userID
-			valueStrings := make([]string, 0, len(devices))
-			i := 2
-			for _, deviceID := range batchDevices {
-				identity := devices[deviceID]
-				values = append(values, deviceID, identity.IdentityKey, identity.SigningKey, identity.Trust, identity.Deleted, identity.Name)
-				valueStrings = append(valueStrings, fmt.Sprintf(valueStringFormat, i, i+1, i+2, i+3, i+4, i+5))
-				i += 6
-			}
-			valueString := strings.Join(valueStrings, ",")
-			_, err = store.DB.Exec(ctx, fmt.Sprintf(deviceMassInsertTemplate, valueString), values...)
+		for chunk := range slices.Chunk(midDevices, 100) {
+			query, params := deviceMassInsertBuilder.Build([1]any{userID}, chunk)
+			_, err = store.DB.Exec(ctx, query, params...)
 			if err != nil {
 				return fmt.Errorf("failed to insert new devices: %w", err)
 			}
