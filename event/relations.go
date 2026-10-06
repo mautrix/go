@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 
 	"go.mau.fi/util/exslices"
+	"go.mau.fi/util/ptr"
 
 	"maunium.net/go/mautrix/id"
 )
@@ -44,8 +45,9 @@ func (rel *RelatesTo) Copy() *RelatesTo {
 	if rel == nil {
 		return nil
 	}
-	cp := *rel
-	return &cp
+	clone := ptr.Clone(rel)
+	clone.InReplyTo = ptr.Clone(clone.InReplyTo)
+	return clone
 }
 
 func (rel *RelatesTo) GetReplaceID() id.EventID {

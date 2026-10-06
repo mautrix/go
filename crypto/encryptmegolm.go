@@ -18,7 +18,6 @@ import (
 	"github.com/tidwall/gjson"
 	"go.mau.fi/util/exgjson"
 	"go.mau.fi/util/exzerolog"
-	"go.mau.fi/util/ptr"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
@@ -58,7 +57,7 @@ func getRelatesTo(content any, plaintext json.RawMessage) *event.RelatesTo {
 	}
 	relatable, ok := content.(event.Relatable)
 	if ok {
-		return ptr.Clone(relatable.OptionalGetRelatesTo())
+		return relatable.OptionalGetRelatesTo().Copy()
 	}
 	return getRawJSON[event.RelatesTo](plaintext, "content", "m.relates_to")
 }
