@@ -4555,10 +4555,6 @@ func (portal *Portal) getBridgeInfo() (string, event.BridgeEventContent) {
 	if portal.RoomType == database.RoomTypeDM || portal.RoomType == database.RoomTypeGroupDM {
 		bridgeInfo.BeeperRoomType = "dm"
 	}
-	if bridgeInfo.Protocol.ID == "slackgo" {
-		bridgeInfo.TempSlackRemoteIDMigratedFlag = true
-		bridgeInfo.TempSlackRemoteIDMigratedFlag2 = true
-	}
 	parent := portal.GetTopLevelParent()
 	if parent != nil {
 		if portal.Parent != nil && portal.Parent != parent && portal.Bridge.Network.GetCapabilities().NetworkIsImmediateParent {
