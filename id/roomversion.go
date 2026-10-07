@@ -227,7 +227,7 @@ func (rv RoomVersion) RedactsInContent() bool {
 //
 // * the `membership`, `origin`, and `prev_state` fields at the top level of all events are no longer protected.
 // * the entire content of `m.room.create` is protected.
-// * the `redacts` field in `m.room.redaction` content is protected instead of the top-level field.
+// * the `redacts` field in `m.room.redaction` content is protected.
 // * the `m.room.power_levels` event protects the `invite` field in content.
 // * the `signed` field inside the `third_party_invite` field in content of `m.room.member` events is protected.
 //
