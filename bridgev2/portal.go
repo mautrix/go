@@ -2055,7 +2055,7 @@ func (portal *Portal) handleMatrixBlockUser(
 	}
 	api, ok := sender.Client.(UserBlockingNetworkAPI)
 	if !ok {
-		return EventHandlingResultIgnored.WithMSSError(ErrDeleteChatNotSupported)
+		return EventHandlingResultIgnored.WithMSSError(ErrBlockUserNotSupported)
 	} else if portal.RoomType != database.RoomTypeDM {
 		return EventHandlingResultFailed.WithMSSError(ErrNonDMBlockUser)
 	}
