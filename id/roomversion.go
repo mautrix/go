@@ -215,10 +215,8 @@ func (rv RoomVersion) CreatorInContent() bool {
 }
 
 // RedactsInContent returns true if the `m.room.redaction` event has the `redacts` field in content instead of at the top level.
-// The redaction protection is also moved from the top level to the content field.
 //
 // See https://github.com/matrix-org/matrix-spec-proposals/pull/2174
-// (and https://github.com/matrix-org/matrix-spec-proposals/pull/2176 for the redaction protection).
 func (rv RoomVersion) RedactsInContent() bool {
 	return rv.NotEquals(RoomV0, RoomV1, RoomV2, RoomV3, RoomV4, RoomV5, RoomV6, RoomV7, RoomV8, RoomV9, RoomV10)
 }

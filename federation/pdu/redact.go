@@ -81,7 +81,7 @@ func RedactContent(eventType string, content jsontext.Value, roomVersion id.Room
 	case "m.room.history_visibility":
 		return filteredObject(content, "history_visibility")
 	case "m.room.redaction":
-		if roomVersion.RedactsInContent() {
+		if roomVersion.UpdatedRedactionRules() {
 			return filteredObject(content, "redacts")
 		}
 		return emptyObject
