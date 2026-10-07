@@ -45,14 +45,16 @@ type BridgeStateQueue struct {
 	unknownErrorReconnects int
 }
 
-func (br *Bridge) SendGlobalBridgeState(state status.BridgeState) {
+func (br *Bridge) SendGlobalBridgeState(ctx context.Context, state status.BridgeState) {
 	state = state.Fill(nil)
 	for {
-		ctx, cancel := context.WithTimeout(br.BackgroundCtx, 30*time.Second)
-		if err := br.Matrix.SendBridgeStatus(ctx, &state); err != nil {
+		attemptCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		if err := br.Matrix.SendBridgeStatus(attemptCtx, &state); err != nil {
 			br.Log.Warn().Err(err).Msg("Failed to update global bridge state")
 			cancel()
 			select {
+			case <-ctx.Done():
+				return
 			case <-br.BackgroundCtx.Done():
 				return
 			case <-time.After(5 * time.Second):
