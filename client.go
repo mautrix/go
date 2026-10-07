@@ -2980,6 +2980,12 @@ func (cli *Client) ReportRoom(ctx context.Context, roomID id.RoomID, reason stri
 	return err
 }
 
+func (cli *Client) ReportUser(ctx context.Context, userID id.UserID, reason string) error {
+	urlPath := cli.BuildClientURL("v3", "users", userID, "report")
+	_, err := cli.MakeRequest(ctx, http.MethodPost, urlPath, &ReqReport{Reason: reason}, nil)
+	return err
+}
+
 func (cli *Client) SetPusher(ctx context.Context, req *Pusher) error {
 	urlPath := cli.BuildClientURL("v3", "pushers", "set")
 	_, err := cli.MakeRequest(ctx, http.MethodPost, urlPath, req, nil)
