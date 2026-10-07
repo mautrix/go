@@ -2994,7 +2994,7 @@ func (cli *Client) SetPusher(ctx context.Context, req *Pusher) error {
 
 func (cli *Client) GetPushers(ctx context.Context) (resp *RespPushers, err error) {
 	urlPath := cli.BuildClientURL("v3", "pushers")
-	_, err = cli.MakeRequest(ctx, http.MethodPost, urlPath, nil, &resp)
+	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
 	return
 }
 
