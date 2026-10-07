@@ -104,9 +104,7 @@ func (pdu *PDU) Redact(roomVersion id.RoomVersion) *PDU {
 		pdu.DeprecatedOrigin = nil
 		pdu.DeprecatedMembership = nil
 	}
-	if pdu.Type != "m.room.redaction" || roomVersion.RedactsInContent() {
-		pdu.Redacts = nil
-	}
+	pdu.Redacts = nil
 	pdu.Content = RedactContent(pdu.Type, pdu.Content, roomVersion)
 	return pdu
 }

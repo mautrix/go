@@ -187,6 +187,12 @@ var testPDUs = []testPDU{roomV4MessageTestPDU, {
 	roomVersion:   id.RoomV11,
 	serverDetails: novaAstraltechOrg,
 	redacted:      true,
+}, {
+	name:          "redaction in v10 room",
+	pdu:           `{"auth_events":["$JGYDqwdNDsjpRsfTlVluzmY2oYMu2Gtd6mCMou45eGE","$iqxM53TFdWaq44Sx8cmmdFXEKYawVBNckAjkssKFAJw","$wtAAK5zyLIrgwEw-jKfRCEVZtx0rg9N_hEGC5us_IOQ"],"content":{},"depth":432,"hashes":{"sha256":"mSv1/MchhL/WzwXBjcS2K7qg8vTTP1FOrcjoMbvarPg"},"origin_server_ts":1778100170433,"prev_events":["$sFlbbjZceBaLtGKGWKL3QdgODlG8G-48GW4ayaWk0jM"],"redacts":"$DlH5HN5HftuZJI6bE7PqLHkV2dln6D3KYJvdXTlGnKw","room_id":"!CoWxYhaAXfclYcwxbv:zirco.dev","sender":"@github:maunium.net","type":"m.room.redaction","signatures":{"maunium.net":{"ed25519:a_xxeS":"SDjg46+bm3QiuQg4jcq7VYrOwEpIG1LzmuYqswi2/3OdyAoHgY8jQjXe7MEs/0SjG7IZ4XYTnW2qYdjk4CwqCg"}},"unsigned":{"age_ts":1778100170433}}`,
+	eventID:       "$QAiIS1SaRQa82ipeI2JiH_Thdr4lDifHa1-dpp4aH6E",
+	roomVersion:   id.RoomV10,
+	serverDetails: mauniumNet,
 }}
 
 func parsePDU(pdu string) (out *pdu.PDU) {
