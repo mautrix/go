@@ -22,6 +22,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exhttp"
 	"golang.org/x/net/publicsuffix"
 	"gopkg.in/yaml.v3"
 
@@ -161,6 +162,7 @@ type AppService struct {
 	StateStore     StateStore
 
 	Router       *http.ServeMux
+	Middleware   []exhttp.Middleware
 	UserAgent    string
 	server       *http.Server
 	HTTPClient   *http.Client

@@ -29,7 +29,7 @@ import (
 // Start starts the HTTP server that listens for calls from the Matrix homeserver.
 func (as *AppService) Start() {
 	as.server = &http.Server{
-		Handler:   as.Router,
+		Handler:   exhttp.ApplyMiddleware(as.Router, as.Middleware...),
 		Protocols: &http.Protocols{},
 	}
 	as.server.Protocols.SetHTTP1(true)
