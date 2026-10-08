@@ -24,10 +24,18 @@ type ResolutionCache interface {
 }
 
 type KeyCache interface {
+	// StoreKeys stores a successful key query response.
 	StoreKeys(context.Context, *ServerKeyResponse) error
+	// StoreFetchError stores a failed key query response.
 	StoreFetchError(ctx context.Context, serverName string, err error) error
-	ShouldReQuery(ctx context.Context, serverName string) (bool, error)
+	// LoadKeys returns the cached key query response for the given server name. Expired entries MUST NOT be returned.
+	// If an error was stored less than maxBackoff ago, the error should be returned wrapped with ErrRecentKeyQueryFailed.
+	// The cache SHOULD also implement its own backoff logic, such that a single error won't be cached for long.
+	// The maxBackoff parameter is just the cap, the backoff can be shorter.
 	LoadKeys(ctx context.Context, serverName string, maxBackoff time.Duration) (*ServerKeyResponse, error)
+	// ShouldReQuery is called if a cached response doesn't have the requested key ID.
+	// The cache should return false if new keys were stored recently.
+	ShouldReQuery(ctx context.Context, serverName string) (bool, error)
 }
 
 type InMemoryCache struct {
