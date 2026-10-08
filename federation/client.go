@@ -286,6 +286,12 @@ func (c *Client) GetOpenIDUserInfo(ctx context.Context, serverName, accessToken 
 		Query:        url.Values{"access_token": {accessToken}},
 		ResponseJSON: &resp,
 	})
+	if resp != nil && resp.Sub.Homeserver() != serverName {
+		if err == nil {
+			err = fmt.Errorf("user ID %s does not belong to server %s", resp.Sub, serverName)
+		}
+		resp = nil
+	}
 	return
 }
 
