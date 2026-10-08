@@ -229,6 +229,7 @@ type LoginDisplayAndWaitParams struct {
 	Type LoginDisplayType `json:"type"`
 	// The thing to display (raw data for QR, unicode emoji for emoji, plain string for code, omitted for nothing)
 	Data string `json:"data,omitempty"`
+	URL  string `json:"url,omitempty"`
 	// An image containing the thing to display. If present, this is recommended over using data directly.
 	// For emojis, the URL to the canonical image representation of the emoji
 	ImageURL string `json:"image_url,omitempty"`
