@@ -17,10 +17,10 @@ import (
 	"net/http"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exsync"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/id"
@@ -32,8 +32,7 @@ type ServerAuth struct {
 	GetDestination func(XMatrixAuth) string
 	MaxBodySize    int64
 
-	keyFetchLocks     map[string]*sync.Mutex
-	keyFetchLocksLock sync.Mutex
+	keyFetchLocks exsync.KeyedMutex[string]
 }
 
 func NewServerAuth(client *Client, keyCache KeyCache, getDestination func(auth XMatrixAuth) string) *ServerAuth {
@@ -42,7 +41,6 @@ func NewServerAuth(client *Client, keyCache KeyCache, getDestination func(auth X
 		Client:         client,
 		GetDestination: getDestination,
 		MaxBodySize:    50 * 1024 * 1024,
-		keyFetchLocks:  make(map[string]*sync.Mutex),
 	}
 }
 
@@ -109,23 +107,16 @@ func (sa *ServerAuth) GetKeysWithCache(ctx context.Context, serverName string, k
 		return res, nil
 	}
 
-	sa.keyFetchLocksLock.Lock()
-	lock, ok := sa.keyFetchLocks[serverName]
-	if !ok {
-		lock = &sync.Mutex{}
-		sa.keyFetchLocks[serverName] = lock
-	}
-	sa.keyFetchLocksLock.Unlock()
+	sa.keyFetchLocks.Lock(serverName)
+	defer sa.keyFetchLocks.Unlock(serverName)
 
-	lock.Lock()
-	defer lock.Unlock()
 	res, err = sa.Keys.LoadKeys(ctx, serverName, maxBackoff)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read cache: %w", err)
 	} else if res != nil {
 		if res.HasKey(keyID) {
 			return res, nil
-		} else if ok, err = sa.Keys.ShouldReQuery(ctx, serverName); err != nil {
+		} else if ok, err := sa.Keys.ShouldReQuery(ctx, serverName); err != nil {
 			return nil, fmt.Errorf("failed to check if should re-query keys: %w", err)
 		} else if !ok {
 			zerolog.Ctx(ctx).Trace().
