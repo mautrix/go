@@ -41,8 +41,7 @@ var TypeMap = map[Type]reflect.Type{
 	StateSpaceParent:       reflect.TypeFor[SpaceParentEventContent](),
 	StateSpaceChild:        reflect.TypeFor[SpaceChildEventContent](),
 
-	StateRoomPolicy:         reflect.TypeFor[RoomPolicyEventContent](),
-	StateUnstableRoomPolicy: reflect.TypeFor[RoomPolicyEventContent](),
+	StateRoomPolicy: reflect.TypeFor[RoomPolicyEventContent](),
 
 	StateImagePack:         reflect.TypeFor[ImagePackEventContent](),
 	StateUnstableImagePack: reflect.TypeFor[ImagePackEventContent](),
