@@ -70,7 +70,8 @@ type OlmMachine struct {
 	AllowKeyShare   func(context.Context, *id.Device, event.RequestedKeyInfo) *KeyShareRejection
 	OnRoomKeyBundle func(context.Context, *event.RoomKeyBundleEventContent)
 	// Callback for MSC4385 secret pushes from other devices of our own user. Secret pushes are ignored if unset.
-	SecretPushReceiver func(context.Context, *DecryptedOlmEvent, *event.SecretPushEventContent)
+	SecretPushReceiver   func(context.Context, *DecryptedOlmEvent, *event.SecretPushEventContent)
+	NeedsUnwedgeCallback func(context.Context, id.UserID, id.SenderKey)
 
 	devicesToUnwedge     map[id.IdentityKey]bool
 	devicesToUnwedgeLock sync.Mutex
