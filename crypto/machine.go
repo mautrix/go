@@ -70,7 +70,8 @@ type OlmMachine struct {
 	AllowKeyShare   func(context.Context, *id.Device, event.RequestedKeyInfo) *KeyShareRejection
 	OnRoomKeyBundle func(context.Context, *event.RoomKeyBundleEventContent)
 	// Callback for MSC4385 secret pushes from other devices of our own user. Secret pushes are ignored if unset.
-	SecretPushReceiver func(context.Context, *DecryptedOlmEvent, *event.SecretPushEventContent)
+	SecretPushReceiver   func(context.Context, *DecryptedOlmEvent, *event.SecretPushEventContent)
+	NeedsUnwedgeCallback func(context.Context, id.UserID, id.SenderKey)
 
 	devicesToUnwedge     map[id.IdentityKey]bool
 	devicesToUnwedgeLock sync.Mutex
@@ -442,14 +443,6 @@ func (mach *OlmMachine) HandleHistoryVisibility(ctx context.Context, evt *event.
 }
 
 func (mach *OlmMachine) HandleEncryptedEvent(ctx context.Context, evt *event.Event) *DecryptedOlmEvent {
-	return mach.HandleEncryptedEventWithUnwedgeCallback(ctx, evt, nil)
-}
-
-type NeedsUnwedgeCallback func(sender id.UserID, senderKey id.SenderKey)
-
-// Same as HandleEncryptedEvent, but reports required repairs to needsUnwedge after releasing the Olm lock.
-// If needsUnwedge is nil, repairs run in the background.
-func (mach *OlmMachine) HandleEncryptedEventWithUnwedgeCallback(ctx context.Context, evt *event.Event, needsUnwedge NeedsUnwedgeCallback) *DecryptedOlmEvent {
 	content, ok := evt.Content.Parsed.(*event.EncryptedEventContent)
 	if !ok {
 		mach.machOrContextLog(ctx).Warn().Msg("Passed invalid event to encrypted handler")
@@ -459,7 +452,7 @@ func (mach *OlmMachine) HandleEncryptedEventWithUnwedgeCallback(ctx context.Cont
 		return nil
 	}
 
-	decryptedEvt, err := mach.decryptOlmEvent(ctx, evt, needsUnwedge)
+	decryptedEvt, err := mach.decryptOlmEvent(ctx, evt)
 	if err != nil {
 		mach.machOrContextLog(ctx).Error().Err(err).Msg("Failed to decrypt to-device event")
 		return nil

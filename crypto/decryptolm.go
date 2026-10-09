@@ -71,7 +71,7 @@ type DecryptedOlmEvent struct {
 	Content event.Content `json:"content"`
 }
 
-func (mach *OlmMachine) decryptOlmEvent(ctx context.Context, evt *event.Event, needsUnwedge NeedsUnwedgeCallback) (*DecryptedOlmEvent, error) {
+func (mach *OlmMachine) decryptOlmEvent(ctx context.Context, evt *event.Event) (*DecryptedOlmEvent, error) {
 	content, ok := evt.Content.Parsed.(*event.EncryptedEventContent)
 	if !ok {
 		return nil, ErrIncorrectEncryptedContentType
@@ -82,7 +82,7 @@ func (mach *OlmMachine) decryptOlmEvent(ctx context.Context, evt *event.Event, n
 	if !ok {
 		return nil, ErrNotEncryptedForMe
 	}
-	decrypted, err := mach.decryptAndParseOlmCiphertext(ctx, evt, content.SenderKey, ownContent.Type, ownContent.Body, needsUnwedge)
+	decrypted, err := mach.decryptAndParseOlmCiphertext(ctx, evt, content.SenderKey, ownContent.Type, ownContent.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +99,7 @@ type userSenderKeyTuple struct {
 	SenderKey id.SenderKey
 }
 
-func (mach *OlmMachine) decryptAndParseOlmCiphertext(ctx context.Context, evt *event.Event, senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string, needsUnwedge NeedsUnwedgeCallback) (*DecryptedOlmEvent, error) {
+func (mach *OlmMachine) decryptAndParseOlmCiphertext(ctx context.Context, evt *event.Event, senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string) (*DecryptedOlmEvent, error) {
 	if olmType != id.OlmMsgTypePreKey && olmType != id.OlmMsgTypeMsg {
 		return nil, ErrUnsupportedOlmMessageType
 	}
@@ -110,7 +110,7 @@ func (mach *OlmMachine) decryptAndParseOlmCiphertext(ctx context.Context, evt *e
 		Logger()
 	ctx = log.WithContext(ctx)
 	endTimeTrace := mach.timeTrace(ctx, "decrypting olm ciphertext", 5*time.Second)
-	plaintext, err := mach.tryDecryptOlmCiphertext(ctx, evt.Sender, senderKey, olmType, ciphertext, needsUnwedge)
+	plaintext, err := mach.tryDecryptOlmCiphertext(ctx, evt.Sender, senderKey, olmType, ciphertext)
 	endTimeTrace()
 	if err != nil {
 		return nil, err
@@ -182,7 +182,7 @@ func olmMessageHash(ciphertext string) ([32]byte, error) {
 	return sha256.Sum256(ciphertextBytes), err
 }
 
-func (mach *OlmMachine) tryDecryptOlmCiphertext(ctx context.Context, sender id.UserID, senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string, needsUnwedge NeedsUnwedgeCallback) ([]byte, error) {
+func (mach *OlmMachine) tryDecryptOlmCiphertext(ctx context.Context, sender id.UserID, senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string) ([]byte, error) {
 	ciphertextHash, err := olmMessageHash(ciphertext)
 	if err != nil {
 		return nil, fmt.Errorf("failed to hash olm ciphertext: %w", err)
@@ -192,8 +192,8 @@ func (mach *OlmMachine) tryDecryptOlmCiphertext(ctx context.Context, sender id.U
 	var unwedge bool
 	defer func() {
 		if unwedge {
-			if needsUnwedge != nil {
-				needsUnwedge(sender, senderKey)
+			if mach.NeedsUnwedgeCallback != nil {
+				mach.NeedsUnwedgeCallback(ctx, sender, senderKey)
 			} else {
 				go mach.UnwedgeDevice(log.WithContext(mach.backgroundCtx), sender, senderKey)
 			}
@@ -397,8 +397,6 @@ func (mach *OlmMachine) tryDecryptOlmCiphertextWithExistingSession(
 
 const MinUnwedgeInterval = 1 * time.Hour
 
-// UnwedgeDevice synchronously attempts to repair an Olm session by creating a
-// new outbound session and sending a dummy event. It is rate-limited per device.
 func (mach *OlmMachine) UnwedgeDevice(ctx context.Context, sender id.UserID, senderKey id.SenderKey) {
 	log := mach.machOrContextLog(ctx).With().
 		Str("action", "unwedge olm session").
