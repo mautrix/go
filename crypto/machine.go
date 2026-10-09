@@ -442,19 +442,28 @@ func (mach *OlmMachine) HandleHistoryVisibility(ctx context.Context, evt *event.
 }
 
 func (mach *OlmMachine) HandleEncryptedEvent(ctx context.Context, evt *event.Event) *DecryptedOlmEvent {
+	decryptedEvt, unwedge := mach.HandleEncryptedEventWithUnwedge(ctx, evt)
+	if unwedge != nil {
+		go unwedge(mach.backgroundCtx)
+	}
+	return decryptedEvt
+}
+
+// Same as HandleEncryptedEvent but returns the unwedge function rather than running it
+func (mach *OlmMachine) HandleEncryptedEventWithUnwedge(ctx context.Context, evt *event.Event) (*DecryptedOlmEvent, func(context.Context)) {
 	content, ok := evt.Content.Parsed.(*event.EncryptedEventContent)
 	if !ok {
 		mach.machOrContextLog(ctx).Warn().Msg("Passed invalid event to encrypted handler")
-		return nil
+		return nil, nil
 	} else if content.Algorithm == id.AlgorithmBeeperStreamV1 {
 		mach.machOrContextLog(ctx).Debug().Msg("Skipping beeper stream encrypted to-device event in Olm machine")
-		return nil
+		return nil, nil
 	}
 
-	decryptedEvt, err := mach.decryptOlmEvent(ctx, evt)
+	decryptedEvt, unwedge, err := mach.decryptOlmEvent(ctx, evt)
 	if err != nil {
 		mach.machOrContextLog(ctx).Error().Err(err).Msg("Failed to decrypt to-device event")
-		return nil
+		return nil, unwedge
 	}
 
 	log := mach.machOrContextLog(ctx).With().
@@ -489,9 +498,9 @@ func (mach *OlmMachine) HandleEncryptedEvent(ctx context.Context, evt *event.Eve
 		log.Trace().Msg("Handled secret push event")
 	default:
 		log.Debug().Msg("Unhandled encrypted to-device event")
-		return decryptedEvt
+		return decryptedEvt, nil
 	}
-	return nil
+	return nil, nil
 }
 
 const olmHashSavePointCount = 5

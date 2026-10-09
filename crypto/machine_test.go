@@ -120,7 +120,7 @@ func TestOlmMachineOlmMegolmSessions(t *testing.T) {
 
 	for _, content := range content.OlmCiphertext {
 		// decrypt olm ciphertext
-		decrypted, err := machineIn.decryptAndParseOlmCiphertext(context.TODO(), &event.Event{
+		decrypted, _, err := machineIn.decryptAndParseOlmCiphertext(context.TODO(), &event.Event{
 			Type:   event.ToDeviceEncrypted,
 			Sender: "user1",
 		}, senderKey, content.Type, content.Body)
