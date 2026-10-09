@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -209,7 +210,7 @@ func (mach *OlmMachine) tryDecryptOlmCiphertext(ctx context.Context, sender id.U
 	if err != nil {
 		if err == ErrDecryptionFailedWithMatchingSession {
 			log.Warn().Msg("Found matching session, but decryption failed")
-			go mach.unwedgeDevice(log, sender, senderKey)
+			mach.startUnwedge(ctx, log, sender, senderKey)
 		}
 		return nil, fmt.Errorf("failed to decrypt olm event: %w", err)
 	}
@@ -224,7 +225,7 @@ func (mach *OlmMachine) tryDecryptOlmCiphertext(ctx context.Context, sender id.U
 	// New sessions can only be created if it's a prekey message, we can't decrypt the message
 	// if it isn't one at this point in time anymore, so return early.
 	if olmType != id.OlmMsgTypePreKey {
-		go mach.unwedgeDevice(log, sender, senderKey)
+		mach.startUnwedge(ctx, log, sender, senderKey)
 		return nil, ErrDecryptionFailedForNormalMessage
 	}
 
@@ -234,7 +235,7 @@ func (mach *OlmMachine) tryDecryptOlmCiphertext(ctx context.Context, sender id.U
 	session, err := mach.account.NewInboundSessionFrom(senderKey, ciphertext)
 	endTimeTrace()
 	if err != nil {
-		go mach.unwedgeDevice(log, sender, senderKey)
+		mach.startUnwedge(ctx, log, sender, senderKey)
 		return nil, fmt.Errorf("failed to create new session from prekey message: %w", err)
 	}
 	log = log.With().Str("new_olm_session_id", session.ID().String()).Logger()
@@ -262,7 +263,7 @@ func (mach *OlmMachine) tryDecryptOlmCiphertext(ctx context.Context, sender id.U
 			log.Warn().Msg("Goolm decryption was successful after libolm failure?")
 		}
 
-		go mach.unwedgeDevice(log, sender, senderKey)
+		mach.startUnwedge(ctx, log, sender, senderKey)
 		return nil, fmt.Errorf("failed to decrypt olm event with session created from prekey message: %w", err)
 	}
 
@@ -387,9 +388,31 @@ func (mach *OlmMachine) tryDecryptOlmCiphertextWithExistingSession(
 
 const MinUnwedgeInterval = 1 * time.Hour
 
-func (mach *OlmMachine) unwedgeDevice(log zerolog.Logger, sender id.UserID, senderKey id.SenderKey) {
+type unwedgeWaitKey struct{}
+
+// WithUnwedgeWait returns a context that tracks background Olm session repairs
+// and a function that waits for those repairs to finish. Call the wait function
+// after all HandleEncryptedEvent calls using this context have returned.
+// Repairs in this scope use ctx for cancellation instead of the machine's
+// background context.
+func WithUnwedgeWait(ctx context.Context) (context.Context, func()) {
+	wg := &sync.WaitGroup{}
+	return context.WithValue(ctx, unwedgeWaitKey{}, wg), wg.Wait
+}
+
+func (mach *OlmMachine) startUnwedge(ctx context.Context, log zerolog.Logger, sender id.UserID, senderKey id.SenderKey) {
+	if wg, ok := ctx.Value(unwedgeWaitKey{}).(*sync.WaitGroup); ok {
+		wg.Go(func() {
+			mach.unwedgeDevice(ctx, log, sender, senderKey)
+		})
+	} else {
+		go mach.unwedgeDevice(mach.backgroundCtx, log, sender, senderKey)
+	}
+}
+
+func (mach *OlmMachine) unwedgeDevice(ctx context.Context, log zerolog.Logger, sender id.UserID, senderKey id.SenderKey) {
 	log = log.With().Str("action", "unwedge olm session").Logger()
-	ctx := log.WithContext(mach.backgroundCtx)
+	ctx = log.WithContext(ctx)
 	mach.recentlyUnwedgedLock.Lock()
 	prevUnwedge, ok := mach.recentlyUnwedged[senderKey]
 	delta := time.Since(prevUnwedge)
