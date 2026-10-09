@@ -442,28 +442,27 @@ func (mach *OlmMachine) HandleHistoryVisibility(ctx context.Context, evt *event.
 }
 
 func (mach *OlmMachine) HandleEncryptedEvent(ctx context.Context, evt *event.Event) *DecryptedOlmEvent {
-	decryptedEvt, unwedge := mach.HandleEncryptedEventWithUnwedge(ctx, evt)
-	if unwedge != nil {
-		go unwedge(mach.backgroundCtx)
-	}
-	return decryptedEvt
+	return mach.HandleEncryptedEventWithUnwedgeCallback(ctx, evt, nil)
 }
 
-// Same as HandleEncryptedEvent but returns the unwedge function rather than running it
-func (mach *OlmMachine) HandleEncryptedEventWithUnwedge(ctx context.Context, evt *event.Event) (*DecryptedOlmEvent, func(context.Context)) {
+type NeedsUnwedgeCallback func(sender id.UserID, senderKey id.SenderKey)
+
+// Same as HandleEncryptedEvent, but reports required repairs to needsUnwedge after releasing the Olm lock.
+// If needsUnwedge is nil, repairs run in the background.
+func (mach *OlmMachine) HandleEncryptedEventWithUnwedgeCallback(ctx context.Context, evt *event.Event, needsUnwedge NeedsUnwedgeCallback) *DecryptedOlmEvent {
 	content, ok := evt.Content.Parsed.(*event.EncryptedEventContent)
 	if !ok {
 		mach.machOrContextLog(ctx).Warn().Msg("Passed invalid event to encrypted handler")
-		return nil, nil
+		return nil
 	} else if content.Algorithm == id.AlgorithmBeeperStreamV1 {
 		mach.machOrContextLog(ctx).Debug().Msg("Skipping beeper stream encrypted to-device event in Olm machine")
-		return nil, nil
+		return nil
 	}
 
-	decryptedEvt, unwedge, err := mach.decryptOlmEvent(ctx, evt)
+	decryptedEvt, err := mach.decryptOlmEvent(ctx, evt, needsUnwedge)
 	if err != nil {
 		mach.machOrContextLog(ctx).Error().Err(err).Msg("Failed to decrypt to-device event")
-		return nil, unwedge
+		return nil
 	}
 
 	log := mach.machOrContextLog(ctx).With().
@@ -498,9 +497,9 @@ func (mach *OlmMachine) HandleEncryptedEventWithUnwedge(ctx context.Context, evt
 		log.Trace().Msg("Handled secret push event")
 	default:
 		log.Debug().Msg("Unhandled encrypted to-device event")
-		return decryptedEvt, nil
+		return decryptedEvt
 	}
-	return nil, nil
+	return nil
 }
 
 const olmHashSavePointCount = 5

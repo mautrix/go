@@ -120,10 +120,10 @@ func TestOlmMachineOlmMegolmSessions(t *testing.T) {
 
 	for _, content := range content.OlmCiphertext {
 		// decrypt olm ciphertext
-		decrypted, _, err := machineIn.decryptAndParseOlmCiphertext(context.TODO(), &event.Event{
+		decrypted, err := machineIn.decryptAndParseOlmCiphertext(context.TODO(), &event.Event{
 			Type:   event.ToDeviceEncrypted,
 			Sender: "user1",
-		}, senderKey, content.Type, content.Body)
+		}, senderKey, content.Type, content.Body, nil)
 		require.NoError(t, err, "Error decrypting olm ciphertext")
 
 		// store room key in new inbound group session
