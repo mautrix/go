@@ -72,9 +72,10 @@ const (
 	getLastMessageInThread       = getMessageBaseQuery + `WHERE bridge_id=$1 AND room_id=$2 AND room_receiver=$3 AND (id=$4 OR thread_root_id=$4) ORDER BY thread_root_id NULLS LAST, timestamp DESC, id DESC, part_id DESC LIMIT 1`
 	getLastNInPortal             = getMessageBaseQuery + `WHERE bridge_id=$1 AND room_id=$2 AND room_receiver=$3 ORDER BY timestamp DESC, id DESC, part_id DESC LIMIT $4`
 
-	getLastMessagePartAtOrBeforeTimeQuery        = getMessageBaseQuery + `WHERE bridge_id = $1 AND room_id=$2 AND room_receiver=$3 AND timestamp<=$4 ORDER BY timestamp DESC, id DESC, part_id DESC LIMIT 1`
-	getLastNonFakeMessagePartAtOrBeforeTimeQuery = getMessageBaseQuery + `WHERE bridge_id = $1 AND room_id=$2 AND room_receiver=$3 AND timestamp<=$4 AND mxid NOT LIKE '~fake:%' ORDER BY timestamp DESC, id DESC, part_id DESC LIMIT 1`
-	getFirstNonFakeMessagePartAfterTimeQuery     = getMessageBaseQuery + `WHERE bridge_id = $1 AND room_id=$2 AND room_receiver=$3 AND timestamp>$4 AND mxid NOT LIKE '~fake:%' ORDER BY timestamp ASC, id ASC, part_id ASC LIMIT 1`
+	getLastMessagePartAtOrBeforeTimeQuery                       = getMessageBaseQuery + `WHERE bridge_id = $1 AND room_id=$2 AND room_receiver=$3 AND timestamp<=$4 ORDER BY timestamp DESC, id DESC, part_id DESC LIMIT 1`
+	getLastNonFakeMessagePartAtOrBeforeTimeQuery                = getMessageBaseQuery + `WHERE bridge_id = $1 AND room_id=$2 AND room_receiver=$3 AND timestamp<=$4 AND mxid NOT LIKE '~fake:%' ORDER BY timestamp DESC, id DESC, part_id DESC LIMIT 1`
+	getLastNonFakeMessagePartAtOrBeforeTimeExcludingSenderQuery = getMessageBaseQuery + `WHERE bridge_id=$1 AND room_id=$2 AND room_receiver=$3 AND timestamp<=$4 AND sender_id<>$5 AND mxid NOT LIKE '~fake:%' ORDER BY timestamp DESC, id DESC, part_id DESC LIMIT 1`
+	getFirstNonFakeMessagePartAfterTimeQuery                    = getMessageBaseQuery + `WHERE bridge_id = $1 AND room_id=$2 AND room_receiver=$3 AND timestamp>$4 AND mxid NOT LIKE '~fake:%' ORDER BY timestamp ASC, id ASC, part_id ASC LIMIT 1`
 
 	countMessagesInPortalQuery = `
 		SELECT COUNT(*) FROM message WHERE bridge_id=$1 AND room_id=$2 AND room_receiver=$3
@@ -149,6 +150,10 @@ func (mq *MessageQuery) GetLastPartAtOrBeforeTime(ctx context.Context, portal ne
 
 func (mq *MessageQuery) GetLastNonFakePartAtOrBeforeTime(ctx context.Context, portal networkid.PortalKey, maxTS time.Time) (*Message, error) {
 	return mq.QueryOne(ctx, getLastNonFakeMessagePartAtOrBeforeTimeQuery, mq.BridgeID, portal.ID, portal.Receiver, maxTS.UnixNano())
+}
+
+func (mq *MessageQuery) GetLastNonFakePartAtOrBeforeTimeExcludingSender(ctx context.Context, portal networkid.PortalKey, maxTS time.Time, sender networkid.UserID) (*Message, error) {
+	return mq.QueryOne(ctx, getLastNonFakeMessagePartAtOrBeforeTimeExcludingSenderQuery, mq.BridgeID, portal.ID, portal.Receiver, maxTS.UnixNano(), sender)
 }
 
 func (mq *MessageQuery) GetFirstNonFakePartAfterTime(ctx context.Context, portal networkid.PortalKey, minTS time.Time) (*Message, error) {
