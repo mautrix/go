@@ -52,8 +52,6 @@ const (
 	MsgFile     MessageType = "m.file"
 
 	MsgVerificationRequest MessageType = "m.key.verification.request"
-
-	MsgBeeperGallery MessageType = "com.beeper.gallery"
 )
 
 // Format specifies the format of the formatted_body in m.room.message events.
@@ -114,32 +112,27 @@ type MessageEventContent struct {
 	GeoURI string `json:"geo_uri,omitempty"`
 
 	// Extra fields for media types
-	URL  id.ContentURIString `json:"url,omitempty"`
-	Info *FileInfo           `json:"info,omitempty"`
-	File *EncryptedFileInfo  `json:"file,omitempty"`
-
-	FileName string `json:"filename,omitempty"`
-
-	Mentions *Mentions `json:"m.mentions,omitempty"`
+	URL      id.ContentURIString `json:"url,omitempty"`
+	Info     *FileInfo           `json:"info,omitempty"`
+	File     *EncryptedFileInfo  `json:"file,omitempty"`
+	FileName string              `json:"filename,omitempty"`
 
 	// Edits and relations
 	NewContent *MessageEventContent `json:"m.new_content,omitempty"`
 	RelatesTo  *RelatesTo           `json:"m.relates_to,omitempty"`
+	Mentions   *Mentions            `json:"m.mentions,omitempty"`
+
+	replyFallbackRemoved bool
 
 	// In-room verification
 	To         id.UserID            `json:"to,omitempty"`
 	FromDevice id.DeviceID          `json:"from_device,omitempty"`
 	Methods    []VerificationMethod `json:"methods,omitempty"`
 
-	replyFallbackRemoved bool
-
 	ImageSourcePacks map[id.ContentURIString]*ImageSource    `json:"com.beeper.msc4459.image_source_packs,omitempty"`
 	BridgedEmojis    map[id.ContentURIString]*BridgedSticker `json:"com.beeper.bridged_emojis,omitempty"`
 
 	MessageSendRetry             *BeeperRetryMetadata     `json:"com.beeper.message_send_retry,omitempty"`
-	BeeperGalleryImages          []*MessageEventContent   `json:"com.beeper.gallery.images,omitempty"`
-	BeeperGalleryCaption         string                   `json:"com.beeper.gallery.caption,omitempty"`
-	BeeperGalleryCaptionHTML     string                   `json:"com.beeper.gallery.caption_html,omitempty"`
 	BeeperPerMessageProfile      *BeeperPerMessageProfile `json:"com.beeper.per_message_profile,omitempty"`
 	BeeperActionMessage          *BeeperActionMessage     `json:"com.beeper.action_message,omitempty"`
 	BeeperLinkPreviews           []*BeeperLinkPreview     `json:"com.beeper.linkpreviews,omitzero"`
