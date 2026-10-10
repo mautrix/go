@@ -51,6 +51,8 @@ const (
 	MsgAudio    MessageType = "m.audio"
 	MsgFile     MessageType = "m.file"
 
+	MsgUnstableGallery MessageType = "dm.filament.gallery"
+
 	MsgVerificationRequest MessageType = "m.key.verification.request"
 )
 
@@ -116,6 +118,10 @@ type MessageEventContent struct {
 	Info     *FileInfo           `json:"info,omitempty"`
 	File     *EncryptedFileInfo  `json:"file,omitempty"`
 	FileName string              `json:"filename,omitempty"`
+
+	UnstableGalleryItemType MessageType            `json:"itemtype,omitempty"`
+	UnstableGalleryItems    []*MessageEventContent `json:"itemtypes,omitempty"`
+	GalleryItems            []*MessageEventContent `json:"items,omitempty"`
 
 	// Edits and relations
 	NewContent *MessageEventContent `json:"m.new_content,omitempty"`
