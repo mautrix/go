@@ -168,9 +168,7 @@ func (cli *Client) OAuthExchangeToken(ctx context.Context, params oauth.Exchange
 		"code_verifier": []string{params.CodeVerifier},
 	}, &resp)
 	if err == nil && params.StoreCredentials {
-		cli.refreshToken = resp.RefreshToken
-		cli.AccessToken = resp.AccessToken
-		cli.accessTokenExpiry = start.Add(resp.ExpiresIn.Duration)
+		cli.oauthSetTokens(resp.RefreshToken, resp.AccessToken, start.Add(resp.ExpiresIn.Duration))
 	}
 	return
 }
@@ -196,10 +194,7 @@ func (cli *Client) OAuthPollDeviceCode(ctx context.Context, params oauth.PollDev
 		"client_id":   []string{clientID},
 	}, &resp)
 	if err == nil && params.StoreCredentials {
-		cli.refreshToken = resp.RefreshToken
-		cli.AccessToken = resp.AccessToken
-		cli.accessTokenExpiry = start.Add(resp.ExpiresIn.Duration)
-		cli.longTokenLifetime = resp.ExpiresIn.Duration > 1*time.Hour
+		cli.oauthSetTokens(resp.RefreshToken, resp.AccessToken, start.Add(resp.ExpiresIn.Duration))
 	}
 	return
 }
@@ -212,11 +207,23 @@ const (
 func (cli *Client) OAuthSetTokens(clientID, refreshToken, accessToken string, expiry time.Time) {
 	cli.refreshLock.Lock()
 	cli.oauthClientID = clientID
+	cli.oauthSetTokens(refreshToken, accessToken, expiry)
+	cli.refreshLock.Unlock()
+}
+
+func (cli *Client) oauthSetTokens(refreshToken, accessToken string, expiry time.Time) {
 	cli.refreshToken = refreshToken
 	cli.AccessToken = accessToken
 	cli.accessTokenExpiry = expiry
 	cli.longTokenLifetime = time.Until(expiry) > 1*time.Hour
-	cli.refreshLock.Unlock()
+}
+
+func (cli *Client) oauthTimeUntilExpiry() time.Duration {
+	now := time.Now()
+	// Check both monotonic and wall clock time to avoid issues with both suspending and wall clock changes.
+	// If a silly user changes their wall clock after resuming from suspend, they may still explode.
+	// TODO ExternalTime might be a better solution once it's released https://github.com/golang/go/issues/36141
+	return min(cli.accessTokenExpiry.Sub(now), cli.accessTokenExpiry.Round(0).Sub(now))
 }
 
 func (cli *Client) shouldRetryWithRefreshedToken(ctx context.Context, prevToken string) bool {
@@ -225,7 +232,7 @@ func (cli *Client) shouldRetryWithRefreshedToken(ctx context.Context, prevToken 
 	}
 	cli.refreshLock.RLock()
 	defer cli.refreshLock.RUnlock()
-	return cli.refreshToken != "" && (prevToken != cli.AccessToken || time.Until(cli.accessTokenExpiry) < 0)
+	return cli.refreshToken != "" && (prevToken != cli.AccessToken || cli.oauthTimeUntilExpiry() < 0)
 }
 
 func (cli *Client) refreshTokenIfNeeded(ctx context.Context, isSync bool) (string, error) {
@@ -233,11 +240,11 @@ func (cli *Client) refreshTokenIfNeeded(ctx context.Context, isSync bool) (strin
 	if isSync {
 		buffer = syncTokenRefreshBuffer
 	}
+	cli.refreshLock.RLock()
 	if cli.longTokenLifetime {
 		buffer *= 5
 	}
-	cli.refreshLock.RLock()
-	needed := cli.refreshToken != "" && time.Until(cli.accessTokenExpiry) < buffer
+	needed := cli.refreshToken != "" && cli.oauthTimeUntilExpiry() < buffer
 	token := cli.AccessToken
 	cli.refreshLock.RUnlock()
 	if needed {
@@ -264,7 +271,7 @@ func (cli *Client) OAuthRefreshToken(ctx context.Context, buffer time.Duration) 
 	} else if cli.oauthClientID == "" {
 		return ErrClientIDNotSet
 	}
-	if time.Until(cli.accessTokenExpiry) > buffer {
+	if cli.oauthTimeUntilExpiry() > buffer {
 		zerolog.Ctx(ctx).Debug().
 			Time("expires_at", cli.accessTokenExpiry).
 			Msg("Not refreshing OAuth token because it is still valid")
@@ -287,10 +294,7 @@ func (cli *Client) OAuthRefreshToken(ctx context.Context, buffer time.Duration) 
 		expiry := start.Add(resp.ExpiresIn.Duration)
 		err = cli.SaveNewToken(ctx, resp.RefreshToken, resp.AccessToken, expiry)
 		if err == nil {
-			cli.refreshToken = resp.RefreshToken
-			cli.AccessToken = resp.AccessToken
-			cli.accessTokenExpiry = expiry
-			cli.longTokenLifetime = resp.ExpiresIn.Duration > 1*time.Hour
+			cli.oauthSetTokens(resp.RefreshToken, resp.AccessToken, expiry)
 		}
 	}
 	return
