@@ -1,4 +1,4 @@
--- v0 -> v31 (compatible with v9+): Latest revision
+-- v0 -> v32 (compatible with v9+): Latest revision
 CREATE TABLE "user" (
 	bridge_id       TEXT NOT NULL,
 	mxid            TEXT NOT NULL,
@@ -183,6 +183,7 @@ CREATE TABLE user_portal (
 	in_space        BOOLEAN NOT NULL,
 	preferred       BOOLEAN NOT NULL,
 	last_read       BIGINT,
+	left_matrix     BOOLEAN NOT NULL DEFAULT false,
 
 	PRIMARY KEY (bridge_id, user_mxid, login_id, portal_id, portal_receiver),
 	CONSTRAINT user_portal_user_login_fkey FOREIGN KEY (bridge_id, login_id)
