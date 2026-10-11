@@ -60,11 +60,16 @@ type CryptoHelper struct {
 	cancelPeriodicDeleteLoop func()
 
 	impersonationEnabled bool
+	// impersonationBackoff avoids retrying a failing registration on every message from the same ghost.
+	impersonationBackoff *retryBackoff
 	// impersonatable caches ghosts that have a registered MSC4350 device, keyed by user ID.
 	// The value includes the bot's device ID and signing key, so a reset of the bot device invalidates entries.
 	impersonatable      sync.Map
 	impersonationFlight singleflight.Group
 }
+
+// impersonationRetryDelay is how long to wait before retrying a failed MSC4350 device registration for a ghost.
+const impersonationRetryDelay = time.Minute
 
 type impersonationCacheEntry struct {
 	deviceID id.DeviceID
@@ -80,6 +85,8 @@ func NewCryptoHelper(c *Connector) Crypto {
 	return &CryptoHelper{
 		bridge: c,
 		log:    &log,
+
+		impersonationBackoff: newRetryBackoff(impersonationRetryDelay),
 	}
 }
 
@@ -216,6 +223,9 @@ func (helper *CryptoHelper) EnsureImpersonatable(ctx context.Context, ghost id.U
 	if cached, ok := helper.impersonatable.Load(ghost); ok && cached == want {
 		return nil
 	}
+	if helper.impersonationBackoff.ShouldSkip(ghost) {
+		return nil
+	}
 	_, err, _ := helper.impersonationFlight.Do(string(ghost), func() (any, error) {
 		if cached, ok := helper.impersonatable.Load(ghost); ok && cached == want {
 			return nil, nil
@@ -253,6 +263,11 @@ func (helper *CryptoHelper) EnsureImpersonatable(ctx context.Context, ghost id.U
 			Msg("Registered MSC4350 impersonatable device for ghost")
 		return nil, nil
 	})
+	if err != nil {
+		helper.impersonationBackoff.RecordFailure(ghost)
+	} else {
+		helper.impersonationBackoff.Clear(ghost)
+	}
 	return err
 }
 
