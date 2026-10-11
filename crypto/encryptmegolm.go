@@ -20,6 +20,7 @@ import (
 	"go.mau.fi/util/exzerolog"
 
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/crypto/canonicaljson"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -131,7 +132,7 @@ func (mach *OlmMachine) EncryptMegolmEventWithStateKey(ctx context.Context, room
 	} else if session == nil {
 		return nil, ErrNoGroupSession
 	}
-	plaintext, err := json.Marshal(&rawMegolmEvent{
+	plaintext, err := canonicaljson.Marshal(&rawMegolmEvent{
 		RoomID:   roomID,
 		Type:     evtType,
 		StateKey: stateKey,
