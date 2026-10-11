@@ -242,14 +242,14 @@ func compactUnicodeEscape(input, output []byte, index int) ([]byte, int) {
 		n := utf8.EncodeRune(buffer[:], rune(c))
 		output = append(output, buffer[:n]...)
 	} else {
-		// Otherwise the escaped character was the first part of a UTF-16 style surrogate pair.
-		// The next 6 bytes MUST be a '\uXXXX'.
-		// If there aren't enough bytes to decode the hex escape then return.
-		if len(input)-index < 6 {
-			return output, len(input)
+		if c >= 0xDC00 || len(input)-index < 6 || input[index] != '\\' || input[index+1] != 'u' {
+			return append(output, input[index-6:index]...), index
 		}
 		// Decode the 4 hex digits from the '\uXXXX'.
 		surrogate := readHexDigits(input[index+2:])
+		if surrogate < 0xDC00 || surrogate >= 0xE000 {
+			return append(output, input[index-6:index]...), index
+		}
 		index += 6
 		// Reconstruct the UCS4 codepoint from the surrogates.
 		codepoint := 0x10000 + (((c & 0x3FF) << 10) | (surrogate & 0x3FF))

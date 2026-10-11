@@ -20,6 +20,7 @@ import (
 	"go.mau.fi/util/exzerolog"
 
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/crypto/canonicaljson"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -140,6 +141,7 @@ func (mach *OlmMachine) EncryptMegolmEventWithStateKey(ctx context.Context, room
 	if err != nil {
 		return nil, err
 	}
+	plaintext = canonicaljson.CompactJSON(plaintext, plaintext[:0])
 	log := mach.machOrContextLog(ctx).With().
 		Str("event_type", evtType.Type).
 		Any("state_key", stateKey).
