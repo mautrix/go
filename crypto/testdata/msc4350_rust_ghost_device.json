@@ -1,0 +1,46 @@
+{
+  "bot_device_id": "JLAFKJWSCS",
+  "bot_device_keys": {
+    "algorithms": [
+      "m.olm.v1.curve25519-aes-sha2",
+      "m.megolm.v1.aes-sha2"
+    ],
+    "device_id": "JLAFKJWSCS",
+    "keys": {
+      "curve25519:JLAFKJWSCS": "rp8OF2NpC6fF8HhnUL9GZa4dDY/J+SzIFLI1wgUxigA",
+      "ed25519:JLAFKJWSCS": "FyzMTzg3/cOWh9480JuVX+5TbuyHhQCYETIj1vaZVTc"
+    },
+    "signatures": {
+      "@alice:example.org": {
+        "ed25519:JLAFKJWSCS": "kBpSuPsCV/8WNg6dAAYxfmMZjwcZZTdgwXNhlM1o9aS7s8rYwPbssLyxRw0I12nB6DU6N1TGn+oVCrC8z83tCg"
+      }
+    },
+    "user_id": "@alice:example.org"
+  },
+  "bot_user_id": "@alice:example.org",
+  "description": "MSC4350 impersonatable device signed by a matrix-rust-sdk device",
+  "ghost_device": {
+    "algorithms": [],
+    "device_id": "JLAFKJWSCS",
+    "fi.mau.msc4350.impersonator": {
+      "algorithms": [
+        "m.olm.v1.curve25519-aes-sha2",
+        "m.megolm.v1.aes-sha2"
+      ],
+      "device_id": "JLAFKJWSCS",
+      "keys": {
+        "curve25519:JLAFKJWSCS": "rp8OF2NpC6fF8HhnUL9GZa4dDY/J+SzIFLI1wgUxigA",
+        "ed25519:JLAFKJWSCS": "FyzMTzg3/cOWh9480JuVX+5TbuyHhQCYETIj1vaZVTc"
+      },
+      "user_id": "@alice:example.org"
+    },
+    "keys": {},
+    "signatures": {
+      "@alice:example.org": {
+        "ed25519:JLAFKJWSCS": "tHUI8WEvKW8B9PT9EjKpArEe3W6nb3D8FojGqHO3GKL68ALtC0TrqTRnXe9TGr9Qnm3br+h5/hsKuubqIr3lCQ"
+      }
+    },
+    "user_id": "@ghost:example.org"
+  },
+  "ghost_user_id": "@ghost:example.org"
+}

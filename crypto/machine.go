@@ -48,6 +48,7 @@ type OlmMachine struct {
 	// Never ask the server for keys automatically as a side effect during Megolm decryption.
 	DisableDecryptKeyFetching bool
 	keyFetchAttempted         *exsync.Set[userSenderKeyTuple]
+	impersonatable            impersonatableDevices
 
 	// Don't mark outbound Olm sessions as shared for devices they were initially sent to.
 	DisableSharedGroupSessionTracking bool
