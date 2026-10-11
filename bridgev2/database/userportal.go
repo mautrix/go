@@ -30,11 +30,13 @@ type UserPortal struct {
 	InSpace   *bool
 	Preferred *bool
 	LastRead  time.Time
+	// LeftMatrix is set when the user left the Matrix room, but the leave wasn't bridged to the remote network.
+	LeftMatrix bool
 }
 
 const (
 	getUserPortalBaseQuery = `
-		SELECT bridge_id, user_mxid, login_id, portal_id, portal_receiver, in_space, preferred, last_read
+		SELECT bridge_id, user_mxid, login_id, portal_id, portal_receiver, in_space, preferred, last_read, left_matrix
 		FROM user_portal
 	`
 	getUserPortalQuery = getUserPortalBaseQuery + `
@@ -54,7 +56,7 @@ const (
 		INSERT INTO user_portal (bridge_id, user_mxid, login_id, portal_id, portal_receiver, in_space, preferred)
 		VALUES ($1, $2, $3, $4, $5, false, false)
 		ON CONFLICT (bridge_id, user_mxid, login_id, portal_id, portal_receiver) DO UPDATE SET portal_id=user_portal.portal_id
-		RETURNING bridge_id, user_mxid, login_id, portal_id, portal_receiver, in_space, preferred, last_read
+		RETURNING bridge_id, user_mxid, login_id, portal_id, portal_receiver, in_space, preferred, last_read, left_matrix
 	`
 	upsertUserPortalQuery = `
 		INSERT INTO user_portal (bridge_id, user_mxid, login_id, portal_id, portal_receiver, in_space, preferred, last_read)
@@ -66,6 +68,9 @@ const (
 	`
 	markLoginAsPreferredQuery = `
 		UPDATE user_portal SET preferred=(login_id=$3) WHERE bridge_id=$1 AND user_mxid=$2 AND portal_id=$4 AND portal_receiver=$5
+	`
+	setLeftMatrixQuery = `
+		UPDATE user_portal SET left_matrix=$6 WHERE bridge_id=$1 AND user_mxid=$2 AND login_id=$3 AND portal_id=$4 AND portal_receiver=$5
 	`
 	markAllNotInSpaceQuery = `
 		UPDATE user_portal SET in_space=false WHERE bridge_id=$1 AND portal_id=$2 AND portal_receiver=$3
@@ -113,6 +118,10 @@ func (upq *UserPortalQuery) MarkAsPreferred(ctx context.Context, login *UserLogi
 	return upq.Exec(ctx, markLoginAsPreferredQuery, upq.BridgeID, login.UserMXID, login.ID, portal.ID, portal.Receiver)
 }
 
+func (upq *UserPortalQuery) SetLeftMatrix(ctx context.Context, up *UserPortal, left bool) error {
+	return upq.Exec(ctx, setLeftMatrixQuery, upq.BridgeID, up.UserMXID, up.LoginID, up.Portal.ID, up.Portal.Receiver, left)
+}
+
 func (upq *UserPortalQuery) MarkAllNotInSpace(ctx context.Context, portal networkid.PortalKey) error {
 	return upq.Exec(ctx, markAllNotInSpaceQuery, upq.BridgeID, portal.ID, portal.Receiver)
 }
@@ -125,7 +134,7 @@ func (up *UserPortal) Scan(row dbutil.Scannable) (*UserPortal, error) {
 	var lastRead sql.NullInt64
 	err := row.Scan(
 		&up.BridgeID, &up.UserMXID, &up.LoginID, &up.Portal.ID, &up.Portal.Receiver,
-		&up.InSpace, &up.Preferred, &lastRead,
+		&up.InSpace, &up.Preferred, &lastRead, &up.LeftMatrix,
 	)
 	if err != nil {
 		return nil, err
