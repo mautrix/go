@@ -22,6 +22,7 @@ import (
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/dbutil"
 	"go.mau.fi/util/exerrors"
+	"golang.org/x/sync/singleflight"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/beeperstream"
@@ -57,6 +58,22 @@ type CryptoHelper struct {
 	cancelSync func()
 
 	cancelPeriodicDeleteLoop func()
+
+	impersonationEnabled bool
+	// impersonationBackoff avoids retrying a failing registration on every message from the same ghost.
+	impersonationBackoff *retryBackoff
+	// impersonatable caches ghosts that have a registered MSC4350 device, keyed by user ID.
+	// The value includes the bot's device ID and signing key, so a reset of the bot device invalidates entries.
+	impersonatable      sync.Map
+	impersonationFlight singleflight.Group
+}
+
+// impersonationRetryDelay is how long to wait before retrying a failed MSC4350 device registration for a ghost.
+const impersonationRetryDelay = time.Minute
+
+type impersonationCacheEntry struct {
+	deviceID id.DeviceID
+	ed25519  id.Ed25519
 }
 
 func NewCryptoHelper(c *Connector) Crypto {
@@ -68,6 +85,8 @@ func NewCryptoHelper(c *Connector) Crypto {
 	return &CryptoHelper{
 		bridge: c,
 		log:    &log,
+
+		impersonationBackoff: newRetryBackoff(impersonationRetryDelay),
 	}
 }
 
@@ -89,6 +108,15 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 	err := helper.store.DB.Upgrade(ctx)
 	if err != nil {
 		return bridgev2.DBUpgradeError{Section: "crypto", Err: err}
+	}
+
+	helper.impersonationEnabled = helper.bridge.Config.Encryption.MSC4350
+	if helper.impersonationEnabled && !helper.bridge.Config.Encryption.MSC4190 {
+		helper.log.Warn().Msg("encryption.msc4350 requires encryption.msc4190, disabling ghost impersonation")
+		helper.impersonationEnabled = false
+	}
+	if helper.impersonationEnabled && !helper.bridge.Config.Encryption.SelfSign {
+		helper.log.Warn().Msg("encryption.msc4350 is enabled without encryption.self_sign, clients may still flag bridged messages")
 	}
 
 	var isExistingDevice bool
@@ -181,6 +209,66 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 	go helper.resyncEncryptionInfo(context.TODO())
 
 	return nil
+}
+
+// EnsureImpersonatable registers an MSC4350 impersonatable device for the given ghost if one isn't registered yet.
+func (helper *CryptoHelper) EnsureImpersonatable(ctx context.Context, ghost id.UserID) error {
+	if !helper.impersonationEnabled || ghost == helper.bridge.AS.BotMXID() {
+		return nil
+	}
+	helper.lock.RLock()
+	defer helper.lock.RUnlock()
+	own := helper.mach.OwnIdentity()
+	want := impersonationCacheEntry{deviceID: own.DeviceID, ed25519: own.SigningKey}
+	if cached, ok := helper.impersonatable.Load(ghost); ok && cached == want {
+		return nil
+	}
+	if helper.impersonationBackoff.ShouldSkip(ghost) {
+		return nil
+	}
+	_, err, _ := helper.impersonationFlight.Do(string(ghost), func() (any, error) {
+		if cached, ok := helper.impersonatable.Load(ghost); ok && cached == want {
+			return nil, nil
+		}
+		registered, err := helper.store.IsImpersonatableDeviceRegistered(ctx, ghost, own.DeviceID, own.SigningKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check if impersonatable device is registered: %w", err)
+		} else if registered {
+			helper.impersonatable.Store(ghost, want)
+			return nil, nil
+		}
+		cli := helper.bridge.AS.NewMautrixClient(ghost)
+		displayName := fmt.Sprintf("%s bridge", helper.bridge.Bridge.Network.GetName().DisplayName)
+		err = cli.CreateDeviceMSC4190(ctx, own.DeviceID, displayName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create device for ghost: %w", err)
+		}
+		cli.SetAppServiceDeviceID = true
+		keys, err := helper.mach.ImpersonatableDeviceKeys(ghost)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate impersonatable device keys: %w", err)
+		}
+		_, err = cli.UploadKeys(ctx, &mautrix.ReqUploadKeys{DeviceKeys: keys})
+		if err != nil {
+			return nil, fmt.Errorf("failed to upload impersonatable device keys: %w", err)
+		}
+		err = helper.store.PutImpersonatableDevice(ctx, ghost, own.DeviceID, own.SigningKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to save impersonatable device registration: %w", err)
+		}
+		helper.impersonatable.Store(ghost, want)
+		helper.log.Debug().
+			Stringer("ghost_user_id", ghost).
+			Stringer("device_id", own.DeviceID).
+			Msg("Registered MSC4350 impersonatable device for ghost")
+		return nil, nil
+	})
+	if err != nil {
+		helper.impersonationBackoff.RecordFailure(ghost)
+	} else {
+		helper.impersonationBackoff.Clear(ghost)
+	}
+	return err
 }
 
 func (helper *CryptoHelper) doSelfSign(ctx context.Context) bool {

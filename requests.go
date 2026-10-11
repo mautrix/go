@@ -300,15 +300,25 @@ type ReqKeysSignatures struct {
 
 type ReqUploadSignatures map[id.UserID]map[string]ReqKeysSignatures
 
+// ImpersonatorDeviceKeys is the bot's device keys object (without signatures)
+// embedded in an MSC4350 impersonatable device.
+type ImpersonatorDeviceKeys struct {
+	UserID     id.UserID      `json:"user_id"`
+	DeviceID   id.DeviceID    `json:"device_id"`
+	Algorithms []id.Algorithm `json:"algorithms"`
+	Keys       KeyMap         `json:"keys"`
+}
+
 type DeviceKeys struct {
-	UserID     id.UserID             `json:"user_id"`
-	DeviceID   id.DeviceID           `json:"device_id"`
-	Algorithms []id.Algorithm        `json:"algorithms"`
-	Keys       KeyMap                `json:"keys"`
-	Signatures signatures.Signatures `json:"signatures"`
-	Dehydrated bool                  `json:"dehydrated,omitzero"`
-	Unsigned   map[string]any        `json:"unsigned,omitempty"`
-	Extra      map[string]any        `json:"-"`
+	UserID       id.UserID               `json:"user_id"`
+	DeviceID     id.DeviceID             `json:"device_id"`
+	Algorithms   []id.Algorithm          `json:"algorithms"`
+	Keys         KeyMap                  `json:"keys"`
+	Signatures   signatures.Signatures   `json:"signatures"`
+	Dehydrated   bool                    `json:"dehydrated,omitzero"`
+	Impersonator *ImpersonatorDeviceKeys `json:"fi.mau.msc4350.impersonator,omitempty"`
+	Unsigned     map[string]any          `json:"unsigned,omitempty"`
+	Extra        map[string]any          `json:"-"`
 }
 
 type serializableDeviceKeys DeviceKeys
@@ -323,6 +333,7 @@ func (dk *DeviceKeys) deleteStandardExtraFields() {
 	delete(dk.Extra, "keys")
 	delete(dk.Extra, "signatures")
 	delete(dk.Extra, "dehydrated")
+	delete(dk.Extra, "fi.mau.msc4350.impersonator")
 	delete(dk.Extra, "unsigned")
 }
 

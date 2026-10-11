@@ -87,8 +87,8 @@ func (account *OlmAccount) SignJSON(obj any) (string, error) {
 	return string(signed), err
 }
 
-func (account *OlmAccount) getInitialKeys(userID id.UserID, deviceID id.DeviceID) *mautrix.DeviceKeys {
-	deviceKeys := &mautrix.DeviceKeys{
+func (account *OlmAccount) ownDeviceKeys(userID id.UserID, deviceID id.DeviceID) *mautrix.DeviceKeys {
+	return &mautrix.DeviceKeys{
 		UserID:     userID,
 		DeviceID:   deviceID,
 		Algorithms: []id.Algorithm{id.AlgorithmMegolmV1, id.AlgorithmOlmV1},
@@ -97,6 +97,10 @@ func (account *OlmAccount) getInitialKeys(userID id.UserID, deviceID id.DeviceID
 			id.NewDeviceKeyID(id.KeyAlgorithmEd25519, deviceID):    string(account.SigningKey()),
 		},
 	}
+}
+
+func (account *OlmAccount) getInitialKeys(userID id.UserID, deviceID id.DeviceID) *mautrix.DeviceKeys {
+	deviceKeys := account.ownDeviceKeys(userID, deviceID)
 
 	signature, err := account.SignJSON(deviceKeys)
 	if err != nil {
@@ -105,6 +109,30 @@ func (account *OlmAccount) getInitialKeys(userID id.UserID, deviceID id.DeviceID
 
 	deviceKeys.Signatures = signatures.NewSingleSignature(userID, id.KeyAlgorithmEd25519, deviceID.String(), signature)
 	return deviceKeys
+}
+
+// getImpersonatableKeys generates MSC4350 device keys for targetUserID, which use the bot's device ID,
+// have no keys of their own, and are signed only by the bot's device.
+func (account *OlmAccount) getImpersonatableKeys(botUserID id.UserID, botDeviceID id.DeviceID, targetUserID id.UserID) (*mautrix.DeviceKeys, error) {
+	own := account.ownDeviceKeys(botUserID, botDeviceID)
+	deviceKeys := &mautrix.DeviceKeys{
+		UserID:     targetUserID,
+		DeviceID:   botDeviceID,
+		Algorithms: []id.Algorithm{},
+		Keys:       mautrix.KeyMap{},
+		Impersonator: &mautrix.ImpersonatorDeviceKeys{
+			UserID:     own.UserID,
+			DeviceID:   own.DeviceID,
+			Algorithms: own.Algorithms,
+			Keys:       own.Keys,
+		},
+	}
+	signature, err := account.SignJSON(deviceKeys)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign impersonatable device keys: %w", err)
+	}
+	deviceKeys.Signatures = signatures.NewSingleSignature(botUserID, id.KeyAlgorithmEd25519, botDeviceID.String(), signature)
+	return deviceKeys, nil
 }
 
 func (account *OlmAccount) getOneTimeKeys(userID id.UserID, deviceID id.DeviceID, currentOTKCount int) map[id.KeyID]mautrix.OneTimeKey {

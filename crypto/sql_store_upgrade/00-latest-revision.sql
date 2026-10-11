@@ -1,4 +1,4 @@
--- v0 -> v22 (compatible with v20+): Latest revision
+-- v0 -> v23 (compatible with v20+): Latest revision
 CREATE TABLE crypto_account (
 	account_id         TEXT    PRIMARY KEY,
 	device_id          TEXT    NOT NULL,
@@ -128,4 +128,13 @@ CREATE TABLE crypto_secrets (
 	secret     bytea NOT NULL,
 
 	PRIMARY KEY (account_id, name)
+);
+
+CREATE TABLE crypto_impersonatable_device (
+	account_id           TEXT NOT NULL,
+	user_id              TEXT NOT NULL,
+	device_id            TEXT NOT NULL,
+	impersonator_ed25519 TEXT NOT NULL,
+
+	PRIMARY KEY (account_id, user_id)
 );

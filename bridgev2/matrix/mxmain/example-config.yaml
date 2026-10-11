@@ -433,6 +433,9 @@ encryption:
     # Requires the homeserver to support MSC4190 and the device masquerading parts of MSC3202.
     # Only relevant when using end-to-bridge encryption, required when using encryption with next-gen auth (MSC3861).
     msc4190: false
+    # Register MSC4350 impersonatable devices for ghosts so clients don't flag bridged messages.
+    # Requires msc4190. Should be used with self_sign.
+    msc4350: false
     # Whether to encrypt reactions and reply metadata as per MSC4392.
     # This is not supported by most clients.
     msc4392: false
