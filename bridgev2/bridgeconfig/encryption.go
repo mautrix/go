@@ -17,6 +17,7 @@ type EncryptionConfig struct {
 	Appservice bool `yaml:"appservice"`
 	MSC4190    bool `yaml:"msc4190"`
 	MSC4392    bool `yaml:"msc4392"`
+	MSC4350    bool `yaml:"msc4350"`
 	SelfSign   bool `yaml:"self_sign"`
 
 	PlaintextMentions bool `yaml:"plaintext_mentions"`
