@@ -267,7 +267,7 @@ func (br *Bridge) QueueRemoteEvent(login *UserLogin, evt RemoteEvent) EventHandl
 		return EventHandlingResultIgnored
 	}
 	// TODO put this in a better place, and maybe cache to avoid constant db queries
-	login.MarkInPortal(ctx, portal)
+	login.markInPortal(ctx, portal, evt.GetSender().IsFromMe)
 	return portal.queueEvent(ctx, &portalRemoteEvent{
 		evt:    evt,
 		source: login,

@@ -21,6 +21,10 @@ import (
 )
 
 func (ul *UserLogin) MarkInPortal(ctx context.Context, portal *Portal) {
+	ul.markInPortal(ctx, portal, false)
+}
+
+func (ul *UserLogin) markInPortal(ctx context.Context, portal *Portal, fromMe bool) {
 	if ul.inPortalCache.Has(portal.PortalKey) {
 		return
 	}
@@ -28,11 +32,18 @@ func (ul *UserLogin) MarkInPortal(ctx context.Context, portal *Portal) {
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to ensure user portal row exists")
 		return
+	} else if userPortal.LeftMatrix {
+		if !fromMe {
+			return
+		}
+		// The user is active in the chat on the remote network again, so stop treating it as left.
+		err = ul.Bridge.DB.UserPortal.SetLeftMatrix(ctx, userPortal, false)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to clear left flag")
+			return
+		}
 	}
 	ul.inPortalCache.Add(portal.PortalKey)
-	if userPortal.LeftMatrix {
-		return
-	}
 	if portal.MXID != "" {
 		dp := ul.User.DoublePuppet(ctx)
 		if dp != nil {

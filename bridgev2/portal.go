@@ -4892,7 +4892,7 @@ func (portal *Portal) syncParticipants(
 		return fmt.Errorf("failed to get current members: %w", err)
 	}
 	delete(currentMembers, portal.Bridge.Bot.GetMXID())
-	leftMatrix := make(map[id.UserID]struct{})
+	leftMatrix := make(map[id.UserID][]*database.UserPortal)
 	if portal.RoomType != database.RoomTypeDM {
 		userPortals, err := portal.Bridge.DB.UserPortal.GetAllInPortal(ctx, portal.PortalKey)
 		if err != nil {
@@ -4900,7 +4900,7 @@ func (portal *Portal) syncParticipants(
 		}
 		for _, up := range userPortals {
 			if up.LeftMatrix {
-				leftMatrix[up.UserMXID] = struct{}{}
+				leftMatrix[up.UserMXID] = append(leftMatrix[up.UserMXID], up)
 			}
 		}
 	}
@@ -4920,8 +4920,18 @@ func (portal *Portal) syncParticipants(
 		}
 		currentMember, ok := currentMembers[extraUserID]
 		delete(currentMembers, extraUserID)
-		if _, left := leftMatrix[extraUserID]; left && member.Membership.IsInviteOrJoin() {
-			return false
+		if leftPortals, left := leftMatrix[extraUserID]; left && member.Membership.IsInviteOrJoin() {
+			if members.IsFull {
+				return false
+			}
+			// An explicit membership change (e.g. being re-added on the remote network) overrides the earlier leave.
+			for _, up := range leftPortals {
+				err = portal.Bridge.DB.UserPortal.SetLeftMatrix(ctx, up, false)
+				if err != nil {
+					log.Err(err).Str("login_id", string(up.LoginID)).Msg("Failed to clear left flag")
+				}
+			}
+			delete(leftMatrix, extraUserID)
 		}
 		if ok && currentMember.Membership == member.Membership {
 			return false
