@@ -102,9 +102,7 @@ func (pdu *RoomV1PDU) Redact(roomVersion id.RoomVersion) *RoomV1PDU {
 	pdu.Unknown = nil
 	pdu.Unsigned = nil
 	pdu.Sticky = nil
-	if pdu.Type != "m.room.redaction" {
-		pdu.Redacts = nil
-	}
+	pdu.Redacts = nil
 	pdu.Content = RedactContent(pdu.Type, pdu.Content, roomVersion)
 	return pdu
 }
