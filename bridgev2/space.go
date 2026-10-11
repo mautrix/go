@@ -30,6 +30,9 @@ func (ul *UserLogin) MarkInPortal(ctx context.Context, portal *Portal) {
 		return
 	}
 	ul.inPortalCache.Add(portal.PortalKey)
+	if userPortal.LeftMatrix {
+		return
+	}
 	if portal.MXID != "" {
 		dp := ul.User.DoublePuppet(ctx)
 		if dp != nil {

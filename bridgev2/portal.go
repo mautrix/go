@@ -2161,10 +2161,7 @@ func (portal *Portal) handleMatrixMembership(
 			Str("prev_membership", string(prevContent.Membership)).
 			Str("target_user_id", evt.GetStateKey())
 	})
-	api, ok := sender.Client.(MembershipHandlingNetworkAPI)
-	if !ok {
-		return EventHandlingResultIgnored.WithMSSError(ErrMembershipNotSupported)
-	}
+	api, apiOK := sender.Client.(MembershipHandlingNetworkAPI)
 	targetMXID := id.UserID(*evt.StateKey)
 	target, err := portal.getTargetUser(ctx, targetMXID)
 	if err != nil {
@@ -2179,10 +2176,16 @@ func (portal *Portal) handleMatrixMembership(
 	}
 	if membershipChangeType.IsSelf && membershipChangeType.To == event.MembershipLeave {
 		sender.inPortalCache.Remove(portal.PortalKey)
-		if !portal.Bridge.Config.BridgeMatrixLeave {
+		if !portal.Bridge.Config.BridgeMatrixLeave || !apiOK {
+			portal.setUserLeftMatrix(ctx, sender.User, true)
 			log.Debug().Str("prev_membership", string(membershipChangeType.From)).Msg("Dropping leave event")
 			return EventHandlingResultIgnored
 		}
+	} else if membershipChangeType.IsSelf && membershipChangeType.To == event.MembershipJoin {
+		portal.setUserLeftMatrix(ctx, sender.User, false)
+	}
+	if !apiOK {
+		return EventHandlingResultIgnored.WithMSSError(ErrMembershipNotSupported)
 	}
 	targetGhost, _ := target.(*Ghost)
 	membershipChange := &MatrixMembershipChange{
@@ -2249,6 +2252,28 @@ func (portal *Portal) handleMatrixMembership(
 		)
 	}
 	return EventHandlingResultSuccess.WithMSS().WithSkipStateEcho(didRedirectInvite)
+}
+
+// setUserLeftMatrix remembers that the user left a group portal on Matrix without the leave being
+// bridged, so that new remote events and participant syncs don't add them back to the room.
+func (portal *Portal) setUserLeftMatrix(ctx context.Context, user *User, left bool) {
+	if left && portal.RoomType == database.RoomTypeDM {
+		return
+	}
+	userPortals, err := portal.Bridge.DB.UserPortal.GetAllForUserInPortal(ctx, user.MXID, portal.PortalKey)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to get user portals to update left flag")
+		return
+	}
+	for _, up := range userPortals {
+		if up.LeftMatrix == left {
+			continue
+		}
+		err = portal.Bridge.DB.UserPortal.SetLeftMatrix(ctx, up, left)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Str("login_id", string(up.LoginID)).Msg("Failed to update left flag")
+		}
+	}
 }
 
 func makePLChange(old, new int, newIsSet bool) *SinglePowerLevelChange {
@@ -4867,6 +4892,18 @@ func (portal *Portal) syncParticipants(
 		return fmt.Errorf("failed to get current members: %w", err)
 	}
 	delete(currentMembers, portal.Bridge.Bot.GetMXID())
+	leftMatrix := make(map[id.UserID]struct{})
+	if portal.RoomType != database.RoomTypeDM {
+		userPortals, err := portal.Bridge.DB.UserPortal.GetAllInPortal(ctx, portal.PortalKey)
+		if err != nil {
+			return fmt.Errorf("failed to get user portals: %w", err)
+		}
+		for _, up := range userPortals {
+			if up.LeftMatrix {
+				leftMatrix[up.UserMXID] = struct{}{}
+			}
+		}
+	}
 	powerChanged := members.PowerLevels.Apply(portal.Bridge.Bot.GetMXID(), currentPower)
 	addExcludeFromTimeline := func(raw map[string]any) {
 		_, hasKey := raw["com.beeper.exclude_from_timeline"]
@@ -4883,6 +4920,9 @@ func (portal *Portal) syncParticipants(
 		}
 		currentMember, ok := currentMembers[extraUserID]
 		delete(currentMembers, extraUserID)
+		if _, left := leftMatrix[extraUserID]; left && member.Membership.IsInviteOrJoin() {
+			return false
+		}
 		if ok && currentMember.Membership == member.Membership {
 			return false
 		}
