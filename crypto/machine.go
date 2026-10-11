@@ -257,6 +257,15 @@ func (mach *OlmMachine) GetAccount() *OlmAccount {
 	return mach.account
 }
 
+// ImpersonatableDeviceKeys generates MSC4350 impersonatable device keys for the given user (an appservice ghost),
+// signed by this device. The keys use this device's ID as the device ID.
+func (mach *OlmMachine) ImpersonatableDeviceKeys(target id.UserID) (*mautrix.DeviceKeys, error) {
+	if mach.account == nil {
+		return nil, ErrOlmAccountNotLoaded
+	}
+	return mach.account.getImpersonatableKeys(mach.Client.UserID, mach.Client.DeviceID, target)
+}
+
 // OwnIdentity returns this device's id.Device struct
 func (mach *OlmMachine) OwnIdentity() *id.Device {
 	return &id.Device{
