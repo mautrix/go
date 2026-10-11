@@ -297,3 +297,41 @@ func TestStoreSecrets(t *testing.T) {
 		})
 	}
 }
+
+func TestStoreImpersonatableDevices(t *testing.T) {
+	stores := getCryptoStores(t)
+	for storeName, store := range stores {
+		t.Run(storeName, func(t *testing.T) {
+			ctx := context.TODO()
+			store, ok := store.(ImpersonatableDeviceStore)
+			require.True(t, ok, "store does not implement ImpersonatableDeviceStore")
+			ghost := id.UserID("@ghost:example.com")
+			registered, err := store.IsImpersonatableDeviceRegistered(ctx, ghost, "DEV", "key1")
+			require.NoError(t, err)
+			assert.False(t, registered, "Device registered before put")
+
+			require.NoError(t, store.PutImpersonatableDevice(ctx, ghost, "DEV", "key1"))
+			registered, err = store.IsImpersonatableDeviceRegistered(ctx, ghost, "DEV", "key1")
+			require.NoError(t, err)
+			assert.True(t, registered, "Device not registered after put")
+
+			registered, err = store.IsImpersonatableDeviceRegistered(ctx, ghost, "DEV", "key2")
+			require.NoError(t, err)
+			assert.False(t, registered, "Different ed25519 key counted as registered")
+			registered, err = store.IsImpersonatableDeviceRegistered(ctx, ghost, "OTHER", "key1")
+			require.NoError(t, err)
+			assert.False(t, registered, "Different device ID counted as registered")
+			registered, err = store.IsImpersonatableDeviceRegistered(ctx, "@other:example.com", "DEV", "key1")
+			require.NoError(t, err)
+			assert.False(t, registered, "Different user counted as registered")
+
+			require.NoError(t, store.PutImpersonatableDevice(ctx, ghost, "DEV", "key2"))
+			registered, err = store.IsImpersonatableDeviceRegistered(ctx, ghost, "DEV", "key2")
+			require.NoError(t, err)
+			assert.True(t, registered, "Upsert did not replace the record")
+			registered, err = store.IsImpersonatableDeviceRegistered(ctx, ghost, "DEV", "key1")
+			require.NoError(t, err)
+			assert.False(t, registered, "Old key still registered after upsert")
+		})
+	}
+}

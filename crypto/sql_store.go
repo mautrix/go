@@ -49,6 +49,7 @@ type SQLCryptoStore struct {
 }
 
 var _ Store = (*SQLCryptoStore)(nil)
+var _ ImpersonatableDeviceStore = (*SQLCryptoStore)(nil)
 
 // NewSQLCryptoStore initializes a new crypto Store using the given database, for a device's crypto material.
 // The stored material will be encrypted with the given key.
@@ -1094,4 +1095,24 @@ func (store *SQLCryptoStore) GetSecret(ctx context.Context, name id.Secret) (val
 func (store *SQLCryptoStore) DeleteSecret(ctx context.Context, name id.Secret) (err error) {
 	_, err = store.DB.Exec(ctx, "DELETE FROM crypto_secrets WHERE account_id=$1 AND name=$2", store.AccountID, name)
 	return
+}
+
+func (store *SQLCryptoStore) IsImpersonatableDeviceRegistered(ctx context.Context, userID id.UserID, deviceID id.DeviceID, ed25519 id.Ed25519) (bool, error) {
+	var registered bool
+	err := store.DB.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM crypto_impersonatable_device
+			WHERE account_id=$1 AND user_id=$2 AND device_id=$3 AND impersonator_ed25519=$4
+		)
+	`, store.AccountID, userID, deviceID, ed25519).Scan(&registered)
+	return registered, err
+}
+
+func (store *SQLCryptoStore) PutImpersonatableDevice(ctx context.Context, userID id.UserID, deviceID id.DeviceID, ed25519 id.Ed25519) error {
+	_, err := store.DB.Exec(ctx, `
+		INSERT INTO crypto_impersonatable_device (account_id, user_id, device_id, impersonator_ed25519)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (account_id, user_id) DO UPDATE SET device_id=excluded.device_id, impersonator_ed25519=excluded.impersonator_ed25519
+	`, store.AccountID, userID, deviceID, ed25519)
+	return err
 }

@@ -160,6 +160,18 @@ type Store interface {
 	DeleteSecret(context.Context, id.Secret) error
 }
 
+// ImpersonatableDeviceStore is an optional extension of [Store] for tracking which MSC4350 impersonatable devices
+// have been registered for appservice ghosts. It's separate from [Store] so existing implementations keep working.
+// Both [SQLCryptoStore] and [MemoryStore] implement it.
+type ImpersonatableDeviceStore interface {
+	// IsImpersonatableDeviceRegistered returns whether an MSC4350 impersonatable device has been registered
+	// for the given user with exactly the given device ID and impersonator (own device) signing key.
+	IsImpersonatableDeviceRegistered(ctx context.Context, userID id.UserID, deviceID id.DeviceID, ed25519 id.Ed25519) (bool, error)
+	// PutImpersonatableDevice records that an MSC4350 impersonatable device was registered for the given user,
+	// replacing any previous record for that user.
+	PutImpersonatableDevice(ctx context.Context, userID id.UserID, deviceID id.DeviceID, ed25519 id.Ed25519) error
+}
+
 type messageIndexKey struct {
 	SessionID id.SessionID
 	Index     uint
@@ -168,6 +180,11 @@ type messageIndexKey struct {
 type messageIndexValue struct {
 	EventID   id.EventID
 	Timestamp int64
+}
+
+type impersonatableDevice struct {
+	DeviceID id.DeviceID
+	Ed25519  id.Ed25519
 }
 
 // MemoryStore is a simple in-memory Store implementation. It can optionally have a callback function for saving data,
@@ -190,9 +207,12 @@ type MemoryStore struct {
 	OutdatedUsers         map[id.UserID]struct{}
 	Secrets               map[id.Secret]string
 	OlmHashes             *exsync.Set[[32]byte]
+
+	ImpersonatableDevices map[id.UserID]impersonatableDevice
 }
 
 var _ Store = (*MemoryStore)(nil)
+var _ ImpersonatableDeviceStore = (*MemoryStore)(nil)
 
 func NewMemoryStore(saveCallback func() error) *MemoryStore {
 	if saveCallback == nil {
@@ -213,6 +233,8 @@ func NewMemoryStore(saveCallback func() error) *MemoryStore {
 		OutdatedUsers:         make(map[id.UserID]struct{}),
 		Secrets:               make(map[id.Secret]string),
 		OlmHashes:             exsync.NewSet[[32]byte](),
+
+		ImpersonatableDevices: make(map[id.UserID]impersonatableDevice),
 	}
 }
 
@@ -784,4 +806,21 @@ func (gs *MemoryStore) DeleteSecret(_ context.Context, name id.Secret) error {
 	defer gs.lock.Unlock()
 	delete(gs.Secrets, name)
 	return nil
+}
+
+func (gs *MemoryStore) IsImpersonatableDeviceRegistered(_ context.Context, userID id.UserID, deviceID id.DeviceID, ed25519 id.Ed25519) (bool, error) {
+	gs.lock.RLock()
+	defer gs.lock.RUnlock()
+	dev, ok := gs.ImpersonatableDevices[userID]
+	return ok && dev.DeviceID == deviceID && dev.Ed25519 == ed25519, nil
+}
+
+func (gs *MemoryStore) PutImpersonatableDevice(_ context.Context, userID id.UserID, deviceID id.DeviceID, ed25519 id.Ed25519) error {
+	gs.lock.Lock()
+	defer gs.lock.Unlock()
+	if gs.ImpersonatableDevices == nil {
+		gs.ImpersonatableDevices = make(map[id.UserID]impersonatableDevice)
+	}
+	gs.ImpersonatableDevices[userID] = impersonatableDevice{DeviceID: deviceID, Ed25519: ed25519}
+	return gs.save()
 }
