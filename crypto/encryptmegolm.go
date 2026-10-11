@@ -132,7 +132,7 @@ func (mach *OlmMachine) EncryptMegolmEventWithStateKey(ctx context.Context, room
 	} else if session == nil {
 		return nil, ErrNoGroupSession
 	}
-	plaintext, err := json.Marshal(&rawMegolmEvent{
+	plaintext, err := canonicaljson.Marshal(&rawMegolmEvent{
 		RoomID:   roomID,
 		Type:     evtType,
 		StateKey: stateKey,
@@ -141,7 +141,6 @@ func (mach *OlmMachine) EncryptMegolmEventWithStateKey(ctx context.Context, room
 	if err != nil {
 		return nil, err
 	}
-	plaintext = canonicaljson.CompactJSON(plaintext, plaintext[:0])
 	log := mach.machOrContextLog(ctx).With().
 		Str("event_type", evtType.Type).
 		Any("state_key", stateKey).

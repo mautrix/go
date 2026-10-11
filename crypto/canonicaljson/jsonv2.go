@@ -229,9 +229,3 @@ func CanonicalJSON(input []byte) ([]byte, error) {
 	err := Canonicalize(&out)
 	return out, err
 }
-
-func CompactJSON(input, output []byte) []byte {
-	value := jsontext.Value(append(output, input...)[len(output):])
-	_ = value.Format(jsontext.AllowDuplicateNames(true), jsontext.AllowInvalidUTF8(true))
-	return append(output, value...)
-}
