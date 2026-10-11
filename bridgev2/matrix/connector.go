@@ -55,6 +55,7 @@ type Crypto interface {
 	Reset(ctx context.Context, startAfterReset bool) error
 	Client() *mautrix.Client
 	ShareKeys(context.Context) error
+	EnsureImpersonatable(context.Context, id.UserID) error
 	BeeperStreamPublisher() bridgev2.BeeperStreamPublisher
 }
 
