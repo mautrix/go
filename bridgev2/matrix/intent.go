@@ -82,10 +82,11 @@ func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType
 					as.Matrix.AddDoublePuppetValueWithTS(content, extra.Timestamp.UnixMilli())
 				}
 			}
-			if !as.Matrix.IsCustomPuppet && as.Matrix.UserID != as.Connector.Bot.UserID {
-				if err := as.Connector.Crypto.EnsureImpersonatable(ctx, as.Matrix.UserID); err != nil {
-					zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to register MSC4350 impersonatable device")
-				}
+			// EnsureJoined skips EnsureRegistered for ghosts that are already in the room,
+			// and the registration hook has to run before the ghost sends something encrypted.
+			err = as.Matrix.EnsureRegistered(ctx)
+			if err != nil {
+				return nil, err
 			}
 			err = as.Connector.Crypto.Encrypt(ctx, roomID, eventType, content)
 			if err != nil {

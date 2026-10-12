@@ -69,18 +69,22 @@ func (intent *IntentAPI) EnsureRegistered(ctx context.Context) error {
 	isRegistered, err := intent.as.StateStore.IsRegistered(ctx, intent.UserID)
 	if err != nil {
 		return fmt.Errorf("failed to check if user is registered: %w", err)
-	} else if isRegistered {
-		intent.Registered = true
-		return nil
 	}
-
-	err = intent.Register(ctx)
-	if err != nil && !errors.Is(err, mautrix.MUserInUse) {
-		return fmt.Errorf("failed to ensure registered: %w", err)
+	if !isRegistered {
+		err = intent.Register(ctx)
+		if err != nil && !errors.Is(err, mautrix.MUserInUse) {
+			return fmt.Errorf("failed to ensure registered: %w", err)
+		}
+		err = intent.as.StateStore.MarkRegistered(ctx, intent.UserID)
+		if err != nil {
+			return fmt.Errorf("failed to mark user as registered in state store: %w", err)
+		}
 	}
-	err = intent.as.StateStore.MarkRegistered(ctx, intent.UserID)
-	if err != nil {
-		return fmt.Errorf("failed to mark user as registered in state store: %w", err)
+	if intent.as.EnsureRegisteredHook != nil {
+		err = intent.as.EnsureRegisteredHook(ctx, intent.UserID)
+		if err != nil {
+			return fmt.Errorf("failed to run post-registration hook: %w", err)
+		}
 	}
 	intent.Registered = true
 	return nil

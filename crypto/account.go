@@ -116,16 +116,11 @@ func (account *OlmAccount) getInitialKeys(userID id.UserID, deviceID id.DeviceID
 func (account *OlmAccount) getImpersonatableKeys(botUserID id.UserID, botDeviceID id.DeviceID, targetUserID id.UserID) (*mautrix.DeviceKeys, error) {
 	own := account.ownDeviceKeys(botUserID, botDeviceID)
 	deviceKeys := &mautrix.DeviceKeys{
-		UserID:     targetUserID,
-		DeviceID:   botDeviceID,
-		Algorithms: []id.Algorithm{},
-		Keys:       mautrix.KeyMap{},
-		Impersonator: &mautrix.ImpersonatorDeviceKeys{
-			UserID:     own.UserID,
-			DeviceID:   own.DeviceID,
-			Algorithms: own.Algorithms,
-			Keys:       own.Keys,
-		},
+		UserID:       targetUserID,
+		DeviceID:     botDeviceID,
+		Algorithms:   []id.Algorithm{},
+		Keys:         mautrix.KeyMap{},
+		Impersonator: own,
 	}
 	signature, err := account.SignJSON(deviceKeys)
 	if err != nil {

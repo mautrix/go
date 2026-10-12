@@ -70,6 +70,25 @@ func (store *SQLStateStore) MarkRegistered(ctx context.Context, userID id.UserID
 	return err
 }
 
+func (store *SQLStateStore) GetImpersonatableDevice(ctx context.Context, userID id.UserID) (deviceID id.DeviceID, signingKey id.Ed25519, err error) {
+	var deviceIDPtr, signingKeyPtr sql.NullString
+	err = store.
+		QueryRow(ctx, "SELECT impersonator_device_id, impersonator_signing_key FROM mx_registrations WHERE user_id=$1", userID).
+		Scan(&deviceIDPtr, &signingKeyPtr)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = nil
+	}
+	return id.DeviceID(deviceIDPtr.String), id.Ed25519(signingKeyPtr.String), err
+}
+
+func (store *SQLStateStore) PutImpersonatableDevice(ctx context.Context, userID id.UserID, deviceID id.DeviceID, signingKey id.Ed25519) error {
+	_, err := store.Exec(ctx, `
+		INSERT INTO mx_registrations (user_id, impersonator_device_id, impersonator_signing_key) VALUES ($1, $2, $3)
+		ON CONFLICT (user_id) DO UPDATE SET impersonator_device_id=excluded.impersonator_device_id, impersonator_signing_key=excluded.impersonator_signing_key
+	`, userID, deviceID, signingKey)
+	return err
+}
+
 type Member struct {
 	id.UserID
 	event.MemberEventContent

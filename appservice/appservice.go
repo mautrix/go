@@ -136,6 +136,11 @@ type StateStore interface {
 	IsRegistered(ctx context.Context, userID id.UserID) (bool, error)
 	MarkRegistered(ctx context.Context, userID id.UserID) error
 
+	// GetImpersonatableDevice returns the bot device that the MSC4350 impersonatable device of the user was
+	// created for. The returned device ID is empty if the user doesn't have an impersonatable device.
+	GetImpersonatableDevice(ctx context.Context, userID id.UserID) (id.DeviceID, id.Ed25519, error)
+	PutImpersonatableDevice(ctx context.Context, userID id.UserID, deviceID id.DeviceID, signingKey id.Ed25519) error
+
 	GetPowerLevel(ctx context.Context, roomID id.RoomID, userID id.UserID) (int, error)
 	GetPowerLevelRequirement(ctx context.Context, roomID id.RoomID, eventType event.Type) (int, error)
 	HasPowerLevel(ctx context.Context, roomID id.RoomID, userID id.UserID, eventType event.Type) (bool, error)
@@ -192,6 +197,10 @@ type AppService struct {
 
 	DoublePuppetValue string
 	GetProfile        func(userID id.UserID, roomID id.RoomID) *event.MemberEventContent
+
+	// EnsureRegisteredHook is called at the end of [IntentAPI.EnsureRegistered] for users that aren't custom puppets.
+	// An error from the hook fails EnsureRegistered, and the hook runs again on the next call.
+	EnsureRegisteredHook func(ctx context.Context, userID id.UserID) error
 }
 
 const DoublePuppetKey = "fi.mau.double_puppet_source"

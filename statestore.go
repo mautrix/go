@@ -112,14 +112,15 @@ func (cli *Client) StateStoreSyncHandler(ctx context.Context, evt *event.Event) 
 }
 
 type MemoryStateStore struct {
-	Registrations     map[id.UserID]bool                                    `json:"registrations"`
-	Members           map[id.RoomID]map[id.UserID]*event.MemberEventContent `json:"memberships"`
-	MembersFetched    map[id.RoomID]bool                                    `json:"members_fetched"`
-	PowerLevels       map[id.RoomID]*event.PowerLevelsEventContent          `json:"power_levels"`
-	Encryption        map[id.RoomID]*event.EncryptionEventContent           `json:"encryption"`
-	Create            map[id.RoomID]*event.Event                            `json:"create"`
-	JoinRules         map[id.RoomID]*event.JoinRulesEventContent            `json:"join_rules"`
-	HistoryVisibility map[id.RoomID]*event.HistoryVisibilityEventContent    `json:"history_visibility"`
+	Registrations         map[id.UserID]bool                                    `json:"registrations"`
+	ImpersonatableDevices map[id.UserID]impersonatableDevice                    `json:"impersonatable_devices,omitempty"`
+	Members               map[id.RoomID]map[id.UserID]*event.MemberEventContent `json:"memberships"`
+	MembersFetched        map[id.RoomID]bool                                    `json:"members_fetched"`
+	PowerLevels           map[id.RoomID]*event.PowerLevelsEventContent          `json:"power_levels"`
+	Encryption            map[id.RoomID]*event.EncryptionEventContent           `json:"encryption"`
+	Create                map[id.RoomID]*event.Event                            `json:"create"`
+	JoinRules             map[id.RoomID]*event.JoinRulesEventContent            `json:"join_rules"`
+	HistoryVisibility     map[id.RoomID]*event.HistoryVisibilityEventContent    `json:"history_visibility"`
 
 	registrationsLock     sync.RWMutex
 	membersLock           sync.RWMutex
@@ -153,6 +154,28 @@ func (store *MemoryStateStore) MarkRegistered(_ context.Context, userID id.UserI
 	store.registrationsLock.Lock()
 	defer store.registrationsLock.Unlock()
 	store.Registrations[userID] = true
+	return nil
+}
+
+type impersonatableDevice struct {
+	DeviceID   id.DeviceID `json:"device_id"`
+	SigningKey id.Ed25519  `json:"signing_key"`
+}
+
+func (store *MemoryStateStore) GetImpersonatableDevice(_ context.Context, userID id.UserID) (id.DeviceID, id.Ed25519, error) {
+	store.registrationsLock.RLock()
+	defer store.registrationsLock.RUnlock()
+	dev := store.ImpersonatableDevices[userID]
+	return dev.DeviceID, dev.SigningKey, nil
+}
+
+func (store *MemoryStateStore) PutImpersonatableDevice(_ context.Context, userID id.UserID, deviceID id.DeviceID, signingKey id.Ed25519) error {
+	store.registrationsLock.Lock()
+	defer store.registrationsLock.Unlock()
+	if store.ImpersonatableDevices == nil {
+		store.ImpersonatableDevices = make(map[id.UserID]impersonatableDevice)
+	}
+	store.ImpersonatableDevices[userID] = impersonatableDevice{DeviceID: deviceID, SigningKey: signingKey}
 	return nil
 }
 
