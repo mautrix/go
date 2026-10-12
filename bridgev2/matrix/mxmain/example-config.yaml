@@ -68,6 +68,8 @@ bridge:
     enable_send_state_requests: false
     # Should the com.beeper.bridge.identifiers list in global ghost profiles include phone numbers?
     phone_numbers_in_profile: false
+    # Should the bridge use Beeper's view-limited media spec for handling view-once and time-limited media?
+    view_limited_media: false
 
     # What should be done to portal rooms when a user logs out or is logged out?
     # Permitted values:
