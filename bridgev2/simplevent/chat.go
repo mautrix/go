@@ -87,7 +87,7 @@ type ChatInfoChange struct {
 
 var _ bridgev2.RemoteChatInfoChange = (*ChatInfoChange)(nil)
 
-func (evt *ChatInfoChange) GetChatInfoChange(ctx context.Context) (*bridgev2.ChatInfoChange, error) {
+func (evt *ChatInfoChange) GetChatInfoChange(ctx context.Context, portal *bridgev2.Portal) (*bridgev2.ChatInfoChange, error) {
 	return evt.ChatInfoChange, nil
 }
 

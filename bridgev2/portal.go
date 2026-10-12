@@ -4065,10 +4065,13 @@ func (portal *Portal) handleRemoteTyping(ctx context.Context, source *UserLogin,
 }
 
 func (portal *Portal) handleRemoteChatInfoChange(ctx context.Context, source *UserLogin, evt RemoteChatInfoChange) EventHandlingResult {
-	info, err := evt.GetChatInfoChange(ctx)
+	info, err := evt.GetChatInfoChange(ctx, portal)
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to get chat info change")
 		return EventHandlingResultFailed.WithError(err)
+	} else if info == nil {
+		zerolog.Ctx(ctx).Debug().Msg("No chat info change received")
+		return EventHandlingResultIgnored
 	}
 	portal.ProcessChatInfoChange(ctx, evt.GetSender(), source, info, getEventTS(evt))
 	return EventHandlingResultSuccess

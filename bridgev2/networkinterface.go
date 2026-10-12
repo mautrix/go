@@ -1227,7 +1227,7 @@ type RemotePostHandler interface {
 
 type RemoteChatInfoChange interface {
 	RemoteEvent
-	GetChatInfoChange(ctx context.Context) (*ChatInfoChange, error)
+	GetChatInfoChange(ctx context.Context, portal *Portal) (*ChatInfoChange, error)
 }
 
 type RemoteChatResync interface {
