@@ -2734,9 +2734,14 @@ func (portal *Portal) handleRemoteEvent(ctx context.Context, source *UserLogin, 
 			return EventHandlingResultSuccess
 		}
 	}
-	preHandler, ok := evt.(RemotePreHandler)
-	if ok {
-		preHandler.PreHandle(ctx, portal)
+
+	if preHandler, ok := evt.(RemotePreHandlerWithResult); ok {
+		resPtr := preHandler.PreHandleWithResult(ctx, portal)
+		if resPtr != nil {
+			return *resPtr
+		}
+	} else if oldPreHandler, ok := evt.(RemotePreHandler); ok {
+		oldPreHandler.PreHandle(ctx, portal)
 	}
 	log.Debug().Msg("Handling remote event")
 	switch evtType {

@@ -1220,6 +1220,11 @@ type RemotePreHandler interface {
 	PreHandle(ctx context.Context, portal *Portal)
 }
 
+type RemotePreHandlerWithResult interface {
+	RemoteEvent
+	PreHandleWithResult(ctx context.Context, portal *Portal) *EventHandlingResult
+}
+
 type RemotePostHandler interface {
 	RemoteEvent
 	PostHandle(ctx context.Context, portal *Portal)

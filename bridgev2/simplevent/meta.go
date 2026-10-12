@@ -27,9 +27,10 @@ type EventMeta struct {
 	Timestamp         time.Time
 	StreamOrder       int64
 
-	PreHandleFunc     func(context.Context, *bridgev2.Portal)
-	PostHandleFunc    func(context.Context, *bridgev2.Portal)
-	MutateContextFunc func(context.Context) context.Context
+	PreHandleFunc           func(context.Context, *bridgev2.Portal)
+	PreHandleWithResultFunc func(context.Context, *bridgev2.Portal) *bridgev2.EventHandlingResult
+	PostHandleFunc          func(context.Context, *bridgev2.Portal)
+	MutateContextFunc       func(context.Context) context.Context
 
 	FetchCertainPortalKeyFunc func(context.Context) networkid.PortalKey
 }
@@ -41,7 +42,7 @@ var (
 	_ bridgev2.RemoteEventThatMayCreatePortal                = (*EventMeta)(nil)
 	_ bridgev2.RemoteEventWithTimestamp                      = (*EventMeta)(nil)
 	_ bridgev2.RemoteEventWithStreamOrder                    = (*EventMeta)(nil)
-	_ bridgev2.RemotePreHandler                              = (*EventMeta)(nil)
+	_ bridgev2.RemotePreHandlerWithResult                    = (*EventMeta)(nil)
 	_ bridgev2.RemotePostHandler                             = (*EventMeta)(nil)
 	_ bridgev2.RemoteEventWithContextMutation                = (*EventMeta)(nil)
 )
@@ -91,10 +92,14 @@ func (evt *EventMeta) ShouldCreatePortal() bool {
 	return evt.CreatePortal
 }
 
-func (evt *EventMeta) PreHandle(ctx context.Context, portal *bridgev2.Portal) {
+func (evt *EventMeta) PreHandleWithResult(ctx context.Context, portal *bridgev2.Portal) *bridgev2.EventHandlingResult {
+	if evt.PreHandleWithResultFunc != nil {
+		return evt.PreHandleWithResultFunc(ctx, portal)
+	}
 	if evt.PreHandleFunc != nil {
 		evt.PreHandleFunc(ctx, portal)
 	}
+	return nil
 }
 
 func (evt *EventMeta) PostHandle(ctx context.Context, portal *bridgev2.Portal) {
