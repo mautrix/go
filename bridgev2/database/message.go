@@ -59,18 +59,19 @@ const (
 			   send_txn_id, metadata
 		FROM message
 	`
-	getAllMessagePartsByIDQuery  = getMessageBaseQuery + `WHERE bridge_id=$1 AND (room_receiver=$2 OR room_receiver='') AND id=$3`
-	getMessagePartByIDQuery      = getMessageBaseQuery + `WHERE bridge_id=$1 AND (room_receiver=$2 OR room_receiver='') AND id=$3 AND part_id=$4`
-	getMessagePartByRowIDQuery   = getMessageBaseQuery + `WHERE bridge_id=$1 AND rowid=$2`
-	getMessageByMXIDQuery        = getMessageBaseQuery + `WHERE bridge_id=$1 AND mxid=$2`
-	getMessageByTxnIDQuery       = getMessageBaseQuery + `WHERE bridge_id=$1 AND (room_receiver=$2 OR room_receiver='') AND (mxid=$3 OR send_txn_id=$4)`
-	getLastMessagePartByIDQuery  = getMessageBaseQuery + `WHERE bridge_id=$1 AND (room_receiver=$2 OR room_receiver='') AND id=$3 ORDER BY part_id DESC LIMIT 1`
-	getFirstMessagePartByIDQuery = getMessageBaseQuery + `WHERE bridge_id=$1 AND (room_receiver=$2 OR room_receiver='') AND id=$3 ORDER BY part_id ASC LIMIT 1`
-	getMessagesBetweenTimeQuery  = getMessageBaseQuery + `WHERE bridge_id=$1 AND room_id=$2 AND room_receiver=$3 AND timestamp>$4 AND timestamp<=$5`
-	getOldestMessageInPortal     = getMessageBaseQuery + `WHERE bridge_id=$1 AND room_id=$2 AND room_receiver=$3 ORDER BY timestamp ASC, id ASC, part_id ASC LIMIT 1`
-	getFirstMessageInThread      = getMessageBaseQuery + `WHERE bridge_id=$1 AND room_id=$2 AND room_receiver=$3 AND (id=$4 OR thread_root_id=$4) ORDER BY thread_root_id NULLS FIRST, timestamp ASC, id ASC, part_id ASC LIMIT 1`
-	getLastMessageInThread       = getMessageBaseQuery + `WHERE bridge_id=$1 AND room_id=$2 AND room_receiver=$3 AND (id=$4 OR thread_root_id=$4) ORDER BY thread_root_id NULLS LAST, timestamp DESC, id DESC, part_id DESC LIMIT 1`
-	getLastNInPortal             = getMessageBaseQuery + `WHERE bridge_id=$1 AND room_id=$2 AND room_receiver=$3 ORDER BY timestamp DESC, id DESC, part_id DESC LIMIT $4`
+	getAllMessagePartsByIDQuery                = getMessageBaseQuery + `WHERE bridge_id=$1 AND (room_receiver=$2 OR room_receiver='') AND id=$3`
+	getMessagePartByIDQuery                    = getMessageBaseQuery + `WHERE bridge_id=$1 AND (room_receiver=$2 OR room_receiver='') AND id=$3 AND part_id=$4`
+	getMessagePartByRowIDQuery                 = getMessageBaseQuery + `WHERE bridge_id=$1 AND rowid=$2`
+	getMessageByMXIDQuery                      = getMessageBaseQuery + `WHERE bridge_id=$1 AND mxid=$2`
+	getMessageByTxnIDQuery                     = getMessageBaseQuery + `WHERE bridge_id=$1 AND (room_receiver=$2 OR room_receiver='') AND (mxid=$3 OR send_txn_id=$4)`
+	getLastMessagePartByIDQuery                = getMessageBaseQuery + `WHERE bridge_id=$1 AND (room_receiver=$2 OR room_receiver='') AND id=$3 ORDER BY part_id DESC LIMIT 1`
+	getFirstMessagePartByIDQuery               = getMessageBaseQuery + `WHERE bridge_id=$1 AND (room_receiver=$2 OR room_receiver='') AND id=$3 ORDER BY part_id ASC LIMIT 1`
+	getMessagesBetweenTimeQuery                = getMessageBaseQuery + `WHERE bridge_id=$1 AND room_id=$2 AND room_receiver=$3 AND timestamp>$4 AND timestamp<=$5`
+	getOldestMessageInPortal                   = getMessageBaseQuery + `WHERE bridge_id=$1 AND room_id=$2 AND room_receiver=$3 ORDER BY timestamp ASC, id ASC, part_id ASC LIMIT 1`
+	getOldestMessageInPortalExcludingIDPattern = getMessageBaseQuery + `WHERE bridge_id=$1 AND room_id=$2 AND room_receiver=$3 AND id NOT LIKE $4 ORDER BY timestamp ASC, id ASC, part_id ASC LIMIT 1`
+	getFirstMessageInThread                    = getMessageBaseQuery + `WHERE bridge_id=$1 AND room_id=$2 AND room_receiver=$3 AND (id=$4 OR thread_root_id=$4) ORDER BY thread_root_id NULLS FIRST, timestamp ASC, id ASC, part_id ASC LIMIT 1`
+	getLastMessageInThread                     = getMessageBaseQuery + `WHERE bridge_id=$1 AND room_id=$2 AND room_receiver=$3 AND (id=$4 OR thread_root_id=$4) ORDER BY thread_root_id NULLS LAST, timestamp DESC, id DESC, part_id DESC LIMIT 1`
+	getLastNInPortal                           = getMessageBaseQuery + `WHERE bridge_id=$1 AND room_id=$2 AND room_receiver=$3 ORDER BY timestamp DESC, id DESC, part_id DESC LIMIT $4`
 
 	getLastMessagePartAtOrBeforeTimeQuery        = getMessageBaseQuery + `WHERE bridge_id = $1 AND room_id=$2 AND room_receiver=$3 AND timestamp<=$4 ORDER BY timestamp DESC, id DESC, part_id DESC LIMIT 1`
 	getLastNonFakeMessagePartAtOrBeforeTimeQuery = getMessageBaseQuery + `WHERE bridge_id = $1 AND room_id=$2 AND room_receiver=$3 AND timestamp<=$4 AND mxid NOT LIKE '~fake:%' ORDER BY timestamp DESC, id DESC, part_id DESC LIMIT 1`
@@ -161,6 +162,10 @@ func (mq *MessageQuery) GetMessagesBetweenTimeQuery(ctx context.Context, portal 
 
 func (mq *MessageQuery) GetFirstPortalMessage(ctx context.Context, portal networkid.PortalKey) (*Message, error) {
 	return mq.QueryOne(ctx, getOldestMessageInPortal, mq.BridgeID, portal.ID, portal.Receiver)
+}
+
+func (mq *MessageQuery) GetFirstPortalMessageExcludingIDPattern(ctx context.Context, portal networkid.PortalKey, excludeIDPattern string) (*Message, error) {
+	return mq.QueryOne(ctx, getOldestMessageInPortalExcludingIDPattern, mq.BridgeID, portal.ID, portal.Receiver, excludeIDPattern)
 }
 
 func (mq *MessageQuery) GetFirstThreadMessage(ctx context.Context, portal networkid.PortalKey, threadRoot networkid.MessageID) (*Message, error) {
