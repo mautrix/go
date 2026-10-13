@@ -267,15 +267,16 @@ func (mp *MediaProxy) getMedia(w http.ResponseWriter, r *http.Request) GetMediaR
 	}
 	resp, err := mp.GetMedia(r.Context(), mediaID, queryToMap(r.URL.Query()))
 	if err != nil {
+		zerolog.Ctx(r.Context()).Err(err).
+			Str("media_id", mediaID).
+			Msg("Failed to get media URL")
 		if errors.Is(err, ErrInvalidMediaIDSyntax) {
 			mautrix.MNotFound.WithMessage("This is a media proxy at %q, other media downloads are not available here", mp.serverName).Write(w)
 		} else if mautrixRespError, ok := errors.AsType[mautrix.RespError](err); ok {
 			mautrixRespError.Write(w)
 		} else if exhttp.IsNetworkError(err) {
-			zerolog.Ctx(r.Context()).Err(err).Str("media_id", mediaID).Msg("Network error while fetching media URL")
 			ErrNetworkError.Write(w)
 		} else {
-			zerolog.Ctx(r.Context()).Err(err).Str("media_id", mediaID).Msg("Failed to get media URL")
 			mautrix.MNotFound.WithMessage("Media not found").Write(w)
 		}
 		return nil
