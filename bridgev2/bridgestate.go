@@ -313,6 +313,8 @@ func (bsq *BridgeStateQueue) immediateSendBridgeState(state status.BridgeState) 
 	}
 	if state.StateEvent == status.StateUnknownError {
 		go bsq.unknownErrorReconnect(state)
+	} else if state.StateEvent == status.StateConnected {
+		bsq.unknownErrorReconnects = 0
 	}
 
 	bgCtx := bsq.login.Log.WithContext(bsq.bridge.BackgroundCtx)
