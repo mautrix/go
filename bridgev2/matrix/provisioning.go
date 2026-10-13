@@ -760,6 +760,7 @@ func (prov *ProvisioningAPI) PostInitSessionTransfer(w http.ResponseWriter, r *h
 	exhttp.WriteJSONResponse(w, http.StatusOK, &RespExportCredentials{
 		Credentials: client.ExportCredentials(r.Context()),
 	})
+	prov.sessionTransfers[loginToExport.ID] = struct{}{}
 }
 
 func (prov *ProvisioningAPI) PostFinishSessionTransfer(w http.ResponseWriter, r *http.Request) {
