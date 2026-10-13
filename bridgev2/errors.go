@@ -119,6 +119,14 @@ func (re RespError) Is(err error) bool {
 	return errors.Is(err, mautrix.RespError(re))
 }
 
+func (re RespError) As(target any) bool {
+	if ptr, ok := target.(*mautrix.RespError); ok {
+		*ptr = mautrix.RespError(re)
+		return true
+	}
+	return false
+}
+
 func (re RespError) Write(w http.ResponseWriter) {
 	mautrix.RespError(re).Write(w)
 }
