@@ -14,6 +14,7 @@ import (
 	"io"
 	"mime"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/textproto"
 	"net/url"
@@ -267,7 +268,15 @@ func (mp *MediaProxy) getMedia(w http.ResponseWriter, r *http.Request) GetMediaR
 			mautrixRespError.Write(w)
 		} else {
 			zerolog.Ctx(r.Context()).Err(err).Str("media_id", mediaID).Msg("Failed to get media URL")
-			mautrix.MNotFound.WithMessage("Media not found").Write(w)
+			netErr, isNetErr := errors.AsType[net.Error](err)
+			switch {
+			case errors.Is(err, context.DeadlineExceeded) || (isNetErr && netErr.Timeout()):
+				mautrix.MConnectionTimeout.WithStatus(http.StatusGatewayTimeout).WithMessage("Timed out fetching media").Write(w)
+			case isNetErr:
+				mautrix.MConnectionFailed.WithStatus(http.StatusBadGateway).WithMessage("Failed to fetch media").Write(w)
+			default:
+				mautrix.MNotFound.WithMessage("Media not found").Write(w)
+			}
 		}
 		return nil
 	}

@@ -12,8 +12,11 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/rs/zerolog"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
@@ -103,5 +106,10 @@ func (br *Connector) getDirectMedia(ctx context.Context, mediaIDStr string, para
 	if err != nil {
 		return response, err
 	}
-	return br.Bridge.Network.(bridgev2.DirectMediableNetwork).Download(ctx, remoteMediaID, params)
+	response, err = br.Bridge.Network.(bridgev2.DirectMediableNetwork).Download(ctx, remoteMediaID, params)
+	if respErr, ok := errors.AsType[bridgev2.RespError](err); ok {
+		zerolog.Ctx(ctx).Err(err).Str("media_id", mediaIDStr).Msg("Failed to get media URL")
+		return nil, mautrix.RespError(respErr)
+	}
+	return response, err
 }
