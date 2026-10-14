@@ -249,7 +249,11 @@ func (mach *OlmMachine) ShareGroupSession(ctx context.Context, roomID id.RoomID,
 	if session == nil || session.Expired() {
 		if session, err = mach.newOutboundGroupSession(ctx, roomID); err != nil {
 			return err
+		} else if err = mach.CryptoStore.AddOutboundGroupSession(ctx, session); err != nil {
+			return fmt.Errorf("failed to store new outbound group session: %w", err)
 		}
+	} else {
+		session.Users = make(map[UserDevice]OGSState)
 	}
 	log = log.With().Str("session_id", session.ID().String()).Logger()
 	ctx = log.WithContext(ctx)
