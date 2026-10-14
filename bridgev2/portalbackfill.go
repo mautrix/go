@@ -175,6 +175,9 @@ func (portal *Portal) doBackwardsBackfill(ctx context.Context, source *UserLogin
 		if resp.CompleteCallback != nil {
 			resp.CompleteCallback()
 		}
+		if resp.AggressiveDeduplication {
+			return false, nil
+		}
 		// Hack to handle some migrated portals where message timestamps are unknown.
 		// They can't be backfilled further, so just mark them as done.
 		if firstMessage != nil && firstMessage.Timestamp.Unix() == 0 {
@@ -246,7 +249,7 @@ func (portal *Portal) doThreadBackfill(ctx context.Context, source *UserLogin, t
 }
 
 func (portal *Portal) cutoffMessages(ctx context.Context, messages []*BackfillMessage, aggressiveDedup, forward bool, lastMessage *database.Message) []*BackfillMessage {
-	if lastMessage != nil && forward {
+	if !aggressiveDedup && lastMessage != nil && forward {
 		cutoff := -1
 		var cutoffIDs []networkid.MessageID
 		for i, msg := range messages {
@@ -266,7 +269,7 @@ func (portal *Portal) cutoffMessages(ctx context.Context, messages []*BackfillMe
 				Msg("Cutting off forward backfill messages older than latest bridged message")
 			messages = messages[cutoff+1:]
 		}
-	} else if lastMessage != nil {
+	} else if !aggressiveDedup && lastMessage != nil {
 		cutoff := -1
 		var cutoffIDs []networkid.MessageID
 		for i, message := range slices.Backward(messages) {
