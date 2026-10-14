@@ -324,6 +324,12 @@ func (br *Bridge) MigrateToSplitPortals(ctx context.Context) (bool, func(), erro
 		return false, nil, fmt.Errorf("failed to fix parent portals: %w", err)
 	}
 	log.Info().Int64("rows_affected", affected2).Msg("Updated parent receivers after split portal migration")
+	affected3, err := br.DB.UserPortal.DeleteNonReceiverAfterSplitPortalMigration(ctx)
+	if err != nil {
+		log.Err(err).Msg("Failed to delete user portals of non-receiver logins after split portal migration")
+		return false, nil, fmt.Errorf("failed to delete non-receiver user portals: %w", err)
+	}
+	log.Info().Int64("rows_affected", affected3).Msg("Deleted user portals of non-receiver logins after split portal migration")
 	withoutReceiver, err := br.DB.Portal.GetAllWithoutReceiver(ctx)
 	if err != nil {
 		log.WithLevel(zerolog.FatalLevel).Err(err).Msg("Failed to get portals that failed to migrate")

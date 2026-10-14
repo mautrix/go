@@ -73,6 +73,9 @@ const (
 	deleteUserPortalQuery = `
 		DELETE FROM user_portal WHERE bridge_id=$1 AND user_mxid=$2 AND login_id=$3 AND portal_id=$4 AND portal_receiver=$5
 	`
+	deleteNonReceiverUserPortalsQuery = `
+		DELETE FROM user_portal WHERE bridge_id=$1 AND portal_receiver<>'' AND login_id<>portal_receiver
+	`
 )
 
 func UserPortalFor(ul *UserLogin, portal networkid.PortalKey) *UserPortal {
@@ -119,6 +122,14 @@ func (upq *UserPortalQuery) MarkAllNotInSpace(ctx context.Context, portal networ
 
 func (upq *UserPortalQuery) Delete(ctx context.Context, up *UserPortal) error {
 	return upq.Exec(ctx, deleteUserPortalQuery, up.BridgeID, up.UserMXID, up.LoginID, up.Portal.ID, up.Portal.Receiver)
+}
+
+func (upq *UserPortalQuery) DeleteNonReceiverAfterSplitPortalMigration(ctx context.Context) (int64, error) {
+	res, err := upq.GetDB().Exec(ctx, deleteNonReceiverUserPortalsQuery, upq.BridgeID)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
 }
 
 func (up *UserPortal) Scan(row dbutil.Scannable) (*UserPortal, error) {
