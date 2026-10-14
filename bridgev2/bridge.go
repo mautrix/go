@@ -312,6 +312,13 @@ func (br *Bridge) MigrateToSplitPortals(ctx context.Context) (bool, func(), erro
 	} else if alreadyMigrated {
 		return false, nil, nil
 	}
+	spmn, ok := br.Network.(SplitPortalMigratingNetwork)
+	if ok {
+		err := spmn.PreSplitPortalMigrate(ctx)
+		if err != nil {
+			return false, nil, fmt.Errorf("failed to prepare split portal migration: %w", err)
+		}
+	}
 	affected, err := br.DB.Portal.MigrateToSplitPortals(ctx)
 	if err != nil {
 		log.WithLevel(zerolog.FatalLevel).Err(err).Msg("Failed to migrate portals")

@@ -331,6 +331,11 @@ type NetworkResettingNetwork interface {
 	ResetNetworkConnections()
 }
 
+type SplitPortalMigratingNetwork interface {
+	NetworkConnector
+	PreSplitPortalMigrate(context.Context) error
+}
+
 type RemoteEchoHandler func(RemoteMessage, *database.Message) (bool, error)
 
 type MatrixMessageResponse struct {
