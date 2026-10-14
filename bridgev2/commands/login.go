@@ -228,6 +228,9 @@ func (uilcs *userInputLoginCommandState) promptNext(ce *Event) {
 	if len(field.Options) > 0 {
 		parts = append(parts, fmt.Sprintf("Options: `%s`", strings.Join(field.Options, "`, `")))
 	}
+	if field.Optional {
+		parts = append(parts, "Enter `skip` to skip this field")
+	}
 	ce.Reply(strings.Join(parts, "\n"))
 	StoreCommandState(ce.User, &CommandState{
 		Next:   MinimalCommandHandlerFunc(uilcs.submitNext),
@@ -243,8 +246,12 @@ func (uilcs *userInputLoginCommandState) submitNext(ce *Event) {
 	if field.Type == bridgev2.LoginInputFieldTypePassword || field.Type == bridgev2.LoginInputFieldTypeToken {
 		ce.Redact()
 	}
+	val := ce.RawArgs
+	if field.Optional && ce.RawArgs == "skip" {
+		val = ""
+	}
 	var err error
-	uilcs.Data[field.ID], err = field.Validate(ce.RawArgs)
+	uilcs.Data[field.ID], err = field.Validate(val)
 	if err != nil {
 		ce.Reply("Invalid value: %v", err)
 		return
