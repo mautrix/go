@@ -344,7 +344,8 @@ type LoginInputDataField struct {
 	Description string `json:"description"`
 	// A default value that the client can pre-fill the field with.
 	DefaultValue string `json:"default_value,omitempty"`
-	Optional     bool   `json:"optional,omitzero"`
+	// If true, the field is optional and can be omitted when submitting.
+	Optional bool `json:"optional,omitzero"`
 	// A regex pattern that the client can use to validate input client-side.
 	Pattern string `json:"pattern,omitempty"`
 	// Minimum and maximum input length as a hint for the client
