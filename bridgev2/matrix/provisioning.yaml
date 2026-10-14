@@ -901,6 +901,9 @@ components:
                     default_value:
                       type: string
                       description: A default value that the client can pre-fill the field with.
+                    optional:
+                      type: boolean
+                      description: If true, the field is optional and can be omitted when submitting.
                     pattern:
                       type: string
                       format: regex

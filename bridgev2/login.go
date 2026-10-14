@@ -344,6 +344,8 @@ type LoginInputDataField struct {
 	Description string `json:"description"`
 	// A default value that the client can pre-fill the field with.
 	DefaultValue string `json:"default_value,omitempty"`
+	// If true, the field is optional and can be omitted when submitting.
+	Optional bool `json:"optional,omitzero"`
 	// A regex pattern that the client can use to validate input client-side.
 	Pattern string `json:"pattern,omitempty"`
 	// Minimum and maximum input length as a hint for the client
@@ -392,33 +394,41 @@ func noopValidate(input string) (string, error) {
 }
 
 func (f *LoginInputDataField) FillDefaultValidate() {
-	if f.Validate != nil {
-		return
-	}
-	switch f.Type {
-	case LoginInputFieldTypePhoneNumber:
-		f.Validate = CleanPhoneNumber
-	case LoginInputFieldTypeEmail:
-		f.Validate = func(email string) (string, error) {
-			if !strings.ContainsRune(email, '@') {
-				return "", fmt.Errorf("invalid email")
-			}
-			return email, nil
-		}
-	default:
-		if f.Pattern != "" {
-			f.Validate = func(s string) (string, error) {
-				match, err := regexp.MatchString(f.Pattern, s)
-				if err != nil {
-					return "", err
-				} else if !match {
-					return "", fmt.Errorf("doesn't match regex `%s`", f.Pattern)
-				} else {
-					return s, nil
+	if f.Validate == nil {
+		switch f.Type {
+		case LoginInputFieldTypePhoneNumber:
+			f.Validate = CleanPhoneNumber
+		case LoginInputFieldTypeEmail:
+			f.Validate = func(email string) (string, error) {
+				if !strings.ContainsRune(email, '@') {
+					return "", fmt.Errorf("invalid email")
 				}
+				return email, nil
 			}
-		} else {
-			f.Validate = noopValidate
+		default:
+			if f.Pattern != "" {
+				f.Validate = func(s string) (string, error) {
+					match, err := regexp.MatchString(f.Pattern, s)
+					if err != nil {
+						return "", err
+					} else if !match {
+						return "", fmt.Errorf("doesn't match regex `%s`", f.Pattern)
+					} else {
+						return s, nil
+					}
+				}
+			} else {
+				f.Validate = noopValidate
+			}
+		}
+	}
+	if f.Optional {
+		validate := f.Validate
+		f.Validate = func(input string) (string, error) {
+			if input == "" {
+				return "", nil
+			}
+			return validate(input)
 		}
 	}
 }
