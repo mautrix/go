@@ -4994,15 +4994,17 @@ func (portal *Portal) syncParticipants(
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		if member.Sender != "" && member.UserInfo != nil {
+		if member.Sender != "" {
 			ghost, err := portal.Bridge.GetGhostByID(ctx, member.Sender)
 			if err != nil {
 				zerolog.Ctx(ctx).Err(err).Str("ghost_id", string(member.Sender)).Msg("Failed to get ghost from member list to update info")
 			} else {
 				if current, ok := currentMembers[ghost.Intent.GetMXID()]; ok && current.Membership == event.MembershipJoin && ptr.Val(member.Nickname) == "" {
-					ghost.reconcileProfile(ctx, current, member.UserInfo)
+					ghost.reconcileProfile(ctx, portal.MXID, current, member.UserInfo)
 				}
-				ghost.UpdateInfo(ctx, member.UserInfo)
+				if member.UserInfo != nil {
+					ghost.UpdateInfo(ctx, member.UserInfo)
+				}
 			}
 		}
 		intent, extraUserID, err := portal.getIntentAndUserMXIDFor(ctx, member.EventSender, source, loginsInPortal, 0)

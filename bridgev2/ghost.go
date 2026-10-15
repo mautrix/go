@@ -413,7 +413,7 @@ func (ghost *Ghost) pushProfileChanges(ctx context.Context, nameChanged, avatarC
 	ghost.lastSync = time.Now()
 }
 
-func (ghost *Ghost) reconcileProfile(ctx context.Context, current *event.MemberEventContent, updatedProfile *UserInfo) {
+func (ghost *Ghost) reconcileProfile(ctx context.Context, roomID id.RoomID, current *event.MemberEventContent, updatedProfile *UserInfo) {
 	if !ghost.syncLock.TryLock() {
 		return
 	}
@@ -426,26 +426,40 @@ func (ghost *Ghost) reconcileProfile(ctx context.Context, current *event.MemberE
 		(updatedProfile == nil || updatedProfile.Name == nil || *updatedProfile.Name == ghost.Name)
 	avatarDrift := ghost.AvatarSet && ghost.AvatarMXC != "" && current.AvatarURL != ghost.AvatarMXC &&
 		(updatedProfile == nil || updatedProfile.Avatar == nil || updatedProfile.Avatar.ID == ghost.AvatarID)
-	// Also don't allow re-setting too often, because there might be multiple in-flight room syncs
-	// that all call this method in a short period.
-	if (!nameDrift && !avatarDrift) || time.Since(ghost.lastSync) < 5*time.Minute {
+	if !nameDrift && !avatarDrift {
 		return
 	}
 	zerolog.Ctx(ctx).Warn().
 		Str("ghost_id", string(ghost.ID)).
+		Stringer("room_id", roomID).
 		Bool("name_drift", nameDrift).
 		Bool("avatar_drift", avatarDrift).
 		Str("expected_name", ghost.Name).
 		Str("actual_name", current.Displayname).
 		Msg("Ghost profile drifted from the server copy, re-pushing")
+	// Also don't allow re-setting too often, because there might be multiple in-flight room syncs
+	// that all call this method in a short period.
+	if time.Since(ghost.lastSync) >= 5*time.Minute {
+		if nameDrift {
+			ghost.NameSet = false
+		}
+		if avatarDrift {
+			ghost.AvatarSet = false
+		}
+		ghost.pushProfileChanges(ctx, nameDrift, avatarDrift, false)
+		if err := ghost.Bridge.DB.Ghost.Update(ctx, ghost.Ghost); err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to save ghost after profile reconcile")
+		}
+	}
+	content := *current
 	if nameDrift {
-		ghost.NameSet = false
+		content.Displayname = ghost.Name
 	}
 	if avatarDrift {
-		ghost.AvatarSet = false
+		content.AvatarURL = ghost.AvatarMXC
 	}
-	ghost.pushProfileChanges(ctx, nameDrift, avatarDrift, false)
-	if err := ghost.Bridge.DB.Ghost.Update(ctx, ghost.Ghost); err != nil {
-		zerolog.Ctx(ctx).Err(err).Msg("Failed to save ghost after profile reconcile")
+	_, err := ghost.Intent.SendState(ctx, roomID, event.StateMember, ghost.Intent.GetMXID().String(), &event.Content{Parsed: &content}, time.Now())
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Stringer("room_id", roomID).Msg("Failed to send member event after profile reconcile")
 	}
 }
