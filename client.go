@@ -795,7 +795,7 @@ func (cli *Client) prepareRequestAttempt(origCtx context.Context, req *http.Requ
 
 	// if there's no retry trigger, nothing to do
 	if cli.RequestRetryTrigger == nil {
-		return req, nil, "", nil
+		return req, nil, token, nil
 	}
 
 	attemptCtx, cancel := context.WithCancelCause(req.Context())
