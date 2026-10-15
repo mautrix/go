@@ -266,9 +266,10 @@ func dontProcessOldEvents(userID id.UserID, resp *RespSync, since string) bool {
 //	cli.Syncer.(mautrix.ExtensibleSyncer).OnSync(cli.MoveInviteState)
 func (cli *Client) MoveInviteState(ctx context.Context, resp *RespSync, _ string) bool {
 	for _, meta := range resp.Rooms.Invite {
-		var inviteState []*event.Event
 		var inviteEvt *event.Event
-		for _, evt := range meta.State.Events {
+		bestState := meta.BestState()
+		inviteState := make([]*event.Event, 0, len(bestState)-1)
+		for _, evt := range bestState {
 			if evt.Type == event.StateMember && evt.GetStateKey() == cli.UserID.String() {
 				inviteEvt = evt
 			} else {
@@ -280,6 +281,7 @@ func (cli *Client) MoveInviteState(ctx context.Context, resp *RespSync, _ string
 		if inviteEvt != nil {
 			inviteEvt.Unsigned.InviteRoomState = inviteState
 			meta.State.Events = []*event.Event{inviteEvt}
+			meta.FullState.Events = nil
 		}
 	}
 	return true
