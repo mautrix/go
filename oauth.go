@@ -267,7 +267,7 @@ func (cli *Client) OAuthRefreshToken(ctx context.Context, buffer time.Duration) 
 	cli.refreshLock.Lock()
 	defer cli.refreshLock.Unlock()
 	if cli.refreshToken == "" {
-		return nil
+		return ErrNoRefreshToken
 	} else if cli.oauthClientID == "" {
 		return ErrClientIDNotSet
 	}

@@ -98,6 +98,7 @@ var (
 
 	ErrFailedToRefreshToken = errors.New("failed to refresh access token")
 	ErrClientIDNotSet       = errors.New("client ID not set")
+	ErrNoRefreshToken       = errors.New("no refresh token available for refresh")
 
 	ErrResponseTooLong      = errors.New("response content length too long")
 	ErrBodyReadReachedLimit = errors.New("reached response size limit while reading body")
