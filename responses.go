@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/tidwall/gjson"
+	"go.mau.fi/util/exmaps"
 	"go.mau.fi/util/jsontime"
 	"go.mau.fi/util/ptr"
 
@@ -461,11 +462,43 @@ type UnreadNotificationCounts struct {
 }
 
 type SyncInvitedRoom struct {
-	State SyncEventsList `json:"invite_state"`
+	State     SyncEventsList `json:"invite_state"`
+	FullState SyncEventsList `json:"state,omitzero"`
+}
+
+func mergeStates(stripped, full SyncEventsList) []*event.Event {
+	if len(full.Events) == 0 {
+		return stripped.Events
+	}
+	type typeKeyTuple struct {
+		evtType  string
+		stateKey string
+	}
+	existingFullState := make(exmaps.Set[typeKeyTuple], len(full.Events))
+	bestState := make([]*event.Event, 0, len(stripped.Events))
+	for _, ev := range full.Events {
+		existingFullState.Add(typeKeyTuple{evtType: ev.Type.Type, stateKey: ev.GetStateKey()})
+		bestState = append(bestState, ev)
+	}
+	for _, ev := range stripped.Events {
+		if !existingFullState.Has(typeKeyTuple{evtType: ev.Type.Type, stateKey: ev.GetStateKey()}) {
+			bestState = append(bestState, ev)
+		}
+	}
+	return bestState
+}
+
+func (sir *SyncInvitedRoom) BestState() []*event.Event {
+	return mergeStates(sir.State, sir.FullState)
 }
 
 type SyncKnockedRoom struct {
-	State SyncEventsList `json:"knock_state"`
+	State     SyncEventsList `json:"knock_state"`
+	FullState SyncEventsList `json:"state,omitzero"`
+}
+
+func (skr *SyncKnockedRoom) BestState() []*event.Event {
+	return mergeStates(skr.State, skr.FullState)
 }
 
 type RespTurnServer struct {
