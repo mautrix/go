@@ -113,11 +113,11 @@ func (account *OlmAccount) getInitialKeys(userID id.UserID, deviceID id.DeviceID
 
 // getImpersonatableKeys generates MSC4350 device keys for targetUserID, which use the bot's device ID,
 // have no keys of their own, and are signed only by the bot's device.
-func (account *OlmAccount) getImpersonatableKeys(botUserID id.UserID, botDeviceID id.DeviceID, targetUserID id.UserID) (*mautrix.DeviceKeys, error) {
+func (account *OlmAccount) getImpersonatableKeys(botUserID id.UserID, botDeviceID id.DeviceID, targetUserID id.UserID, targetDeviceID id.DeviceID) (*mautrix.DeviceKeys, error) {
 	own := account.ownDeviceKeys(botUserID, botDeviceID)
 	deviceKeys := &mautrix.DeviceKeys{
 		UserID:       targetUserID,
-		DeviceID:     botDeviceID,
+		DeviceID:     targetDeviceID,
 		Algorithms:   []id.Algorithm{},
 		Keys:         mautrix.KeyMap{},
 		Impersonator: own,

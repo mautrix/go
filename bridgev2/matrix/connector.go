@@ -56,6 +56,7 @@ type Crypto interface {
 	Client() *mautrix.Client
 	ShareKeys(context.Context) error
 	EnsureImpersonatable(context.Context, id.UserID) error
+	EnsureImpersonatableDoublePuppet(context.Context, *appservice.IntentAPI) error
 	BeeperStreamPublisher() bridgev2.BeeperStreamPublisher
 }
 
@@ -637,6 +638,13 @@ func (br *Connector) NewUserIntent(ctx context.Context, userID id.UserID, access
 		return nil, accessToken, err
 	}
 	br.doublePuppetIntents.Set(userID, intent)
+	if br.Crypto != nil {
+		err = br.Crypto.EnsureImpersonatableDoublePuppet(ctx, intent)
+		if err != nil {
+			// Messages are still sent without it, clients just won't trust them as coming from the user's device.
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to register impersonatable device for double puppet")
+		}
+	}
 	return &ASIntent{Connector: br, Matrix: intent}, newToken, nil
 }
 

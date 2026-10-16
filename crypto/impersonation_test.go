@@ -21,7 +21,7 @@ func TestImpersonatableDeviceKeys(t *testing.T) {
 	mach := newMachine(t, "@bot:example.com")
 	ghost := id.UserID("@ghost:example.com")
 
-	dk, err := mach.ImpersonatableDeviceKeys(ghost)
+	dk, err := mach.ImpersonatableDeviceKeys(ghost, mach.Client.DeviceID)
 	require.NoError(t, err)
 
 	assert.Equal(t, ghost, dk.UserID)
@@ -63,7 +63,7 @@ func TestImpersonatableDeviceKeys(t *testing.T) {
 
 func TestImpersonatorMatchesOwnDeviceKeys(t *testing.T) {
 	mach := newMachine(t, "@bot:example.com")
-	dk, err := mach.ImpersonatableDeviceKeys("@ghost:example.com")
+	dk, err := mach.ImpersonatableDeviceKeys("@ghost:example.com", mach.Client.DeviceID)
 	require.NoError(t, err)
 	own := mach.account.ownDeviceKeys(mach.Client.UserID, mach.Client.DeviceID)
 	assert.Equal(t, own.UserID, dk.Impersonator.UserID)
@@ -85,6 +85,6 @@ func TestGetInitialKeysUnchanged(t *testing.T) {
 }
 
 func TestImpersonatableDeviceKeysNoAccount(t *testing.T) {
-	_, err := (&OlmMachine{}).ImpersonatableDeviceKeys("@ghost:example.com")
+	_, err := (&OlmMachine{}).ImpersonatableDeviceKeys("@ghost:example.com", "DEV")
 	assert.ErrorIs(t, err, ErrOlmAccountNotLoaded)
 }

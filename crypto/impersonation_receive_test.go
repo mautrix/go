@@ -49,7 +49,7 @@ func TestValidateImpersonatableDevice(t *testing.T) {
 	bot := newMachine(t, testBotUser)
 	botDevice := botDeviceFor(t, bot)
 	valid := func(t *testing.T) *mautrix.DeviceKeys {
-		keys, err := bot.ImpersonatableDeviceKeys(testGhostUser)
+		keys, err := bot.ImpersonatableDeviceKeys(testGhostUser, bot.Client.DeviceID)
 		require.NoError(t, err)
 		return keys
 	}
@@ -186,7 +186,7 @@ func (f *impersonationFixture) setGhostDevice(keys *mautrix.DeviceKeys) {
 
 func (f *impersonationFixture) ghostKeys(t *testing.T) *mautrix.DeviceKeys {
 	t.Helper()
-	keys, err := f.bot.ImpersonatableDeviceKeys(testGhostUser)
+	keys, err := f.bot.ImpersonatableDeviceKeys(testGhostUser, f.bot.Client.DeviceID)
 	require.NoError(t, err)
 	return keys
 }
@@ -236,7 +236,7 @@ func TestDecryptImpersonatedMessageRejectsInvalidDevices(t *testing.T) {
 
 	// A device signed by someone else who claims to be the bot's device.
 	other := newMachine(t, testBotUser)
-	forged, err := other.ImpersonatableDeviceKeys(testGhostUser)
+	forged, err := other.ImpersonatableDeviceKeys(testGhostUser, other.Client.DeviceID)
 	require.NoError(t, err)
 	f.setGhostDevice(forged)
 	assert.Equal(t, id.TrustStateUnknownDevice, f.decrypt(t, testGhostUser).Mautrix.TrustState)
@@ -279,7 +279,7 @@ func TestDecryptImpersonatedMessageFromGhostWithCrossSigningKeys(t *testing.T) {
 func TestFetchKeysKeepsImpersonatableDevices(t *testing.T) {
 	ctx := context.Background()
 	bot := newMachine(t, testBotUser)
-	ghostKeys, err := bot.ImpersonatableDeviceKeys(testGhostUser)
+	ghostKeys, err := bot.ImpersonatableDeviceKeys(testGhostUser, bot.Client.DeviceID)
 	require.NoError(t, err)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

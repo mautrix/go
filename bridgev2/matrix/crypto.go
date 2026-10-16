@@ -24,6 +24,7 @@ import (
 	"go.mau.fi/util/exerrors"
 
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/appservice"
 	"maunium.net/go/mautrix/beeperstream"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
@@ -219,7 +220,7 @@ func (helper *CryptoHelper) EnsureImpersonatable(ctx context.Context, ghost id.U
 	if err != nil {
 		return fmt.Errorf("failed to create device for ghost: %w", err)
 	}
-	keys, err := helper.mach.ImpersonatableDeviceKeys(ghost)
+	keys, err := helper.mach.ImpersonatableDeviceKeys(ghost, own.DeviceID)
 	if err != nil {
 		return fmt.Errorf("failed to generate impersonatable device keys: %w", err)
 	}
@@ -679,4 +680,65 @@ func (syncer *cryptoSyncer) GetFilterJSON(_ id.UserID) *mautrix.Filter {
 			Timeline:     &mautrix.FilterPart{NotTypes: everything},
 		},
 	}
+}
+
+// EnsureImpersonatableDoublePuppet creates an MSC4350 impersonatable device for a double-puppeted user, so that
+// messages the bridge sends as them are trusted by clients.
+//
+// With an access token, the impersonatable device takes the place of the device the token belongs to. That only
+// works for a device without keys of its own (a token from a separate login), as uploading replaces any device keys.
+// A device that already has keys is left alone. With appservice double puppeting there is no device, so the user
+// gets one with the bridge bot's device ID like ghosts do.
+//
+// If the user has cross-signing keys, clients only trust the device after the user's own client signs it.
+func (helper *CryptoHelper) EnsureImpersonatableDoublePuppet(ctx context.Context, intent *appservice.IntentAPI) error {
+	if !helper.impersonationEnabled {
+		return nil
+	}
+	helper.lock.RLock()
+	defer helper.lock.RUnlock()
+	if helper.mach == nil {
+		return nil
+	}
+	own := helper.mach.OwnIdentity()
+	user := intent.UserID
+	log := helper.log.With().Stringer("double_puppet_user_id", user).Logger()
+	deviceID := own.DeviceID
+	if intent.SetAppServiceUserID {
+		displayName := fmt.Sprintf("%s bridge", helper.bridge.Bridge.Network.GetName().DisplayName)
+		err := intent.CreateDeviceMSC4190(ctx, deviceID, displayName)
+		if err != nil {
+			return fmt.Errorf("failed to create device: %w", err)
+		}
+	} else {
+		whoami, err := intent.Whoami(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get device ID of access token: %w", err)
+		} else if whoami.DeviceID == "" {
+			return nil
+		}
+		deviceID = whoami.DeviceID
+	}
+	existing, err := intent.QueryKeys(ctx, &mautrix.ReqQueryKeys{DeviceKeys: mautrix.DeviceKeysRequest{user: {deviceID}}})
+	if err != nil {
+		return fmt.Errorf("failed to query device keys: %w", err)
+	}
+	if dk, ok := existing.DeviceKeys[user][deviceID]; ok && (len(dk.Keys) > 0 || len(dk.Algorithms) > 0) {
+		log.Warn().
+			Stringer("device_id", deviceID).
+			Msg("Device of double puppet access token has its own keys, not making it impersonatable")
+		return nil
+	}
+	keys, err := helper.mach.ImpersonatableDeviceKeys(user, deviceID)
+	if err != nil {
+		return fmt.Errorf("failed to generate impersonatable device keys: %w", err)
+	}
+	_, err = intent.UploadKeys(ctx, &mautrix.ReqUploadKeys{DeviceKeys: keys})
+	if err != nil {
+		return fmt.Errorf("failed to upload impersonatable device keys: %w", err)
+	}
+	log.Debug().
+		Stringer("device_id", deviceID).
+		Msg("Registered MSC4350 impersonatable device for double puppet")
+	return nil
 }
