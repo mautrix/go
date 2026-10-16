@@ -437,12 +437,13 @@ func (as *ASIntent) doUploadReq(ctx context.Context, file *event.EncryptedFileIn
 	if as.Connector.Config.Homeserver.AsyncMedia {
 		if req.ContentBytes != nil {
 			// Prevent too many background uploads at once
-			err = as.Connector.uploadSema.Acquire(ctx, int64(len(req.ContentBytes)))
+			sema := as.Connector.uploadSema
+			err = sema.Acquire(ctx, int64(len(req.ContentBytes)))
 			if err != nil {
 				return
 			}
 			req.DoneCallback = func() {
-				as.Connector.uploadSema.Release(int64(len(req.ContentBytes)))
+				sema.Release(int64(len(req.ContentBytes)))
 			}
 		}
 		req.AsyncContext = zerolog.Ctx(ctx).WithContext(as.Connector.Bridge.BackgroundCtx)
