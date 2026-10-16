@@ -1,3 +1,74 @@
+## v0.32.0 (2026-10-16)
+
+* **Breaking change *(bridgev2)*** Added portal parameter to the
+  `GetChatInfoChange` method.
+* *(bridgev2)* Removed deprecated SimpleRemoteEvent type.
+* *(event)* Removed unstable MSC4284 types, as policy servers have been
+  stabilized.
+* *(event)* Removed unused Beeper gallery types.
+* *(bridgev2)* Added support for disappearing message timers based on when the
+  recipient reads the message.
+* *(bridgev2)* Added fingerprint ID option for client HTTP requests.
+* *(bridgev2)* Added `optional` flag to login user input fields.
+* *(bridgev2)* Added body size limit for incoming provisioning API requests.
+* *(bridgev2)* Added interface for media that can only be viewed for a certain
+  amount of time and/or certain number of times.
+* *(bridgev2)* Added interface for blocking/unblocking users on the remote
+  network.
+* *(bridgev2)* Added alternate pre-handle methods for events that allow
+  cancelling the event.
+* *(appservice)* Added support for h2c in the HTTP server.
+* *(appservice)* Added support for global middleware in the HTTP server.
+* *(client)* Added wrappers for MatrixRTC livekit token endpoints.
+* *(client)* Added wrapper for report user endpoint.
+* *(client)* Added support for reading the full own invite/knock event in sync
+  added by [MSC4319].
+* *(event)* Added [MSC4274] gallery types.
+* *(federation)* Added cap for key fetch backoff.
+* *(federation)* Added context parameters for cache to allow persistent caches.
+* *(federation)* Added validation when getting OpenID user info so that callers
+  don't need to remember to do it separately.
+* *(crypto)* Added backoff for fetching device lists that fail repeatedly.
+* *(crypto)* Added option to schedule Olm session unwedging manually instead of
+  having it happen automatically in a goroutine.
+* *(crypto)* Changed Megolm session sharing to reuse the previous attempt if
+  sharing fails.
+* *(event)* Updated unsigned relations struct to match reality.
+* *(event)* Updated edit fallback to always be cut to a few dozen bytes.
+* *(client)* Changed displayname and avatar updates getters to ignore
+  `M_NOT_FOUND` errors, as the spec allows returning that instead of an empty
+  object.
+* *(format)* Changed short emphasis extension to have higher priority to allow
+  combining it with the standard emphasis syntax.
+* *(mediaproxy)* Changed network errors to return 502 instead of 404.
+* *(bridgev2)* Changed login provisioning API to allow returning initial cookies
+  to use when opening a webview.
+* *(bridgev2)* Changed reaction sync to keep existing database entries if
+  removing a reaction fails.
+* *(bridgev2)* Fixed old client not being disconnected when an existing login
+  is recreated.
+* *(bridgev2)* Fixed avatar and topic set flags being flipped on save.
+* *(bridgev2)* Fixed fake message MXID generation not being sufficiently unique.
+* *(bridgev2)* Fixed various panics and missing recovers.
+* *(bridgev2)* Fixed bridge state loop not stopping on bridge stop.
+* *(bridgev2)* Fixed deadlock when overwriting existing portal.
+* *(bridgev2)* Fixed `bridgev2.RespError` not being castable to
+  `mautrix.RespError` using `errors.As`.
+* *(bridgev2)* Fixed split portal migration leaving behind incorrect
+  `user_portal` rows.
+* *(client)* Fixed method used for get pushers endpoint.
+* *(client)* Fixed OAuth token expiry times only being counted in monotonic
+  time, which would stop when the system is suspended.
+* *(client)* Fixed expired OAuth token not attempting refresh when making request.
+* *(crypto)* Fixed JSON encoding using HTML escapes unnecessarily, which lead
+  to events being bigger than necessary, especially if they had formatting.
+* *(federation)* Fixed incorrect request path on SendInvite.
+* *(federation/pdu)* Fixed top-level `redacts` being incorrectly protected from
+  redaction.
+
+[MSC4274]: https://github.com/matrix-org/matrix-spec-proposals/pull/4274
+[MSC4319]: https://github.com/matrix-org/matrix-spec-proposals/pull/4319
+
 ## v0.31.0 (2026-09-16)
 
 * Bumped minimum Go version to 1.26.
