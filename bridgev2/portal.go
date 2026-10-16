@@ -87,6 +87,7 @@ type Portal struct {
 	currentlyTypingLock   sync.Mutex
 	currentlyTypingGhosts *exsync.Set[id.UserID]
 	typingUpdaterRunning  bool
+	lastMatrixTyping      time.Time
 
 	outgoingMessages     map[networkid.TransactionID]*outgoingMessage
 	outgoingMessagesLock sync.Mutex
@@ -1085,6 +1086,7 @@ func (portal *Portal) handleMatrixTyping(ctx context.Context, evt *event.Event) 
 	portal.sendTypings(ctx, stoppedTyping, false)
 	portal.sendTypings(ctx, startedTyping, true)
 	portal.currentlyTyping = content.UserIDs
+	portal.lastMatrixTyping = time.Now()
 	if len(portal.currentlyTypingLogins) > 0 && !portal.typingUpdaterRunning && portal.Bridge.Network.GetCapabilities().TypingRepeatInterval > 0 {
 		portal.typingUpdaterRunning = true
 		go portal.periodicTypingUpdater()
@@ -1142,6 +1144,8 @@ func (portal *Portal) sendTypings(ctx context.Context, userIDs []id.UserID, typi
 	}
 }
 
+const typingRepeatTimeout = 5 * time.Minute
+
 func (portal *Portal) periodicTypingUpdater() {
 	log := portal.Log.With().Str("component", "typing updater").Logger()
 	ctx := log.WithContext(portal.backgroundCtx)
@@ -1157,7 +1161,7 @@ func (portal *Portal) periodicTypingUpdater() {
 			return
 		}
 		portal.currentlyTypingLock.Lock()
-		if len(portal.currentlyTypingLogins) == 0 {
+		if len(portal.currentlyTypingLogins) == 0 || time.Since(portal.lastMatrixTyping) > typingRepeatTimeout {
 			portal.typingUpdaterRunning = false
 			portal.currentlyTypingLock.Unlock()
 			return
