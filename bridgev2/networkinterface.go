@@ -390,6 +390,9 @@ type NetworkGeneralCapabilities struct {
 	// When a portal has a parent space which has its own parent, should the `network` field
 	// in `m.bridge` events be set to the top-level space or the immediate parent?
 	NetworkIsImmediateParent bool
+	// If set, HandleMatrixTyping is called again at this interval for users who are still typing.
+	// This should be set for networks where typing notifications expire unless they're repeated.
+	TypingRepeatInterval time.Duration
 }
 
 // NetworkAPI is an interface representing a remote network client for a single user login.

@@ -86,6 +86,8 @@ type Portal struct {
 	currentlyTypingLogins map[id.UserID]*UserLogin
 	currentlyTypingLock   sync.Mutex
 	currentlyTypingGhosts *exsync.Set[id.UserID]
+	typingUpdaterRunning  bool
+	lastMatrixTyping      time.Time
 
 	outgoingMessages     map[networkid.TransactionID]*outgoingMessage
 	outgoingMessagesLock sync.Mutex
@@ -1084,6 +1086,11 @@ func (portal *Portal) handleMatrixTyping(ctx context.Context, evt *event.Event) 
 	portal.sendTypings(ctx, stoppedTyping, false)
 	portal.sendTypings(ctx, startedTyping, true)
 	portal.currentlyTyping = content.UserIDs
+	portal.lastMatrixTyping = time.Now()
+	if len(portal.currentlyTypingLogins) > 0 && !portal.typingUpdaterRunning && portal.Bridge.Network.GetCapabilities().TypingRepeatInterval > 0 {
+		portal.typingUpdaterRunning = true
+		go portal.periodicTypingUpdater()
+	}
 	// TODO actual status
 	return EventHandlingResultSuccess
 }
@@ -1137,17 +1144,27 @@ func (portal *Portal) sendTypings(ctx context.Context, userIDs []id.UserID, typi
 	}
 }
 
+const typingRepeatTimeout = 5 * time.Minute
+
 func (portal *Portal) periodicTypingUpdater() {
-	// TODO actually call this function
 	log := portal.Log.With().Str("component", "typing updater").Logger()
-	ctx := log.WithContext(context.Background())
+	ctx := log.WithContext(portal.backgroundCtx)
+	ticker := time.NewTicker(portal.Bridge.Network.GetCapabilities().TypingRepeatInterval)
+	defer ticker.Stop()
 	for {
-		// TODO make delay configurable by network connector
-		time.Sleep(5 * time.Second)
-		portal.currentlyTypingLock.Lock()
-		if len(portal.currentlyTyping) == 0 {
+		select {
+		case <-ticker.C:
+		case <-ctx.Done():
+			portal.currentlyTypingLock.Lock()
+			portal.typingUpdaterRunning = false
 			portal.currentlyTypingLock.Unlock()
-			continue
+			return
+		}
+		portal.currentlyTypingLock.Lock()
+		if len(portal.currentlyTypingLogins) == 0 || time.Since(portal.lastMatrixTyping) > typingRepeatTimeout {
+			portal.typingUpdaterRunning = false
+			portal.currentlyTypingLock.Unlock()
+			return
 		}
 		for _, userID := range portal.currentlyTyping {
 			login, ok := portal.currentlyTypingLogins[userID]
