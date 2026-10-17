@@ -1565,7 +1565,7 @@ func (evt *MatrixMessage) fillDBMessage(message *database.Message) *database.Mes
 	if message.SenderMXID == "" {
 		message.SenderMXID = evt.Event.Sender
 	}
-	if message.SendTxnID != "" {
+	if message.SendTxnID == "" {
 		message.SendTxnID = evt.InputTransactionID
 	}
 	return message
