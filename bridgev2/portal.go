@@ -3872,7 +3872,7 @@ func (portal *Portal) handleRemoteMessageRemove(ctx context.Context, source *Use
 	if !ok {
 		return EventHandlingResultFailed.WithError(ErrFailedToGetIntent)
 	}
-	if intent == portal.Bridge.Bot && len(targetParts) > 0 {
+	if intent == portal.Bridge.Bot && len(targetParts) > 0 && !onlyForMe {
 		senderIntent, err := portal.getIntentForMXID(ctx, targetParts[0].SenderMXID)
 		if err != nil {
 			log.Err(err).Stringer("sender_mxid", targetParts[0].SenderMXID).Msg("Failed to get intent for removing message")
