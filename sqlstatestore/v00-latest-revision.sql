@@ -1,7 +1,9 @@
--- v0 -> v11 (compatible with v3+): Latest revision
+-- v0 -> v12 (compatible with v3+): Latest revision
 
 CREATE TABLE mx_registrations (
-	user_id TEXT PRIMARY KEY
+	user_id TEXT PRIMARY KEY,
+	impersonator_device_id   TEXT,
+	impersonator_signing_key TEXT
 );
 
 -- only: postgres

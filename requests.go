@@ -305,10 +305,12 @@ type DeviceKeys struct {
 	DeviceID   id.DeviceID           `json:"device_id"`
 	Algorithms []id.Algorithm        `json:"algorithms"`
 	Keys       KeyMap                `json:"keys"`
-	Signatures signatures.Signatures `json:"signatures"`
+	Signatures signatures.Signatures `json:"signatures,omitempty"`
 	Dehydrated bool                  `json:"dehydrated,omitzero"`
-	Unsigned   map[string]any        `json:"unsigned,omitempty"`
-	Extra      map[string]any        `json:"-"`
+	// Impersonator is the device keys (without signatures) of the device that can send as this user, see MSC4350.
+	Impersonator *DeviceKeys    `json:"fi.mau.msc4350.impersonator,omitempty"`
+	Unsigned     map[string]any `json:"unsigned,omitempty"`
+	Extra        map[string]any `json:"-"`
 }
 
 type serializableDeviceKeys DeviceKeys
@@ -323,6 +325,7 @@ func (dk *DeviceKeys) deleteStandardExtraFields() {
 	delete(dk.Extra, "keys")
 	delete(dk.Extra, "signatures")
 	delete(dk.Extra, "dehydrated")
+	delete(dk.Extra, "fi.mau.msc4350.impersonator")
 	delete(dk.Extra, "unsigned")
 }
 
