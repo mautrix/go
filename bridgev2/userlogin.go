@@ -308,10 +308,8 @@ func (ul *UserLogin) Delete(ctx context.Context, state status.BridgeState, opts 
 	}
 	if opts.LogoutRemote {
 		ul.Client.LogoutRemote(ctx)
-	} else {
-		// we probably shouldn't delete the login if disconnect isn't finished
-		ul.Disconnect()
 	}
+	ul.Disconnect()
 	var portals []*database.UserPortal
 	var err error
 	if cleanupRooms {
