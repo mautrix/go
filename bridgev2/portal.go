@@ -102,7 +102,8 @@ type Portal struct {
 	functionalMembersLock  sync.Mutex
 	functionalMembersCache *event.ElementFunctionalMembersContent
 
-	events chan portalEvent
+	events         chan portalEvent
+	eventsSendLock sync.RWMutex
 
 	eventsLock sync.Mutex
 	eventIdx   int
@@ -368,6 +369,11 @@ func (portal *Portal) queueEvent(ctx context.Context, evt portalEvent) EventHand
 	} else {
 		if portal.events == nil {
 			panic(fmt.Errorf("queueEvent into uninitialized portal %s", portal.PortalKey))
+		}
+		portal.eventsSendLock.RLock()
+		defer portal.eventsSendLock.RUnlock()
+		if portal.backgroundCtx.Err() != nil {
+			return EventHandlingResultIgnored
 		}
 		select {
 		case portal.events <- evt:
@@ -5417,11 +5423,7 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 	if portal.Bridge.Config.PortalEventBuffer == 0 {
 		go portal.queueEvent(mergedCtx, evt)
 	} else {
-		select {
-		case portal.events <- evt:
-		case <-portal.deleted:
-			return ErrPortalIsDeleted
-		}
+		portal.queueEvent(mergedCtx, evt)
 	}
 	select {
 	case <-ctx.Done():
@@ -5799,8 +5801,9 @@ func (portal *Portal) unlockedDeleteCache() {
 	}
 	portal.cancelBackground()
 	if portal.events != nil {
-		// TODO there's a small risk of this racing with a queueEvent call
+		portal.eventsSendLock.Lock()
 		close(portal.events)
+		portal.eventsSendLock.Unlock()
 	}
 }
 
