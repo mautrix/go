@@ -210,6 +210,9 @@ func (ms *MessageStatus) ToMSSEvent(evt *MessageStatusEventInfo) *event.BeeperMe
 			content.Message = content.InternalError
 		}
 	}
+	if content.Message == "" && (ms.Status == event.MessageStatusRetriable || ms.Status == event.MessageStatusFail) {
+		content.Message = defaultStatusMessage(ms.ErrorReason)
+	}
 	if ms.DeliveredTo != nil {
 		content.DeliveredToUsers = &ms.DeliveredTo
 	}
@@ -217,6 +220,25 @@ func (ms *MessageStatus) ToMSSEvent(evt *MessageStatusEventInfo) *event.BeeperMe
 		content.DisappearingTimer = ms.DisappearingTimer
 	}
 	return content
+}
+
+// defaultStatusMessage is the human-readable message used for failed statuses that don't have one,
+// so clients never have to show a failure with no explanation.
+func defaultStatusMessage(reason event.MessageStatusReason) string {
+	switch reason {
+	case event.MessageStatusUnsupported:
+		return "not supported on this network"
+	case event.MessageStatusTooOld:
+		return "timed out waiting for the network"
+	case event.MessageStatusNoPermission:
+		return "you don't have permission to do that here"
+	case event.MessageStatusBridgeUnavailable:
+		return "not connected to the network"
+	case event.MessageStatusUndecryptable:
+		return "the bridge couldn't decrypt this"
+	default:
+		return "failed to send to the network"
+	}
 }
 
 func (ms *MessageStatus) ToNoticeEvent(evt *MessageStatusEventInfo) *event.MessageEventContent {
