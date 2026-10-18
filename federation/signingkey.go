@@ -97,6 +97,11 @@ func (skr *ServerKeyResponse) HasKey(keyID id.KeyID) bool {
 }
 
 func (skr *ServerKeyResponse) VerifySelfSignature() error {
+	if skr == nil {
+		return fmt.Errorf("response is nil")
+	} else if len(skr.VerifyKeys) == 0 {
+		return fmt.Errorf("no keys in response")
+	}
 	for keyID, key := range skr.VerifyKeys {
 		if err := signutil.VerifyJSON(skr.ServerName, keyID, key.Key, skr.Raw); err != nil {
 			return fmt.Errorf("failed to verify self signature for key %s: %w", keyID, err)
