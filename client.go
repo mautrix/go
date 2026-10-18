@@ -2173,9 +2173,11 @@ type ReqUploadMedia struct {
 	// UnstableUploadURL specifies the URL to upload the content to. MXC must also be set.
 	// see https://github.com/matrix-org/matrix-spec-proposals/pull/3870 for more info
 	UnstableUploadURL string
+
+	Client *http.Client
 }
 
-func (cli *Client) tryUploadMediaToURL(ctx context.Context, url, contentType string, content io.Reader, contentLength int64) (*http.Response, error) {
+func (cli *Client) tryUploadMediaToURL(ctx context.Context, client *http.Client, url, contentType string, content io.Reader, contentLength int64) (*http.Response, error) {
 	cli.Log.Debug().
 		Str("url", url).
 		Int64("content_length", contentLength).
@@ -2190,11 +2192,13 @@ func (cli *Client) tryUploadMediaToURL(ctx context.Context, url, contentType str
 		req.Header.Set("User-Agent", cli.UserAgent+" (external media uploader)")
 	}
 
-	if cli.ExternalClient != nil {
-		return cli.ExternalClient.Do(req)
-	} else {
-		return http.DefaultClient.Do(req)
+	if client == nil {
+		client = cli.ExternalClient
 	}
+	if client == nil {
+		client = http.DefaultClient
+	}
+	return client.Do(req)
 }
 
 func (cli *Client) uploadMediaToURL(ctx context.Context, data ReqUploadMedia) (*RespMediaUpload, error) {
@@ -2212,7 +2216,7 @@ func (cli *Client) uploadMediaToURL(ctx context.Context, data ReqUploadMedia) (*
 		retries = 0
 	}
 	for {
-		resp, err := cli.tryUploadMediaToURL(ctx, data.UnstableUploadURL, data.ContentType, reader, data.ContentLength)
+		resp, err := cli.tryUploadMediaToURL(ctx, data.Client, data.UnstableUploadURL, data.ContentType, reader, data.ContentLength)
 		if err == nil {
 			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 				// Everything is fine
@@ -2311,6 +2315,7 @@ func (cli *Client) UploadMedia(ctx context.Context, data ReqUploadMedia) (*RespM
 		RequestBody:   data.Content,
 		RequestLength: data.ContentLength,
 		ResponseJSON:  &m,
+		Client:        data.Client,
 	})
 	return &m, err
 }
