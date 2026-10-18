@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/rs/zerolog"
 	"go.mau.fi/util/exhttp"
 	"go.mau.fi/util/exslices"
 	"go.mau.fi/util/jsontime"
@@ -495,12 +496,17 @@ func (c *Client) MakeRequest(ctx context.Context, serverName string, authenticat
 	return err
 }
 
-func (c *Client) MakeFullRequest(ctx context.Context, params RequestParams) ([]byte, *http.Response, error) {
+func (c *Client) MakeFullRequest(ctx context.Context, params RequestParams) (body []byte, resp *http.Response, retErr error) {
 	req, err := c.compileRequest(ctx, params)
 	if err != nil {
 		return nil, nil, err
 	}
-	resp, err := c.HTTP.Do(req)
+	start := time.Now()
+	resp, err = c.HTTP.Do(req)
+	dur := time.Since(start)
+	defer func() {
+		c.logRequestDone(req, resp, err, dur, params.ServerName)
+	}()
 	if err != nil {
 		return nil, nil, mautrix.HTTPError{
 			Request:  req,
@@ -513,7 +519,6 @@ func (c *Client) MakeFullRequest(ctx context.Context, params RequestParams) ([]b
 	if !params.DontReadBody {
 		defer resp.Body.Close()
 	}
-	var body []byte
 	if resp.StatusCode >= 300 {
 		body, err = mautrix.ParseErrorResponse(req, resp)
 		return body, resp, err
@@ -540,6 +545,9 @@ func (c *Client) MakeFullRequest(ctx context.Context, params RequestParams) ([]b
 				WrappedError: err,
 			}
 		}
+		if resp.ContentLength == -1 {
+			resp.ContentLength = int64(len(body))
+		}
 		if params.ResponseJSON != nil {
 			err = json.Unmarshal(body, params.ResponseJSON)
 			if err != nil {
@@ -555,6 +563,39 @@ func (c *Client) MakeFullRequest(ctx context.Context, params RequestParams) ([]b
 		}
 	}
 	return body, resp, nil
+}
+
+func (c *Client) logRequestDone(req *http.Request, resp *http.Response, err error, duration time.Duration, serverName string) {
+	if c == nil {
+		return
+	}
+	var evt *zerolog.Event
+	logLevel := zerolog.DebugLevel
+	if errors.Is(err, context.Canceled) {
+		logLevel = zerolog.WarnLevel
+	} else if err != nil {
+		logLevel = zerolog.ErrorLevel
+	}
+	evt = zerolog.Ctx(req.Context()).WithLevel(logLevel).
+		Str("dest_server_name", serverName).
+		Str("method", req.Method).
+		Str("url", req.URL.String()).
+		Dur("duration", duration)
+	if resp != nil {
+		evt.Int("status_code", resp.StatusCode).
+			Int64("response_length", resp.ContentLength).
+			Str("response_mime", resp.Header.Get("Content-Type"))
+		if serverRequestID := resp.Header.Get("X-Beeper-Request-ID"); serverRequestID != "" {
+			evt.Str("beeper_request_id", serverRequestID)
+		}
+	}
+	if errors.Is(err, context.Canceled) {
+		evt.Err(err).Msg("Request canceled")
+	} else if err != nil {
+		evt.Err(err).Msg("Request failed")
+	} else {
+		evt.Msg("Request completed")
+	}
 }
 
 var ErrNotConfiguredForAuth = errors.New("client not configured for authentication")
