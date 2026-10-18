@@ -173,6 +173,8 @@ type EventHandlingResult struct {
 
 	SkipStateEcho bool
 
+	Permanent bool
+
 	// Error is an optional reason for failure. It is not required, Success may be false even without a specific error.
 	Error error
 	// Whether the Error should be sent as a MSS event.
@@ -200,6 +202,11 @@ func (ehr EventHandlingResult) WithError(err error) EventHandlingResult {
 	}
 	ehr.Error = err
 	ehr.Success = false
+	return ehr
+}
+
+func (ehr EventHandlingResult) WithPermanent() EventHandlingResult {
+	ehr.Permanent = true
 	return ehr
 }
 
@@ -231,7 +238,19 @@ func (ul *UserLogin) QueueRemoteEvent(evt RemoteEvent) EventHandlingResult {
 	return ul.Bridge.QueueRemoteEvent(ul, evt)
 }
 
+func (ul *UserLogin) QueueRemoteEventWithCallback(evt RemoteEvent, onHandled func(EventHandlingResult)) {
+	ul.Bridge.QueueRemoteEventWithCallback(ul, evt, onHandled)
+}
+
 func (br *Bridge) QueueRemoteEvent(login *UserLogin, evt RemoteEvent) EventHandlingResult {
+	return br.queueRemoteEvent(login, evt, nil)
+}
+
+func (br *Bridge) QueueRemoteEventWithCallback(login *UserLogin, evt RemoteEvent, onHandled func(EventHandlingResult)) {
+	br.queueRemoteEvent(login, evt, onHandled)
+}
+
+func (br *Bridge) queueRemoteEvent(login *UserLogin, evt RemoteEvent, onHandled func(EventHandlingResult)) EventHandlingResult {
 	log := login.Log
 	ctx := log.WithContext(br.BackgroundCtx)
 	maybeUncertain, ok := evt.(RemoteEventWithUncertainPortalReceiver)
@@ -257,19 +276,27 @@ func (br *Bridge) QueueRemoteEvent(login *UserLogin, evt RemoteEvent) EventHandl
 	if err != nil {
 		log.Err(err).Object("portal_key", key).Bool("uncertain_receiver", isUncertain).
 			Msg("Failed to get portal to handle remote event")
-		return EventHandlingResultFailed.WithError(fmt.Errorf("failed to get portal: %w", err))
+		res := EventHandlingResultFailed.WithError(fmt.Errorf("failed to get portal: %w", err))
+		if onHandled != nil {
+			onHandled(res)
+		}
+		return res
 	} else if portal == nil {
 		log.Warn().
 			Stringer("event_type", evt.GetType()).
 			Object("portal_key", key).
 			Bool("uncertain_receiver", isUncertain).
 			Msg("Portal not found to handle remote event")
+		if onHandled != nil {
+			onHandled(EventHandlingResultIgnored)
+		}
 		return EventHandlingResultIgnored
 	}
 	// TODO put this in a better place, and maybe cache to avoid constant db queries
 	login.MarkInPortal(ctx, portal)
 	return portal.queueEvent(ctx, &portalRemoteEvent{
-		evt:    evt,
-		source: login,
+		evt:       evt,
+		source:    login,
+		onHandled: onHandled,
 	})
 }

@@ -44,9 +44,16 @@ type portalMatrixEvent struct {
 }
 
 type portalRemoteEvent struct {
-	evt     RemoteEvent
-	source  *UserLogin
-	evtType RemoteEventType
+	evt       RemoteEvent
+	source    *UserLogin
+	evtType   RemoteEventType
+	onHandled func(EventHandlingResult)
+}
+
+func notifyRemoteEventHandled(rawEvt any, res EventHandlingResult) {
+	if evt, ok := rawEvt.(*portalRemoteEvent); ok && evt.onHandled != nil {
+		evt.onHandled(res)
+	}
 }
 
 type portalCreateEvent struct {
@@ -355,48 +362,84 @@ func (br *Bridge) GetExistingPortalByKey(ctx context.Context, key networkid.Port
 }
 
 func (portal *Portal) queueEvent(ctx context.Context, evt portalEvent) EventHandlingResult {
-	if portal.backgroundCtx.Err() != nil {
-		if portal.Bridge.BackgroundCtx.Err() != nil {
-			return EventHandlingResultFailed.WithError(fmt.Errorf("bridge shutting down: %w", portal.Bridge.BackgroundCtx.Err()))
-		}
-		return EventHandlingResultIgnored
-	}
 	if portal.Bridge.Config.PortalEventBuffer == 0 {
+		if portal.backgroundCtx.Err() != nil {
+			res := portal.unhandledEventResult()
+			notifyRemoteEventHandled(evt, res)
+			return res
+		}
 		portal.eventsLock.Lock()
 		defer portal.eventsLock.Unlock()
 		portal.eventIdx++
 		return portal.handleSingleEventWithDelayLogging(portal.eventIdx, evt)
-	} else {
-		if portal.events == nil {
-			panic(fmt.Errorf("queueEvent into uninitialized portal %s", portal.PortalKey))
-		}
-		portal.eventsSendLock.RLock()
-		defer portal.eventsSendLock.RUnlock()
-		if portal.backgroundCtx.Err() != nil {
-			return EventHandlingResultIgnored
-		}
+	}
+	if portal.events == nil {
+		panic(fmt.Errorf("queueEvent into uninitialized portal %s", portal.PortalKey))
+	}
+	if !portal.sendToEventChannel(ctx, evt) {
+		res := portal.unhandledEventResult()
+		notifyRemoteEventHandled(evt, res)
+		return res
+	}
+	return EventHandlingResultQueued
+}
+
+func (portal *Portal) sendToEventChannel(ctx context.Context, evt portalEvent) bool {
+	portal.eventsSendLock.RLock()
+	defer portal.eventsSendLock.RUnlock()
+	if portal.backgroundCtx.Err() != nil {
+		return false
+	}
+	select {
+	case portal.events <- evt:
+		return true
+	case <-portal.deleted:
+		return false
+	default:
+	}
+	zerolog.Ctx(ctx).Error().
+		Str("portal_id", string(portal.ID)).
+		Msg("Portal event channel is full, queue will block")
+	for {
 		select {
 		case portal.events <- evt:
-			return EventHandlingResultQueued
+			return true
 		case <-portal.deleted:
-			return EventHandlingResultIgnored
-		default:
+			return false
+		case <-time.After(5 * time.Second):
 			zerolog.Ctx(ctx).Error().
 				Str("portal_id", string(portal.ID)).
-				Msg("Portal event channel is full, queue will block")
-			for {
-				select {
-				case portal.events <- evt:
-					return EventHandlingResultQueued
-				case <-portal.deleted:
-					return EventHandlingResultIgnored
-				case <-time.After(5 * time.Second):
-					zerolog.Ctx(ctx).Error().
-						Str("portal_id", string(portal.ID)).
-						Msg("Portal event channel is still full")
-				}
-			}
+				Msg("Portal event channel is still full")
 		}
+	}
+}
+
+func (portal *Portal) unhandledEventResult() EventHandlingResult {
+	if err := portal.Bridge.BackgroundCtx.Err(); err != nil {
+		return EventHandlingResultFailed.WithError(fmt.Errorf("bridge shutting down: %w", err))
+	}
+	return EventHandlingResultIgnored
+}
+
+func (portal *Portal) dropQueuedEvents() {
+	var dropped []portalEvent
+	portal.eventsSendLock.Lock()
+	for drained := false; !drained; {
+		select {
+		case rawEvt := <-portal.events:
+			if rawEvt == nil {
+				drained = true
+			} else {
+				dropped = append(dropped, rawEvt)
+			}
+		default:
+			drained = true
+		}
+	}
+	portal.eventsSendLock.Unlock()
+	res := portal.unhandledEventResult()
+	for _, rawEvt := range dropped {
+		notifyRemoteEventHandled(rawEvt, res)
 	}
 }
 
@@ -418,6 +461,7 @@ func (portal *Portal) eventLoop() {
 				portal.handleSingleEventWithDelayLogging(i, rawEvt)
 			}
 		case <-portal.deleted:
+			portal.dropQueuedEvents()
 			return
 		}
 	}
@@ -459,6 +503,7 @@ func (portal *Portal) handleSingleEventWithDelayLogging(idx int, rawEvt any) (ou
 		outerRes = res
 		handleDuration = time.Since(start)
 		close(doneCh)
+		notifyRemoteEventHandled(rawEvt, res)
 		if backgrounded.Load() {
 			log.Debug().
 				Time("started_at", start).
@@ -577,8 +622,12 @@ func (portal *Portal) handleSingleEvent(ctx context.Context, rawEvt any, doneCal
 	log := zerolog.Ctx(ctx)
 	var res EventHandlingResult
 	defer func() {
+		v := recover()
+		if v != nil {
+			res = EventHandlingResultFailed.WithError(ErrPanicInEventHandler)
+		}
 		doneCallback(res)
-		if v := recover(); v != nil {
+		if v != nil {
 			err := exerrors.RecoverToError(v)
 			stack := debug.Stack()
 			log.Err(err).
@@ -3266,7 +3315,7 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 		} else {
 			log.Err(err).Msg("Failed to convert remote message")
 			portal.sendRemoteErrorNotice(ctx, intent, err, ts, "message")
-			return EventHandlingResultFailed.WithError(err)
+			return EventHandlingResultFailed.WithError(err).WithPermanent()
 		}
 	}
 	_, res = portal.sendConvertedMessage(ctx, source, evt.GetID(), intent, evt.GetSender().Sender, converted, ts, getStreamOrder(evt), nil, true)
@@ -3349,7 +3398,7 @@ func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, e
 	} else if err != nil {
 		log.Err(err).Msg("Failed to convert remote edit")
 		portal.sendRemoteErrorNotice(ctx, intent, err, ts, "edit")
-		return EventHandlingResultFailed.WithError(err)
+		return EventHandlingResultFailed.WithError(err).WithPermanent()
 	}
 	res := portal.sendConvertedEdit(ctx, source, existing[0].ID, evt.GetSender().Sender, converted, intent, ts, getStreamOrder(evt))
 	if portal.currentlyTypingGhosts.Pop(intent.GetMXID()) {
@@ -5826,4 +5875,51 @@ func (portal *Portal) SetRelay(ctx context.Context, relay *UserLogin) error {
 		return err
 	}
 	return nil
+}
+
+type RemoteEventBatch struct {
+	login *UserLogin
+	wg    sync.WaitGroup
+	lock  sync.Mutex
+	errs  []error
+}
+
+var ErrRemoteEventFailed = errors.New("remote event handling failed")
+
+func (ul *UserLogin) NewRemoteEventBatch() *RemoteEventBatch {
+	return &RemoteEventBatch{login: ul}
+}
+
+func (b *RemoteEventBatch) Queue(evt RemoteEvent) {
+	b.wg.Add(1)
+	evtType := evt.GetType()
+	b.login.QueueRemoteEventWithCallback(evt, func(res EventHandlingResult) {
+		defer b.wg.Done()
+		if res.Success || res.Permanent {
+			return
+		}
+		err := res.Error
+		if err == nil {
+			err = ErrRemoteEventFailed
+		}
+		b.lock.Lock()
+		b.errs = append(b.errs, fmt.Errorf("%s: %w", evtType, err))
+		b.lock.Unlock()
+	})
+}
+
+func (b *RemoteEventBatch) Wait(ctx context.Context) error {
+	done := make(chan struct{})
+	go func() {
+		b.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	b.lock.Lock()
+	defer b.lock.Unlock()
+	return errors.Join(b.errs...)
 }
