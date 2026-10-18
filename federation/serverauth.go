@@ -128,9 +128,9 @@ func (sa *ServerAuth) GetKeysWithCache(ctx context.Context, serverName string, k
 	}
 	res, err = sa.Client.ServerKeys(ctx, serverName)
 	if err != nil {
-		err = sa.Keys.StoreFetchError(ctx, serverName, err)
-		if err != nil {
-			zerolog.Ctx(ctx).Warn().Err(err).
+		storeErr := sa.Keys.StoreFetchError(ctx, serverName, err)
+		if storeErr != nil {
+			zerolog.Ctx(ctx).Warn().Err(storeErr).
 				Str("server_name", serverName).
 				Msg("Failed to store server key fetch error in cache")
 		}
@@ -206,7 +206,7 @@ func (sa *ServerAuth) Authenticate(r *http.Request) (*http.Request, *mautrix.Res
 				Msg("Failed to query keys to authenticate request (cached error)")
 		}
 		return nil, &errFailedToQueryKeys
-	} else if err := resp.VerifySelfSignature(); err != nil {
+	} else if err = resp.VerifySelfSignature(); err != nil {
 		log.Trace().Err(err).
 			Str("server_name", parsed.Origin).
 			Msg("Failed to validate self-signatures of server keys")
