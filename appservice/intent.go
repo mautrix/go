@@ -34,7 +34,21 @@ type IntentAPI struct {
 }
 
 func (as *AppService) NewIntentAPI(localpart string) *IntentAPI {
-	userID := id.NewUserID(localpart, as.HomeserverDomain)
+	return as.newIntentAPIWithUserID(id.NewUserID(localpart, as.HomeserverDomain))
+}
+
+func (as *AppService) NewDoublePuppetIntent(userID id.UserID, client *mautrix.Client) *IntentAPI {
+	return &IntentAPI{
+		Client: client,
+		bot:    as.botClient,
+		as:     as,
+		UserID: userID,
+
+		IsCustomPuppet: true,
+	}
+}
+
+func (as *AppService) newIntentAPIWithUserID(userID id.UserID) *IntentAPI {
 	bot := as.BotClient()
 	if userID == bot.UserID {
 		bot = nil

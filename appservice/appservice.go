@@ -293,7 +293,7 @@ func (as *AppService) makeIntent(userID id.UserID) *IntentAPI {
 		}
 		return nil
 	}
-	intent = as.NewIntentAPI(localpart)
+	intent = as.newIntentAPIWithUserID(userID)
 	as.intents[userID] = intent
 	return intent
 }
