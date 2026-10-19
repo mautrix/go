@@ -13,6 +13,8 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/rs/zerolog"
 
@@ -26,6 +28,8 @@ type IntentAPI struct {
 	bot    *mautrix.Client
 	as     *AppService
 	UserID id.UserID
+
+	lastUsed atomic.Uint32
 
 	registerLock sync.Mutex
 
@@ -64,6 +68,12 @@ func (as *AppService) newIntentAPIUnlocked(userID id.UserID) *IntentAPI {
 
 		IsCustomPuppet: false,
 	}
+}
+
+var cacheStart = time.Now()
+
+func (intent *IntentAPI) Touch() {
+	intent.lastUsed.Store(uint32(time.Since(cacheStart) / 1e9))
 }
 
 func (intent *IntentAPI) Register(ctx context.Context) error {

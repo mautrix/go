@@ -63,6 +63,7 @@ func (as *ASIntent) Matrix() *appservice.IntentAPI {
 		api = as.getIntent(as.UserID)
 		as.mx = weak.Make(api)
 	}
+	api.Touch()
 	return api
 }
 

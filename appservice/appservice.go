@@ -7,6 +7,7 @@
 package appservice
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"net"
@@ -14,6 +15,7 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -58,6 +60,8 @@ func Create() *AppService {
 		QueryHandler:   &QueryHandlerStub{},
 
 		SpecVersions: &mautrix.RespVersions{},
+
+		IntentCacheSize: 2048,
 
 		DefaultHTTPRetries: 4,
 	}
@@ -179,6 +183,9 @@ type AppService struct {
 	intents     map[id.UserID]*IntentAPI
 	intentsLock sync.RWMutex
 
+	lastCacheEvict  time.Time
+	IntentCacheSize int
+
 	ws                    *websocket.Conn
 	StopWebsocket         func(error)
 	websocketHandlers     map[string]WebsocketHandler
@@ -291,6 +298,10 @@ func (as *AppService) makeIntent(userID id.UserID) *IntentAPI {
 				Msg("Failed to make intent: homeserver doesn't match")
 		}
 		return nil
+	}
+	if as.IntentCacheSize > 0 && len(as.intents) >= as.IntentCacheSize && time.Since(as.lastCacheEvict) > 5*time.Minute {
+		as.evictIntentCache()
+		as.lastCacheEvict = time.Now()
 	}
 	intent = as.newIntentAPIUnlocked(userID)
 	as.intents[userID] = intent
@@ -443,4 +454,36 @@ func (as *AppService) botClientUnlocked() *mautrix.Client {
 		as.botClient = as.makeClientUnlocked(as.BotMXID())
 	}
 	return as.botClient
+}
+
+type cacheItem struct {
+	touchedAt uint32
+	key       id.UserID
+}
+
+func (as *AppService) evictIntentCache() {
+	items := make([]cacheItem, 0, len(as.intents))
+	for key, intent := range as.intents {
+		if intent == as.botIntent {
+			continue
+		}
+		items = append(items, cacheItem{
+			touchedAt: intent.lastUsed.Load(),
+			key:       key,
+		})
+	}
+	slices.SortFunc(items, func(a, b cacheItem) int {
+		return cmp.Compare(a.touchedAt, b.touchedAt)
+	})
+	cutoff := len(items) - (as.IntentCacheSize / 4)
+	if cutoff > 0 {
+		for _, item := range items[:cutoff] {
+			delete(as.intents, item.key)
+			delete(as.clients, item.key)
+		}
+	}
+	as.Log.Debug().
+		Time("last_evict", as.lastCacheEvict).
+		Int("removed_count", cutoff).
+		Msg("Evicted intent cache")
 }
