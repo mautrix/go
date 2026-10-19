@@ -163,6 +163,9 @@ func (pong BridgeState) Fill(user BridgeStateFiller) BridgeState {
 	} else {
 		pong.TTL = 21600
 	}
+	if pong.StateEvent == StateBadCredentials && pong.UserAction == "" {
+		pong.UserAction = UserActionRelogin
+	}
 	return pong
 }
 
