@@ -17,6 +17,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"weak"
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/fallocate"
@@ -35,7 +36,8 @@ import (
 
 // ASIntent implements the bridge ghost API interface using a real Matrix homeserver as the backend.
 type ASIntent struct {
-	mx        *appservice.IntentAPI
+	mx        weak.Pointer[appservice.IntentAPI]
+	getIntent func(userID id.UserID) *appservice.IntentAPI
 	Connector *Connector
 	UserID    id.UserID
 
@@ -43,9 +45,10 @@ type ASIntent struct {
 	directChatsCache event.DirectChatsEventContent
 }
 
-func (br *Connector) newASIntent(userID id.UserID, mx *appservice.IntentAPI) *ASIntent {
+func (br *Connector) newASIntent(userID id.UserID, getIntent func(id.UserID) *appservice.IntentAPI) *ASIntent {
 	return &ASIntent{
-		mx:        mx,
+		mx:        weak.Make(getIntent(userID)),
+		getIntent: getIntent,
 		Connector: br,
 		UserID:    userID,
 	}
@@ -55,7 +58,12 @@ var _ bridgev2.MatrixAPI = (*ASIntent)(nil)
 var _ bridgev2.MarkAsDMMatrixAPI = (*ASIntent)(nil)
 
 func (as *ASIntent) Matrix() *appservice.IntentAPI {
-	return as.mx
+	api := as.mx.Value()
+	if api == nil {
+		api = as.getIntent(as.UserID)
+		as.mx = weak.Make(api)
+	}
+	return api
 }
 
 func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType event.Type, content *event.Content, extra *bridgev2.MatrixSendExtra) (*mautrix.RespSendEvent, error) {

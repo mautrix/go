@@ -508,8 +508,7 @@ func (br *Connector) UpdateBotProfile(ctx context.Context) {
 }
 
 func (br *Connector) GhostIntent(userID networkid.UserID) bridgev2.MatrixAPI {
-	mxid := br.FormatGhostMXID(userID)
-	return br.newASIntent(mxid, br.AS.Intent(mxid))
+	return br.newASIntent(br.FormatGhostMXID(userID), br.AS.Intent)
 }
 
 func (br *Connector) SendBridgeStatus(ctx context.Context, state *status.BridgeState) error {
@@ -632,11 +631,23 @@ func (br *Connector) NewUserIntent(ctx context.Context, userID id.UserID, access
 		return nil, accessToken, err
 	}
 	br.doublePuppetIntents.Set(userID, intent)
-	return br.newASIntent(userID, intent), newToken, nil
+	return br.newASIntent(userID, br.getDoublePuppetIntent), newToken, nil
+}
+
+func (br *Connector) getDoublePuppetIntent(userID id.UserID) *appservice.IntentAPI {
+	intent, _ := br.doublePuppetIntents.Get(userID)
+	return intent
 }
 
 func (br *Connector) BotIntent() bridgev2.MatrixAPI {
-	return br.newASIntent(br.Bot.UserID, br.Bot)
+	return br.newASIntent(br.Bot.UserID, br.getBotIntent)
+}
+
+func (br *Connector) getBotIntent(userID id.UserID) *appservice.IntentAPI {
+	if userID != br.Bot.UserID {
+		panic("getBotIntent called with non-bot user ID")
+	}
+	return br.Bot
 }
 
 func (br *Connector) GetPowerLevels(ctx context.Context, roomID id.RoomID) (*event.PowerLevelsEventContent, error) {
