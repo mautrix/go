@@ -61,8 +61,6 @@ func Create() *AppService {
 
 		SpecVersions: &mautrix.RespVersions{},
 
-		IntentCacheSize: 2048,
-
 		DefaultHTTPRetries: 4,
 	}
 
@@ -305,6 +303,9 @@ func (as *AppService) makeIntent(userID id.UserID) *IntentAPI {
 	}
 	intent = as.newIntentAPIUnlocked(userID)
 	as.intents[userID] = intent
+	if as.IntentCacheSize > 0 {
+		intent.Touch()
+	}
 	return intent
 }
 
