@@ -23,10 +23,9 @@ import (
 
 type IntentAPI struct {
 	*mautrix.Client
-	bot       *mautrix.Client
-	as        *AppService
-	Localpart string
-	UserID    id.UserID
+	bot    *mautrix.Client
+	as     *AppService
+	UserID id.UserID
 
 	registerLock sync.Mutex
 
@@ -41,11 +40,10 @@ func (as *AppService) NewIntentAPI(localpart string) *IntentAPI {
 		bot = nil
 	}
 	return &IntentAPI{
-		Client:    as.Client(userID),
-		bot:       bot,
-		as:        as,
-		Localpart: localpart,
-		UserID:    userID,
+		Client: as.Client(userID),
+		bot:    bot,
+		as:     as,
+		UserID: userID,
 
 		IsCustomPuppet: false,
 	}
@@ -53,7 +51,7 @@ func (as *AppService) NewIntentAPI(localpart string) *IntentAPI {
 
 func (intent *IntentAPI) Register(ctx context.Context) error {
 	_, err := intent.Client.MakeRequest(ctx, http.MethodPost, intent.BuildClientURL("v3", "register"), &mautrix.ReqRegister[any]{
-		Username:     intent.Localpart,
+		Username:     intent.UserID.Localpart(),
 		Type:         mautrix.AuthTypeAppservice,
 		InhibitLogin: true,
 	}, nil)
