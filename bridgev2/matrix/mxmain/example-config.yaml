@@ -289,6 +289,9 @@ matrix:
     # Should the bridge set additional custom profile info for ghosts?
     # This can make a lot of requests, as there's no batch profile update endpoint.
     ghost_extra_profile_info: false
+    # Maximum file download size in bytes. By default (-1), the bridge will only download 100 MiB files in-memory
+    # and 2 GiB files when streaming via disk. This can be set to a value higher than zero to change both limits.
+    max_download_size: -1
 
 # Segment-compatible analytics endpoint for tracking some events, like provisioning API login and encryption errors.
 analytics:

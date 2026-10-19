@@ -106,6 +106,7 @@ type MatrixConfig struct {
 	FederateRooms         bool  `yaml:"federate_rooms"`
 	UploadFileThreshold   int64 `yaml:"upload_file_threshold"`
 	GhostExtraProfileInfo bool  `yaml:"ghost_extra_profile_info"`
+	MaxDownloadSize       int64 `yaml:"max_download_size"`
 }
 
 type AnalyticsConfig struct {
