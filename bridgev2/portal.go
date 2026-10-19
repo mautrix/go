@@ -977,13 +977,12 @@ func (portal *Portal) handleMatrixReceipts(ctx context.Context, evt *event.Event
 }
 
 func (portal *Portal) handleMatrixReadReceipt(ctx context.Context, user *User, eventID id.EventID, receipt event.ReadReceipt) {
-	log := zerolog.Ctx(ctx)
-	log.UpdateContext(func(c zerolog.Context) zerolog.Context {
-		return c.
-			Stringer("event_id", eventID).
-			Stringer("user_id", user.MXID).
-			Stringer("receipt_ts", receipt.Timestamp)
-	})
+	log := zerolog.Ctx(ctx).With().
+		Stringer("event_id", eventID).
+		Stringer("user_id", user.MXID).
+		Stringer("receipt_ts", receipt.Timestamp).
+		Stringer("thread_id", receipt.ThreadID).
+		Logger()
 	login, userPortal, err := portal.FindPreferredLogin(ctx, user, false)
 	if err != nil {
 		if !errors.Is(err, ErrNotLoggedIn) {
@@ -3984,6 +3983,30 @@ func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserL
 	if !ok {
 		return EventHandlingResultFailed.WithError(ErrFailedToGetIntent)
 	}
+	var threadRoot *database.Message
+	var threadReadingIntent ThreadReadingMatrixAPI
+	if threadProvider, ok := evt.(RemoteReadReceiptWithThread); ok {
+		threadRootID := threadProvider.GetReceiptThread()
+		threadRoot, err = portal.Bridge.DB.Message.GetLastPartByID(ctx, portal.Receiver, threadRootID)
+		if err != nil {
+			log.Err(err).
+				Str("thread_root_id", string(threadRootID)).
+				Msg("Failed to get thread root message for read receipt")
+			return EventHandlingResultFailed.WithError(err)
+		} else if threadRoot == nil {
+			log.Debug().
+				Str("thread_root_id", string(threadRootID)).
+				Msg("Thread root message not found")
+		} else if threadRoot.HasFakeMXID() {
+			log.Debug().
+				Str("thread_root_id", string(threadRootID)).
+				Msg("Thread root message is fake")
+			threadRoot = nil
+		}
+		if threadRoot != nil {
+			threadReadingIntent, _ = intent.(ThreadReadingMatrixAPI)
+		}
+	}
 	var addTargetLog func(evt *zerolog.Event) *zerolog.Event
 	if lastTarget == nil {
 		sevt, evtOK := evt.(RemoteReadReceiptWithStreamOrder)
@@ -4004,7 +4027,11 @@ func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserL
 		addTargetLog = func(evt *zerolog.Event) *zerolog.Event {
 			return evt.Stringer("target_mxid", lastTarget.MXID)
 		}
-		err = intent.MarkRead(ctx, portal.MXID, lastTarget.MXID, getEventTS(evt))
+		if threadReadingIntent != nil {
+			err = threadReadingIntent.MarkThreadRead(ctx, portal.MXID, lastTarget.MXID, getEventTS(evt), threadRoot.MXID)
+		} else {
+			err = intent.MarkRead(ctx, portal.MXID, lastTarget.MXID, getEventTS(evt))
+		}
 		readUpTo = lastTarget.Timestamp
 	}
 	if err != nil {

@@ -1410,6 +1410,11 @@ type RemoteReadReceiptWithStreamOrder interface {
 	GetReadUpToStreamOrder() int64
 }
 
+type RemoteReadReceiptWithThread interface {
+	RemoteReadReceipt
+	GetReceiptThread() networkid.MessageID
+}
+
 type RemoteDeliveryReceipt interface {
 	RemoteEvent
 	GetReceiptTargets() []networkid.MessageID

@@ -163,6 +163,10 @@ func (as *ASIntent) SendState(ctx context.Context, roomID id.RoomID, eventType e
 }
 
 func (as *ASIntent) MarkRead(ctx context.Context, roomID id.RoomID, eventID id.EventID, ts time.Time) (err error) {
+	return as.MarkThreadRead(ctx, roomID, eventID, ts, "")
+}
+
+func (as *ASIntent) MarkThreadRead(ctx context.Context, roomID id.RoomID, eventID id.EventID, ts time.Time, threadID id.EventID) (err error) {
 	extraData := map[string]any{}
 	if !ts.IsZero() {
 		extraData["ts"] = ts.UnixMilli()
@@ -176,11 +180,9 @@ func (as *ASIntent) MarkRead(ctx context.Context, roomID id.RoomID, eventID id.E
 		req.FullyRead = eventID
 		req.BeeperFullyReadExtra = extraData
 	}
-	if as.Matrix().IsCustomPuppet && as.Connector.SpecVersions.Supports(mautrix.BeeperFeatureInboxState) && as.Connector.Config.Homeserver.Software != bridgeconfig.SoftwareHungry {
-		err = as.Matrix().SetBeeperInboxState(ctx, roomID, &mautrix.ReqSetBeeperInboxState{
-			//MarkedUnread: ptr.Ptr(false),
-			ReadMarkers: &req,
-		})
+	if threadID != "" {
+		extraData["thread_id"] = threadID
+		err = as.Matrix().SendReceipt(ctx, roomID, eventID, event.ReceiptTypeRead, extraData)
 	} else {
 		err = as.Matrix().SetReadMarkers(ctx, roomID, &req)
 		if err == nil && as.Matrix().IsCustomPuppet && as.Connector.Config.Homeserver.Software != bridgeconfig.SoftwareHungry {

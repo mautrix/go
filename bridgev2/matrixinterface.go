@@ -230,6 +230,11 @@ type MatrixAPI interface {
 	GetEvent(ctx context.Context, roomID id.RoomID, eventID id.EventID) (*event.Event, error)
 }
 
+type ThreadReadingMatrixAPI interface {
+	MatrixAPI
+	MarkThreadRead(ctx context.Context, roomID id.RoomID, eventID id.EventID, ts time.Time, threadID id.EventID) error
+}
+
 type StreamOrderReadingMatrixAPI interface {
 	MatrixAPI
 	MarkStreamOrderRead(ctx context.Context, roomID id.RoomID, streamOrder int64, ts time.Time) error
