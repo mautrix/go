@@ -121,9 +121,9 @@ func NewConnector(cfg *bridgeconfig.Config) *Connector {
 	c.MediaConfig.UploadSize = 50 * 1024 * 1024
 	c.MaxDownloadSize = 2 * 1024 * 1024 * 1024
 	c.MaxMemoryDownloadSize = 100 * 1024 * 1024
-	if cfg.Matrix.UploadFileThreshold > 0 {
-		c.MaxDownloadSize = cfg.Matrix.UploadFileThreshold
-		c.MaxMemoryDownloadSize = cfg.Matrix.UploadFileThreshold
+	if cfg.Matrix.MaxDownloadSize > 0 {
+		c.MaxDownloadSize = cfg.Matrix.MaxDownloadSize
+		c.MaxMemoryDownloadSize = cfg.Matrix.MaxDownloadSize
 	}
 	c.uploadSema = semaphore.NewWeighted(c.MediaConfig.UploadSize + 1)
 	c.Capabilities = &bridgev2.MatrixCapabilities{}
