@@ -245,8 +245,17 @@ func (mach *OlmMachine) FetchKeys(ctx context.Context, users []id.UserID, includ
 			Int("old_device_count", len(existingDevices)).
 			Msg("Updating devices in store")
 		changed := false
+		var impersonatable []*mautrix.DeviceKeys
 		for deviceID, deviceKeys := range devices {
 			log := log.With().Stringer("device_id", deviceID).Logger()
+			if deviceKeys.Impersonator != nil {
+				// MSC4350 impersonatable devices have no keys of their own, so they're validated when
+				// a message is received instead of being stored as regular devices.
+				if deviceID == deviceKeys.DeviceID && userID == deviceKeys.UserID {
+					impersonatable = append(impersonatable, &deviceKeys)
+				}
+				continue
+			}
 			existing, existed := existingDevices[deviceID]
 			log.Trace().Msg("Validating device")
 			newDevice, err := mach.validateDevice(userID, deviceID, deviceKeys, existing)
@@ -263,6 +272,7 @@ func (mach *OlmMachine) FetchKeys(ctx context.Context, users []id.UserID, includ
 				}
 			}
 		}
+		mach.impersonatable.replace(userID, impersonatable)
 		log.Trace().Int("new_device_count", len(newDevices)).Msg("Storing new device list")
 		err = mach.CryptoStore.PutDevices(ctx, userID, newDevices)
 		if err != nil {

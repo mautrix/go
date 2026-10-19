@@ -48,6 +48,7 @@ type OlmMachine struct {
 	// Never ask the server for keys automatically as a side effect during Megolm decryption.
 	DisableDecryptKeyFetching bool
 	keyFetchAttempted         *exsync.Set[userSenderKeyTuple]
+	impersonatable            impersonatableDevices
 
 	// Don't mark outbound Olm sessions as shared for devices they were initially sent to.
 	DisableSharedGroupSessionTracking bool
@@ -256,6 +257,16 @@ func (mach *OlmMachine) Fingerprint() string {
 
 func (mach *OlmMachine) GetAccount() *OlmAccount {
 	return mach.account
+}
+
+// ImpersonatableDeviceKeys generates MSC4350 impersonatable device keys for the given user, signed by this device.
+// The device ID of the impersonatable device is up to the caller: appservice ghosts use this device's ID,
+// double puppets use the ID of the device their access token belongs to.
+func (mach *OlmMachine) ImpersonatableDeviceKeys(target id.UserID, deviceID id.DeviceID) (*mautrix.DeviceKeys, error) {
+	if mach.account == nil {
+		return nil, ErrOlmAccountNotLoaded
+	}
+	return mach.account.getImpersonatableKeys(mach.Client.UserID, mach.Client.DeviceID, target, deviceID)
 }
 
 // OwnIdentity returns this device's id.Device struct
