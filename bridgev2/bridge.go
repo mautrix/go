@@ -97,7 +97,7 @@ func NewBridge(
 	}
 	br.Commands = newCommandProcessor(br)
 	br.Matrix.Init(br)
-	br.Bot = br.Matrix.BotIntent()
+	br.Bot = br.Matrix.(botIntentGetter).BotIntent()
 	br.Network.Init(br)
 	br.DisappearLoop = &DisappearLoop{br: br}
 	return br

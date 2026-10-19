@@ -51,7 +51,6 @@ type MatrixConnector interface {
 	FormatGhostMXID(userID networkid.UserID) id.UserID
 	GhostIntent(userID networkid.UserID) MatrixAPI
 	NewUserIntent(ctx context.Context, userID id.UserID, accessToken string) (MatrixAPI, string, error)
-	BotIntent() MatrixAPI
 
 	SendBridgeStatus(ctx context.Context, state *status.BridgeState) error
 	SendMessageStatus(ctx context.Context, status *MessageStatus, evt *MessageStatusEventInfo)
@@ -69,6 +68,11 @@ type MatrixConnector interface {
 	GenerateReactionEventID(roomID id.RoomID, targetMessage *database.Message, sender networkid.UserID, emojiID networkid.EmojiID) id.EventID
 
 	ServerName() string
+}
+
+type botIntentGetter interface {
+	MatrixConnector
+	BotIntent() MatrixAPI
 }
 
 type MatrixConnectorWithArbitraryRoomState interface {
