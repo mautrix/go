@@ -653,7 +653,7 @@ func (as *ASIntent) CreateRoom(ctx context.Context, req *mautrix.ReqCreateRoom) 
 }
 
 func (as *ASIntent) MarkAsDM(ctx context.Context, roomID id.RoomID, withUser id.UserID) error {
-	if !as.Connector.Config.Matrix.SyncDirectChatList {
+	if !as.Connector.Config.Matrix.SyncDirectChatList || !as.IsDoublePuppet() {
 		return nil
 	}
 	as.dmUpdateLock.Lock()
