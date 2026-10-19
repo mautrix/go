@@ -3985,7 +3985,7 @@ func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserL
 	}
 	var threadRoot *database.Message
 	var threadReadingIntent ThreadReadingMatrixAPI
-	if threadProvider, ok := evt.(RemoteReadReceiptWithThread); ok {
+	if threadProvider, ok := evt.(RemoteReadReceiptWithThread); ok && threadProvider.GetReceiptThread() != "" {
 		threadRootID := threadProvider.GetReceiptThread()
 		threadRoot, err = portal.Bridge.DB.Message.GetLastPartByID(ctx, portal.Receiver, threadRootID)
 		if err != nil {
