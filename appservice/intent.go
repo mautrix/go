@@ -33,14 +33,17 @@ type IntentAPI struct {
 	Registered     bool
 }
 
+// Deprecated: Intents should not be created manually
 func (as *AppService) NewIntentAPI(localpart string) *IntentAPI {
-	return as.newIntentAPIWithUserID(id.NewUserID(localpart, as.HomeserverDomain))
+	as.intentsLock.Lock()
+	defer as.intentsLock.Unlock()
+	return as.newIntentAPIUnlocked(id.NewUserID(localpart, as.HomeserverDomain))
 }
 
 func (as *AppService) NewDoublePuppetIntent(userID id.UserID, client *mautrix.Client) *IntentAPI {
 	return &IntentAPI{
 		Client: client,
-		bot:    as.botClient,
+		bot:    as.BotClient(),
 		as:     as,
 		UserID: userID,
 
@@ -48,13 +51,13 @@ func (as *AppService) NewDoublePuppetIntent(userID id.UserID, client *mautrix.Cl
 	}
 }
 
-func (as *AppService) newIntentAPIWithUserID(userID id.UserID) *IntentAPI {
-	bot := as.BotClient()
+func (as *AppService) newIntentAPIUnlocked(userID id.UserID) *IntentAPI {
+	bot := as.botClientUnlocked()
 	if userID == bot.UserID {
 		bot = nil
 	}
 	return &IntentAPI{
-		Client: as.Client(userID),
+		Client: as.makeClientUnlocked(userID),
 		bot:    bot,
 		as:     as,
 		UserID: userID,

@@ -384,7 +384,7 @@ func (as *AppService) StartWebsocket(ctx context.Context, baseURL string, onConn
 		HTTPClient: as.HTTPClient,
 		HTTPHeader: http.Header{
 			"Authorization": []string{fmt.Sprintf("Bearer %s", as.Registration.AppToken)},
-			"User-Agent":    []string{as.BotClient().UserAgent},
+			"User-Agent":    []string{as.UserAgent},
 
 			"X-Mautrix-Process-ID":        []string{as.ProcessID},
 			"X-Mautrix-Websocket-Version": []string{"3"},
