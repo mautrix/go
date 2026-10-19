@@ -35,15 +35,28 @@ import (
 
 // ASIntent implements the bridge ghost API interface using a real Matrix homeserver as the backend.
 type ASIntent struct {
-	Matrix    *appservice.IntentAPI
+	mx        *appservice.IntentAPI
 	Connector *Connector
+	UserID    id.UserID
 
 	dmUpdateLock     sync.Mutex
 	directChatsCache event.DirectChatsEventContent
 }
 
+func (br *Connector) newASIntent(userID id.UserID, mx *appservice.IntentAPI) *ASIntent {
+	return &ASIntent{
+		mx:        mx,
+		Connector: br,
+		UserID:    userID,
+	}
+}
+
 var _ bridgev2.MatrixAPI = (*ASIntent)(nil)
 var _ bridgev2.MarkAsDMMatrixAPI = (*ASIntent)(nil)
+
+func (as *ASIntent) Matrix() *appservice.IntentAPI {
+	return as.mx
+}
 
 func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType event.Type, content *event.Content, extra *bridgev2.MatrixSendExtra) (*mautrix.RespSendEvent, error) {
 	if extra == nil {
@@ -51,14 +64,14 @@ func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType
 	}
 	if eventType == event.EventRedaction && !as.Connector.SpecVersions.Supports(mautrix.FeatureRedactSendAsEvent) {
 		parsedContent := content.Parsed.(*event.RedactionEventContent)
-		as.Matrix.AddDoublePuppetValue(content)
+		as.Matrix().AddDoublePuppetValue(content)
 		if parsedContent.DontRenderPlaceholder {
 			if content.Raw == nil {
 				content.Raw = make(map[string]any)
 			}
 			content.Raw["com.beeper.dont_render_redacted_placeholder"] = true
 		}
-		return as.Matrix.RedactEvent(ctx, roomID, parsedContent.Redacts, mautrix.ReqRedact{
+		return as.Matrix().RedactEvent(ctx, roomID, parsedContent.Redacts, mautrix.ReqRedact{
 			TxnID:  extra.TransactionID,
 			Reason: parsedContent.Reason,
 			Extra:  content.Raw,
@@ -75,11 +88,11 @@ func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType
 			if as.Connector.Crypto == nil {
 				return nil, fmt.Errorf("room is encrypted, but bridge isn't configured to support encryption")
 			}
-			if as.Matrix.IsCustomPuppet {
+			if as.Matrix().IsCustomPuppet {
 				if extra.Timestamp.IsZero() {
-					as.Matrix.AddDoublePuppetValue(content)
+					as.Matrix().AddDoublePuppetValue(content)
 				} else {
-					as.Matrix.AddDoublePuppetValueWithTS(content, extra.Timestamp.UnixMilli())
+					as.Matrix().AddDoublePuppetValueWithTS(content, extra.Timestamp.UnixMilli())
 				}
 			}
 			err = as.Connector.Crypto.Encrypt(ctx, roomID, eventType, content)
@@ -89,7 +102,7 @@ func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType
 			eventType = event.EventEncrypted
 		}
 	}
-	return as.Matrix.SendMessageEvent(ctx, roomID, eventType, content, mautrix.ReqSendEvent{Timestamp: extra.Timestamp.UnixMilli(), TransactionID: extra.TransactionID})
+	return as.Matrix().SendMessageEvent(ctx, roomID, eventType, content, mautrix.ReqSendEvent{Timestamp: extra.Timestamp.UnixMilli(), TransactionID: extra.TransactionID})
 }
 
 func (as *ASIntent) fillMemberEvent(ctx context.Context, roomID id.RoomID, userID id.UserID, content *event.Content) {
@@ -97,7 +110,7 @@ func (as *ASIntent) fillMemberEvent(ctx context.Context, roomID id.RoomID, userI
 	if !ok || targetContent.Displayname != "" || targetContent.AvatarURL != "" {
 		return
 	}
-	memberContent, err := as.Matrix.StateStore.TryGetMember(ctx, roomID, userID)
+	memberContent, err := as.Matrix().StateStore.TryGetMember(ctx, roomID, userID)
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).
 			Stringer("target_user_id", userID).
@@ -114,7 +127,7 @@ func (as *ASIntent) fillMemberEvent(ctx context.Context, roomID id.RoomID, userI
 	} else if ghost != nil {
 		targetContent.Displayname = ghost.Name
 		targetContent.AvatarURL = ghost.AvatarMXC
-	} else if profile, err := as.Matrix.GetProfile(ctx, userID); err != nil {
+	} else if profile, err := as.Matrix().GetProfile(ctx, userID); err != nil {
 		zerolog.Ctx(ctx).Debug().Err(err).
 			Stringer("target_user_id", userID).
 			Str("membership", string(targetContent.Membership)).
@@ -129,12 +142,12 @@ func (as *ASIntent) SendState(ctx context.Context, roomID id.RoomID, eventType e
 	if eventType == event.StateMember {
 		as.fillMemberEvent(ctx, roomID, id.UserID(stateKey), content)
 	}
-	resp, err = as.Matrix.SendStateEvent(ctx, roomID, eventType, stateKey, content, mautrix.ReqSendEvent{Timestamp: ts.UnixMilli()})
+	resp, err = as.Matrix().SendStateEvent(ctx, roomID, eventType, stateKey, content, mautrix.ReqSendEvent{Timestamp: ts.UnixMilli()})
 	if err != nil && eventType == event.StateMember {
 		var httpErr mautrix.HTTPError
 		if errors.As(err, &httpErr) && httpErr.RespError != nil &&
 			(strings.Contains(httpErr.RespError.Err, "is already in the room") || strings.Contains(httpErr.RespError.Err, "is already joined to room")) {
-			err = as.Matrix.StateStore.SetMembership(ctx, roomID, id.UserID(stateKey), event.MembershipJoin)
+			err = as.Matrix().StateStore.SetMembership(ctx, roomID, id.UserID(stateKey), event.MembershipJoin)
 		}
 	}
 	return resp, err
@@ -145,24 +158,24 @@ func (as *ASIntent) MarkRead(ctx context.Context, roomID id.RoomID, eventID id.E
 	if !ts.IsZero() {
 		extraData["ts"] = ts.UnixMilli()
 	}
-	as.Matrix.AddDoublePuppetValue(extraData)
+	as.Matrix().AddDoublePuppetValue(extraData)
 	req := mautrix.ReqSetReadMarkers{
 		Read:            eventID,
 		BeeperReadExtra: extraData,
 	}
-	if as.Matrix.IsCustomPuppet {
+	if as.Matrix().IsCustomPuppet {
 		req.FullyRead = eventID
 		req.BeeperFullyReadExtra = extraData
 	}
-	if as.Matrix.IsCustomPuppet && as.Connector.SpecVersions.Supports(mautrix.BeeperFeatureInboxState) && as.Connector.Config.Homeserver.Software != bridgeconfig.SoftwareHungry {
-		err = as.Matrix.SetBeeperInboxState(ctx, roomID, &mautrix.ReqSetBeeperInboxState{
+	if as.Matrix().IsCustomPuppet && as.Connector.SpecVersions.Supports(mautrix.BeeperFeatureInboxState) && as.Connector.Config.Homeserver.Software != bridgeconfig.SoftwareHungry {
+		err = as.Matrix().SetBeeperInboxState(ctx, roomID, &mautrix.ReqSetBeeperInboxState{
 			//MarkedUnread: ptr.Ptr(false),
 			ReadMarkers: &req,
 		})
 	} else {
-		err = as.Matrix.SetReadMarkers(ctx, roomID, &req)
-		if err == nil && as.Matrix.IsCustomPuppet && as.Connector.Config.Homeserver.Software != bridgeconfig.SoftwareHungry {
-			err = as.Matrix.SetRoomAccountData(ctx, roomID, event.AccountDataMarkedUnread.Type, &event.MarkedUnreadEventContent{
+		err = as.Matrix().SetReadMarkers(ctx, roomID, &req)
+		if err == nil && as.Matrix().IsCustomPuppet && as.Connector.Config.Homeserver.Software != bridgeconfig.SoftwareHungry {
+			err = as.Matrix().SetRoomAccountData(ctx, roomID, event.AccountDataMarkedUnread.Type, &event.MarkedUnreadEventContent{
 				Unread: false,
 			})
 		}
@@ -174,12 +187,12 @@ func (as *ASIntent) MarkUnread(ctx context.Context, roomID id.RoomID, unread boo
 	if as.Connector.Config.Homeserver.Software == bridgeconfig.SoftwareHungry {
 		return nil
 	}
-	if as.Matrix.IsCustomPuppet && as.Connector.SpecVersions.Supports(mautrix.BeeperFeatureInboxState) {
-		return as.Matrix.SetBeeperInboxState(ctx, roomID, &mautrix.ReqSetBeeperInboxState{
+	if as.Matrix().IsCustomPuppet && as.Connector.SpecVersions.Supports(mautrix.BeeperFeatureInboxState) {
+		return as.Matrix().SetBeeperInboxState(ctx, roomID, &mautrix.ReqSetBeeperInboxState{
 			MarkedUnread: new(unread),
 		})
 	} else {
-		return as.Matrix.SetRoomAccountData(ctx, roomID, event.AccountDataMarkedUnread.Type, &event.MarkedUnreadEventContent{
+		return as.Matrix().SetRoomAccountData(ctx, roomID, event.AccountDataMarkedUnread.Type, &event.MarkedUnreadEventContent{
 			Unread: unread,
 		})
 	}
@@ -188,11 +201,11 @@ func (as *ASIntent) MarkUnread(ctx context.Context, roomID id.RoomID, unread boo
 func (as *ASIntent) MarkTyping(ctx context.Context, roomID id.RoomID, typingType bridgev2.TypingType, timeout time.Duration) error {
 	if typingType != bridgev2.TypingTypeText {
 		return nil
-	} else if as.Matrix.IsCustomPuppet {
+	} else if as.Matrix().IsCustomPuppet {
 		// Don't send double puppeted typing notifications, there's no good way to prevent echoing them
 		return nil
 	}
-	_, err := as.Matrix.UserTyping(ctx, roomID, timeout > 0, timeout)
+	_, err := as.Matrix().UserTyping(ctx, roomID, timeout > 0, timeout)
 	return err
 }
 
@@ -204,7 +217,7 @@ func (as *ASIntent) DownloadMedia(ctx context.Context, uri id.ContentURIString, 
 	if err != nil {
 		return nil, err
 	}
-	data, err := as.Matrix.DownloadBytes(ctx, parsedURI)
+	data, err := as.Matrix().DownloadBytes(ctx, parsedURI)
 	if err != nil {
 		return nil, err
 	}
@@ -237,7 +250,7 @@ func (as *ASIntent) DownloadMediaToFile(ctx context.Context, uri id.ContentURISt
 		_ = tempFile.Close()
 		_ = os.Remove(tempFile.Name())
 	}()
-	resp, err := as.Matrix.Download(ctx, parsedURI)
+	resp, err := as.Matrix().Download(ctx, parsedURI)
 	if err != nil {
 		return fmt.Errorf("failed to send download request: %w", err)
 	}
@@ -415,13 +428,13 @@ func (as *ASIntent) UploadMediaStream(
 		req.AsyncContext = zerolog.Ctx(ctx).WithContext(as.Connector.Bridge.BackgroundCtx)
 		startedAsyncUpload = true
 		var resp *mautrix.RespCreateMXC
-		resp, err = as.Matrix.UploadAsync(ctx, req)
+		resp, err = as.Matrix().UploadAsync(ctx, req)
 		if resp != nil {
 			url = resp.ContentURI.CUString()
 		}
 	} else {
 		var resp *mautrix.RespMediaUpload
-		resp, err = as.Matrix.UploadMedia(ctx, req)
+		resp, err = as.Matrix().UploadMedia(ctx, req)
 		if resp != nil {
 			url = resp.ContentURI.CUString()
 		}
@@ -448,13 +461,13 @@ func (as *ASIntent) doUploadReq(ctx context.Context, file *event.EncryptedFileIn
 		}
 		req.AsyncContext = zerolog.Ctx(ctx).WithContext(as.Connector.Bridge.BackgroundCtx)
 		var resp *mautrix.RespCreateMXC
-		resp, err = as.Matrix.UploadAsync(ctx, req)
+		resp, err = as.Matrix().UploadAsync(ctx, req)
 		if resp != nil {
 			url = resp.ContentURI.CUString()
 		}
 	} else {
 		var resp *mautrix.RespMediaUpload
-		resp, err = as.Matrix.UploadMedia(ctx, req)
+		resp, err = as.Matrix().UploadMedia(ctx, req)
 		if resp != nil {
 			url = resp.ContentURI.CUString()
 		}
@@ -467,7 +480,7 @@ func (as *ASIntent) doUploadReq(ctx context.Context, file *event.EncryptedFileIn
 }
 
 func (as *ASIntent) SetDisplayName(ctx context.Context, name string) error {
-	return as.Matrix.SetDisplayName(ctx, name)
+	return as.Matrix().SetDisplayName(ctx, name)
 }
 
 func (as *ASIntent) SetAvatarURL(ctx context.Context, avatarURL id.ContentURIString) error {
@@ -475,7 +488,7 @@ func (as *ASIntent) SetAvatarURL(ctx context.Context, avatarURL id.ContentURIStr
 	if err != nil {
 		return err
 	}
-	return as.Matrix.SetAvatarURL(ctx, parsedAvatarURL)
+	return as.Matrix().SetAvatarURL(ctx, parsedAvatarURL)
 }
 
 func dataToFields(data any) (map[string]json.RawMessage, error) {
@@ -499,18 +512,18 @@ func marshalField(val any) json.RawMessage {
 var nullJSON = json.RawMessage("null")
 
 func (as *ASIntent) SetProfile(ctx context.Context, data any) error {
-	return as.Matrix.UnstableOverwriteProfile(ctx, data)
+	return as.Matrix().UnstableOverwriteProfile(ctx, data)
 }
 
 func (as *ASIntent) SetExtraProfileMeta(ctx context.Context, data any) error {
 	if as.Connector.SpecVersions.Supports(mautrix.BeeperFeatureArbitraryProfileMeta) {
-		return as.Matrix.BeeperUpdateProfile(ctx, data)
+		return as.Matrix().BeeperUpdateProfile(ctx, data)
 	} else if as.Connector.SpecVersions.Supports(mautrix.FeatureArbitraryProfileFields) && as.Connector.Config.Matrix.GhostExtraProfileInfo {
 		fields, err := dataToFields(data)
 		if err != nil {
 			return fmt.Errorf("failed to marshal fields: %w", err)
 		}
-		currentProfile, err := as.Matrix.GetProfile(ctx, as.Matrix.UserID)
+		currentProfile, err := as.Matrix().GetProfile(ctx, as.Matrix().UserID)
 		if err != nil {
 			return fmt.Errorf("failed to get current profile: %w", err)
 		}
@@ -520,12 +533,12 @@ func (as *ASIntent) SetExtraProfileMeta(ctx context.Context, data any) error {
 				if bytes.Equal(val, nullJSON) {
 					continue
 				}
-				err = as.Matrix.SetProfileField(ctx, key, val)
+				err = as.Matrix().SetProfileField(ctx, key, val)
 			} else if !bytes.Equal(marshalField(existing), val) {
 				if bytes.Equal(val, nullJSON) {
-					err = as.Matrix.DeleteProfileField(ctx, key)
+					err = as.Matrix().DeleteProfileField(ctx, key)
 				} else {
-					err = as.Matrix.SetProfileField(ctx, key, val)
+					err = as.Matrix().SetProfileField(ctx, key, val)
 				}
 			}
 			if err != nil {
@@ -537,11 +550,11 @@ func (as *ASIntent) SetExtraProfileMeta(ctx context.Context, data any) error {
 }
 
 func (as *ASIntent) GetMXID() id.UserID {
-	return as.Matrix.UserID
+	return as.UserID
 }
 
 func (as *ASIntent) IsDoublePuppet() bool {
-	return as.Matrix.IsDoublePuppet()
+	return as.Matrix().IsDoublePuppet()
 }
 
 func (as *ASIntent) EnsureJoined(ctx context.Context, roomID id.RoomID, extra ...bridgev2.EnsureJoinedParams) error {
@@ -549,12 +562,12 @@ func (as *ASIntent) EnsureJoined(ctx context.Context, roomID id.RoomID, extra ..
 	if len(extra) > 0 {
 		params = extra[0]
 	}
-	err := as.Matrix.EnsureJoined(ctx, roomID, appservice.EnsureJoinedParams{Via: params.Via})
+	err := as.Matrix().EnsureJoined(ctx, roomID, appservice.EnsureJoinedParams{Via: params.Via})
 	if err != nil {
 		return err
 	}
-	if as.Connector.Bot.UserID == as.Matrix.UserID {
-		_, err = as.Matrix.State(ctx, roomID)
+	if as.Connector.Bot.UserID == as.Matrix().UserID {
+		_, err = as.Matrix().State(ctx, roomID)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to get state after joining room with bot")
 		}
@@ -563,7 +576,7 @@ func (as *ASIntent) EnsureJoined(ctx context.Context, roomID id.RoomID, extra ..
 }
 
 func (as *ASIntent) EnsureInvited(ctx context.Context, roomID id.RoomID, userID id.UserID) error {
-	return as.Matrix.EnsureInvited(ctx, roomID, userID)
+	return as.Matrix().EnsureInvited(ctx, roomID, userID)
 }
 
 func (br *Connector) getDefaultEncryptionEvent() *event.EncryptionEventContent {
@@ -624,7 +637,7 @@ func (as *ASIntent) CreateRoom(ctx context.Context, req *mautrix.ReqCreateRoom) 
 		req.CreationContent["m.federate"] = false
 	}
 	as.filterCreateRequestForV12(ctx, req)
-	resp, err := as.Matrix.CreateRoom(ctx, req)
+	resp, err := as.Matrix().CreateRoom(ctx, req)
 	if err != nil {
 		return "", err
 	}
@@ -642,7 +655,7 @@ func (as *ASIntent) MarkAsDM(ctx context.Context, roomID id.RoomID, withUser id.
 		return nil
 	}
 	var directChats event.DirectChatsEventContent
-	err := as.Matrix.GetAccountData(ctx, event.AccountDataDirectChats.Type, &directChats)
+	err := as.Matrix().GetAccountData(ctx, event.AccountDataDirectChats.Type, &directChats)
 	if errors.Is(err, mautrix.MNotFound) {
 		directChats = make(event.DirectChatsEventContent)
 	} else if err != nil {
@@ -654,7 +667,7 @@ func (as *ASIntent) MarkAsDM(ctx context.Context, roomID id.RoomID, withUser id.
 		return nil
 	}
 	directChats[withUser] = append(rooms, roomID)
-	err = as.Matrix.SetAccountData(ctx, event.AccountDataDirectChats.Type, &directChats)
+	err = as.Matrix().SetAccountData(ctx, event.AccountDataDirectChats.Type, &directChats)
 	if err != nil {
 		if rooms == nil {
 			delete(directChats, withUser)
@@ -671,22 +684,22 @@ func (as *ASIntent) DeleteRoom(ctx context.Context, roomID id.RoomID, puppetsOnl
 		return nil
 	}
 	if as.Connector.SpecVersions.Supports(mautrix.BeeperFeatureRoomYeeting) {
-		err := as.Matrix.BeeperDeleteRoom(ctx, roomID)
+		err := as.Matrix().BeeperDeleteRoom(ctx, roomID)
 		if err != nil {
 			return err
 		}
-		err = as.Matrix.StateStore.ClearCachedMembers(ctx, roomID)
+		err = as.Matrix().StateStore.ClearCachedMembers(ctx, roomID)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to clear cached members while cleaning up portal")
 		}
 		return nil
 	}
-	members, err := as.Matrix.JoinedMembers(ctx, roomID)
+	members, err := as.Matrix().JoinedMembers(ctx, roomID)
 	if err != nil {
 		return fmt.Errorf("failed to get portal members for cleanup: %w", err)
 	}
 	for member := range members.Joined {
-		if member == as.Matrix.UserID {
+		if member == as.Matrix().UserID {
 			continue
 		}
 		if as.Connector.Bridge.IsGhostMXID(member) {
@@ -695,17 +708,17 @@ func (as *ASIntent) DeleteRoom(ctx context.Context, roomID id.RoomID, puppetsOnl
 				zerolog.Ctx(ctx).Err(err).Stringer("user_id", member).Msg("Failed to leave room while cleaning up portal")
 			}
 		} else if !puppetsOnly {
-			_, err = as.Matrix.KickUser(ctx, roomID, &mautrix.ReqKickUser{UserID: member, Reason: "Deleting portal"})
+			_, err = as.Matrix().KickUser(ctx, roomID, &mautrix.ReqKickUser{UserID: member, Reason: "Deleting portal"})
 			if err != nil {
 				zerolog.Ctx(ctx).Err(err).Stringer("user_id", member).Msg("Failed to kick user while cleaning up portal")
 			}
 		}
 	}
-	_, err = as.Matrix.LeaveRoom(ctx, roomID)
+	_, err = as.Matrix().LeaveRoom(ctx, roomID)
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to leave room while cleaning up portal")
 	}
-	err = as.Matrix.StateStore.ClearCachedMembers(ctx, roomID)
+	err = as.Matrix().StateStore.ClearCachedMembers(ctx, roomID)
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to clear cached members while cleaning up portal")
 	}
@@ -713,7 +726,7 @@ func (as *ASIntent) DeleteRoom(ctx context.Context, roomID id.RoomID, puppetsOnl
 }
 
 func (as *ASIntent) TagRoom(ctx context.Context, roomID id.RoomID, tag event.RoomTag, isTagged bool) error {
-	tags, err := as.Matrix.GetTags(ctx, roomID)
+	tags, err := as.Matrix().GetTags(ctx, roomID)
 	if err != nil {
 		return fmt.Errorf("failed to get room tags: %w", err)
 	}
@@ -722,7 +735,7 @@ func (as *ASIntent) TagRoom(ctx context.Context, roomID id.RoomID, tag event.Roo
 		if alreadyTagged {
 			return nil
 		}
-		err = as.Matrix.AddTagWithCustomData(ctx, roomID, tag, &event.TagMetadata{
+		err = as.Matrix().AddTagWithCustomData(ctx, roomID, tag, &event.TagMetadata{
 			MauDoublePuppetSource: as.Connector.AS.DoublePuppetValue,
 		})
 		if err != nil {
@@ -731,7 +744,7 @@ func (as *ASIntent) TagRoom(ctx context.Context, roomID id.RoomID, tag event.Roo
 	}
 	for extraTag := range tags.Tags {
 		if extraTag == event.RoomTagFavourite || extraTag == event.RoomTagLowPriority {
-			err = as.Matrix.RemoveTag(ctx, roomID, extraTag)
+			err = as.Matrix().RemoveTag(ctx, roomID, extraTag)
 			if err != nil {
 				return fmt.Errorf("failed to remove extra tag %s: %w", extraTag, err)
 			}
@@ -750,26 +763,26 @@ func (as *ASIntent) MuteRoom(ctx context.Context, roomID id.RoomID, until time.T
 		mutedUntil = until.UnixMilli()
 	}
 	if as.Connector.SpecVersions.Supports(mautrix.BeeperFeatureAccountDataMute) {
-		return as.Matrix.SetRoomAccountData(ctx, roomID, event.AccountDataBeeperMute.Type, &event.BeeperMuteEventContent{
+		return as.Matrix().SetRoomAccountData(ctx, roomID, event.AccountDataBeeperMute.Type, &event.BeeperMuteEventContent{
 			MutedUntil: mutedUntil,
 		})
 	}
 	if mutedUntil == 0 {
-		err := as.Matrix.DeletePushRule(ctx, "global", pushrules.RoomRule, string(roomID))
+		err := as.Matrix().DeletePushRule(ctx, "global", pushrules.RoomRule, string(roomID))
 		// If the push rule doesn't exist, everything is fine
 		if errors.Is(err, mautrix.MNotFound) {
 			err = nil
 		}
 		return err
 	} else {
-		return as.Matrix.PutPushRule(ctx, "global", pushrules.RoomRule, string(roomID), &mautrix.ReqPutPushRule{
+		return as.Matrix().PutPushRule(ctx, "global", pushrules.RoomRule, string(roomID), &mautrix.ReqPutPushRule{
 			Actions: []*pushrules.PushAction{},
 		})
 	}
 }
 
 func (as *ASIntent) GetEvent(ctx context.Context, roomID id.RoomID, eventID id.EventID) (*event.Event, error) {
-	evt, err := as.Matrix.Client.GetEvent(ctx, roomID, eventID)
+	evt, err := as.Matrix().Client.GetEvent(ctx, roomID, eventID)
 	if err != nil {
 		return nil, err
 	}
@@ -789,5 +802,5 @@ func (as *ASIntent) GetEvent(ctx context.Context, roomID id.RoomID, eventID id.E
 }
 
 func (as *ASIntent) GetStateEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string) (*event.Event, error) {
-	return as.Matrix.FullStateEvent(ctx, roomID, eventType, stateKey)
+	return as.Matrix().FullStateEvent(ctx, roomID, eventType, stateKey)
 }

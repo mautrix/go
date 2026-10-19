@@ -183,7 +183,7 @@ func (br *BridgeMain) postMigrateDMPortal(ctx context.Context, portal *bridgev2.
 	if err != nil {
 		return fmt.Errorf("failed to get ghost for %s: %w", otherUserID, err)
 	}
-	mx := ghost.Intent.(*matrix.ASIntent).Matrix
+	mx := ghost.Intent.(*matrix.ASIntent).Matrix()
 	err = br.Matrix.Bot.EnsureJoined(ctx, portal.MXID, appservice.EnsureJoinedParams{
 		BotOverride: mx.Client,
 	})

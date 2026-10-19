@@ -508,10 +508,8 @@ func (br *Connector) UpdateBotProfile(ctx context.Context) {
 }
 
 func (br *Connector) GhostIntent(userID networkid.UserID) bridgev2.MatrixAPI {
-	return &ASIntent{
-		Matrix:    br.AS.Intent(br.FormatGhostMXID(userID)),
-		Connector: br,
-	}
+	mxid := br.FormatGhostMXID(userID)
+	return br.newASIntent(mxid, br.AS.Intent(mxid))
 }
 
 func (br *Connector) SendBridgeStatus(ctx context.Context, state *status.BridgeState) error {
@@ -634,11 +632,11 @@ func (br *Connector) NewUserIntent(ctx context.Context, userID id.UserID, access
 		return nil, accessToken, err
 	}
 	br.doublePuppetIntents.Set(userID, intent)
-	return &ASIntent{Connector: br, Matrix: intent}, newToken, nil
+	return br.newASIntent(userID, intent), newToken, nil
 }
 
 func (br *Connector) BotIntent() bridgev2.MatrixAPI {
-	return &ASIntent{Connector: br, Matrix: br.Bot}
+	return br.newASIntent(br.Bot.UserID, br.Bot)
 }
 
 func (br *Connector) GetPowerLevels(ctx context.Context, roomID id.RoomID) (*event.PowerLevelsEventContent, error) {

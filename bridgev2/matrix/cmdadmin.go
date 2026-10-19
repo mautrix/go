@@ -59,7 +59,7 @@ func fnSetPowerLevel(ce *commands.Event) {
 		ce.Reply("**Usage:** `set-pl [user] <level>`")
 		return
 	}
-	_, err = ce.Bot.(*ASIntent).Matrix.SetPowerLevel(ce.Ctx, ce.RoomID, userID, level)
+	_, err = ce.Bot.(*ASIntent).Matrix().SetPowerLevel(ce.Ctx, ce.RoomID, userID, level)
 	if err != nil {
 		ce.Reply("Failed to set power levels: %v", err)
 	}

@@ -54,11 +54,11 @@ func fnPingMatrix(ce *commands.Event) {
 		return
 	}
 	asIntent := intent.(*ASIntent)
-	resp, err := asIntent.Matrix.Whoami(ce.Ctx)
+	resp, err := asIntent.Matrix().Whoami(ce.Ctx)
 	if err != nil {
 		ce.Reply("Failed to validate Matrix login: %v", err)
 	} else {
-		if asIntent.Matrix.SetAppServiceUserID && resp.DeviceID == "" {
+		if asIntent.Matrix().SetAppServiceUserID && resp.DeviceID == "" {
 			ce.Reply("Confirmed valid access token for %s (appservice double puppeting)", resp.UserID)
 		} else {
 			ce.Reply("Confirmed valid access token for %s / %s", resp.UserID, resp.DeviceID)
