@@ -32,7 +32,6 @@ import (
 type Ghost struct {
 	*database.Ghost
 	Bridge *Bridge
-	Log    zerolog.Logger
 	Intent MatrixAPI
 
 	syncLock sync.Mutex
@@ -59,7 +58,6 @@ func (br *Bridge) loadGhost(ctx context.Context, dbGhost *database.Ghost, queryE
 	ghost := &Ghost{
 		Ghost:  dbGhost,
 		Bridge: br,
-		Log:    br.Log.With().Str("ghost_id", string(dbGhost.ID)).Logger(),
 		Intent: br.Matrix.GhostIntent(dbGhost.ID),
 	}
 	br.ghostsByID[ghost.ID] = ghost
