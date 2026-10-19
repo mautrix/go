@@ -3972,8 +3972,16 @@ func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserL
 			}
 		}
 	}
+	var threadRootID networkid.MessageID
+	if threadProvider, ok := evt.(RemoteReadReceiptWithThread); ok {
+		threadRootID = threadProvider.GetReceiptThread()
+	}
 	if lastTarget == nil && !readUpTo.IsZero() {
-		lastTarget, err = portal.Bridge.DB.Message.GetLastNonFakePartAtOrBeforeTime(ctx, portal.PortalKey, readUpTo)
+		if threadRootID != "" {
+			lastTarget, err = portal.Bridge.DB.Message.GetLastNonFakePartAtOrBeforeTimeInThread(ctx, portal.PortalKey, threadRootID, readUpTo)
+		} else {
+			lastTarget, err = portal.Bridge.DB.Message.GetLastNonFakePartAtOrBeforeTime(ctx, portal.PortalKey, readUpTo)
+		}
 		if err != nil {
 			log.Err(err).Time("read_up_to", readUpTo).Msg("Failed to get target message for read receipt")
 		}
@@ -3985,9 +3993,8 @@ func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserL
 	}
 	var threadRoot *database.Message
 	var threadReadingIntent ThreadReadingMatrixAPI
-	if threadProvider, ok := evt.(RemoteReadReceiptWithThread); ok && threadProvider.GetReceiptThread() != "" {
-		threadRootID := threadProvider.GetReceiptThread()
-		threadRoot, err = portal.Bridge.DB.Message.GetLastPartByID(ctx, portal.Receiver, threadRootID)
+	if threadRootID != "" {
+		threadRoot, err = portal.Bridge.DB.Message.GetFirstThreadMessage(ctx, portal.PortalKey, threadRootID)
 		if err != nil {
 			log.Err(err).
 				Str("thread_root_id", string(threadRootID)).
