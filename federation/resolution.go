@@ -194,5 +194,5 @@ func RequestWellKnown(ctx context.Context, cli *http.Client, hostname string) (*
 	} else if cacheDuration > MaxCacheDuration {
 		cacheDuration = MaxCacheDuration
 	}
-	return &respData, time.Now().Add(24 * time.Hour), nil
+	return &respData, time.Now().Add(cacheDuration), nil
 }
