@@ -218,6 +218,13 @@ func (as *ASIntent) MarkTyping(ctx context.Context, roomID id.RoomID, typingType
 	return err
 }
 
+func makeMediaSizeError(size, limit int64) error {
+	if size <= 0 {
+		return fmt.Errorf("%w (over %.2f MB)", bridgev2.ErrMediaTooLarge, float64(limit)/1000/1000)
+	}
+	return fmt.Errorf("%w (%.2f MB > %.2f MB)", bridgev2.ErrMediaTooLarge, float64(size)/1000/1000, float64(limit)/1000/1000)
+}
+
 func (as *ASIntent) DownloadMedia(ctx context.Context, uri id.ContentURIString, file *event.EncryptedFileInfo) ([]byte, error) {
 	if file != nil {
 		uri = file.URL
@@ -226,9 +233,21 @@ func (as *ASIntent) DownloadMedia(ctx context.Context, uri id.ContentURIString, 
 	if err != nil {
 		return nil, err
 	}
-	data, err := as.Matrix().DownloadBytes(ctx, parsedURI)
+	resp, err := as.Matrix().Download(ctx, parsedURI)
 	if err != nil {
 		return nil, err
+	}
+	limit := min(as.Connector.MaxDownloadSize, as.Connector.MaxMemoryDownloadSize)
+	if resp.ContentLength > limit {
+		_ = resp.Body.Close()
+		return nil, fmt.Errorf("in-memory %w", makeMediaSizeError(resp.ContentLength, limit))
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
+	_ = resp.Body.Close()
+	if err != nil {
+		return nil, err
+	} else if int64(len(data)) > limit {
+		return nil, fmt.Errorf("in-memory %w", makeMediaSizeError(-1, limit))
 	}
 	if file != nil {
 		err = file.DecryptInPlace(data)
@@ -263,6 +282,9 @@ func (as *ASIntent) DownloadMediaToFile(ctx context.Context, uri id.ContentURISt
 	if err != nil {
 		return fmt.Errorf("failed to send download request: %w", err)
 	}
+	if resp.ContentLength > as.Connector.MaxDownloadSize {
+		return makeMediaSizeError(resp.ContentLength, as.Connector.MaxDownloadSize)
+	}
 	defer resp.Body.Close()
 	reader := resp.Body
 	if file != nil {
@@ -274,9 +296,12 @@ func (as *ASIntent) DownloadMediaToFile(ctx context.Context, uri id.ContentURISt
 			return fmt.Errorf("failed to preallocate file: %w", err)
 		}
 	}
-	_, err = io.Copy(tempFile, reader)
+	var n int64
+	n, err = io.Copy(tempFile, io.LimitReader(reader, as.Connector.MaxDownloadSize+1))
 	if err != nil {
 		return fmt.Errorf("failed to read response: %w", err)
+	} else if n > as.Connector.MaxDownloadSize {
+		return makeMediaSizeError(-1, as.Connector.MaxDownloadSize)
 	}
 	err = reader.Close()
 	if err != nil {
@@ -295,7 +320,7 @@ func (as *ASIntent) DownloadMediaToFile(ctx context.Context, uri id.ContentURISt
 
 func (as *ASIntent) UploadMedia(ctx context.Context, roomID id.RoomID, data []byte, fileName, mimeType string) (url id.ContentURIString, file *event.EncryptedFileInfo, err error) {
 	if int64(len(data)) > as.Connector.MediaConfig.UploadSize {
-		return "", nil, fmt.Errorf("%w (%.2f MB > %.2f MB)", bridgev2.ErrMediaTooLarge, float64(len(data))/1000/1000, float64(as.Connector.MediaConfig.UploadSize)/1000/1000)
+		return "", nil, makeMediaSizeError(int64(len(data)), as.Connector.MediaConfig.UploadSize)
 	}
 	if roomID != "" {
 		var encrypted bool
@@ -327,7 +352,7 @@ func (as *ASIntent) UploadMediaStream(
 	cb bridgev2.FileStreamCallback,
 ) (url id.ContentURIString, file *event.EncryptedFileInfo, err error) {
 	if size > as.Connector.MediaConfig.UploadSize {
-		return "", nil, fmt.Errorf("%w (%.2f MB > %.2f MB)", bridgev2.ErrMediaTooLarge, float64(size)/1000/1000, float64(as.Connector.MediaConfig.UploadSize)/1000/1000)
+		return "", nil, makeMediaSizeError(size, as.Connector.MediaConfig.UploadSize)
 	}
 	if !requireFile && 0 < size && size < as.Connector.Config.Matrix.UploadFileThreshold {
 		var buf bytes.Buffer
@@ -421,7 +446,7 @@ func (as *ASIntent) UploadMediaStream(
 	}
 	size = info.Size()
 	if size > as.Connector.MediaConfig.UploadSize {
-		return "", nil, fmt.Errorf("%w (%.2f MB > %.2f MB)", bridgev2.ErrMediaTooLarge, float64(size)/1000/1000, float64(as.Connector.MediaConfig.UploadSize)/1000/1000)
+		return "", nil, makeMediaSizeError(size, as.Connector.MediaConfig.UploadSize)
 	}
 	req := mautrix.ReqUploadMedia{
 		Content:       replFile,

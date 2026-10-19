@@ -85,6 +85,8 @@ type Connector struct {
 	specCapsLock            sync.Mutex
 	Capabilities            *bridgev2.MatrixCapabilities
 	IgnoreUnsupportedServer bool
+	MaxDownloadSize         int64
+	MaxMemoryDownloadSize   int64
 
 	EventProcessor *appservice.EventProcessor
 
@@ -117,6 +119,8 @@ func NewConnector(cfg *bridgeconfig.Config) *Connector {
 	c.Config = cfg
 	c.userIDRegex = cfg.MakeUserIDRegex("(.+)")
 	c.MediaConfig.UploadSize = 50 * 1024 * 1024
+	c.MaxDownloadSize = 2 * 1024 * 1024 * 1024
+	c.MaxMemoryDownloadSize = 100 * 1024 * 1024
 	c.uploadSema = semaphore.NewWeighted(c.MediaConfig.UploadSize + 1)
 	c.Capabilities = &bridgev2.MatrixCapabilities{}
 	c.doublePuppetIntents = exsync.NewMap[id.UserID, *appservice.IntentAPI]()
