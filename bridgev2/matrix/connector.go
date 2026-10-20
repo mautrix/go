@@ -10,6 +10,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -736,7 +737,11 @@ func (br *Connector) BatchSend(ctx context.Context, roomID id.RoomID, req *mautr
 				intent.AddDoublePuppetValueWithTS(&evt.Content, evt.Timestamp)
 			}
 			if evt.Type != event.EventEncrypted && evt.Type != event.EventReaction {
-				err = br.Crypto.Encrypt(ctx, roomID, evt.Type, &evt.Content)
+				err = br.encryptWithSizeLimit(ctx, roomID, evt.Type, &evt.Content, func(content *event.Content) {
+					if intent != nil {
+						intent.AddDoublePuppetValueWithTS(content, evt.Timestamp)
+					}
+				})
 				if err != nil {
 					return nil, err
 				}
@@ -746,8 +751,56 @@ func (br *Connector) BatchSend(ctx context.Context, roomID id.RoomID, req *mautr
 				}
 			}
 		}
+	} else {
+		for _, evt := range req.Events {
+			if evt.Type != event.EventReaction && isContentTooLarge(ctx, evt.Type, &evt.Content) {
+				evt.Content = makeTooLargeNotice(&evt.Content)
+				evt.Type = event.EventMessage
+			}
+		}
 	}
 	return br.Bot.BeeperBatchSend(ctx, roomID, req)
+}
+
+const MaxEventContentSize = 64 * 1024
+
+func isContentTooLarge(ctx context.Context, evtType event.Type, content *event.Content) bool {
+	data, err := json.Marshal(content)
+	if err != nil || len(data) <= MaxEventContentSize {
+		return false
+	}
+	zerolog.Ctx(ctx).Warn().
+		Stringer("event_type", &evtType).
+		Int("content_size", len(data)).
+		Msg("Event content is too large, replacing with notice")
+	return true
+}
+
+func makeTooLargeNotice(original *event.Content) event.Content {
+	notice := &event.MessageEventContent{
+		MsgType: event.MsgNotice,
+		Body:    "Message is too large to bridge",
+	}
+	if relatable, ok := original.Parsed.(event.Relatable); ok {
+		relatesTo := relatable.OptionalGetRelatesTo()
+		if replaceID := relatesTo.GetReplaceID(); replaceID != "" {
+			notice.SetEdit(replaceID)
+		} else {
+			notice.RelatesTo = relatesTo
+		}
+	}
+	return event.Content{Parsed: notice}
+}
+
+func (br *Connector) encryptWithSizeLimit(ctx context.Context, roomID id.RoomID, evtType event.Type, content *event.Content, addDoublePuppetValue func(*event.Content)) error {
+	original := *content
+	err := br.Crypto.Encrypt(ctx, roomID, evtType, content)
+	if err != nil || !isContentTooLarge(ctx, evtType, content) {
+		return err
+	}
+	*content = makeTooLargeNotice(&original)
+	addDoublePuppetValue(content)
+	return br.Crypto.Encrypt(ctx, roomID, event.EventMessage, content)
 }
 
 func (br *Connector) GenerateDeterministicEventID(roomID id.RoomID, _ networkid.PortalKey, messageID networkid.MessageID, partID networkid.PartID) id.EventID {
