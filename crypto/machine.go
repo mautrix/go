@@ -89,6 +89,7 @@ type OlmMachine struct {
 	lastOTKUpload       time.Time
 	receivedOTKsForSelf atomic.Bool
 	repairingOTKs       atomic.Bool
+	otkRepairStarted    atomic.Bool
 
 	CrossSigningKeys    *CrossSigningKeysCache
 	crossSigningPubkeys *CrossSigningPublicKeysCache
@@ -887,6 +888,18 @@ func (mach *OlmMachine) ShareKeys(ctx context.Context, currentOTKCount int) erro
 			Int("server_count", resp.OneTimeKeyCounts.SignedCurve25519).
 			Msg("Fetched current OTK count from server")
 		currentOTKCount = resp.OneTimeKeyCounts.SignedCurve25519
+		if currentOTKCount > int(mach.account.Internal.MaxNumberOfOneTimeKeys()) && mach.otkRepairStarted.CompareAndSwap(false, true) {
+			log.Warn().
+				Int("server_count", currentOTKCount).
+				Msg("Server has more one-time keys than the account can store, repairing")
+			go func() {
+				err := mach.RepairOneTimeKeys(mach.backgroundCtx)
+				if err != nil {
+					log.Err(err).Msg("Failed to repair one-time keys")
+				}
+			}()
+			return nil
+		}
 	}
 	var deviceKeys *mautrix.DeviceKeys
 	if !mach.account.Shared {
