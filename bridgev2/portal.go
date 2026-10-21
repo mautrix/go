@@ -2911,10 +2911,12 @@ func (portal *Portal) GetIntentFor(ctx context.Context, sender EventSender, sour
 	if err != nil {
 		return nil, false
 	}
-	if intent == nil {
+	if sender.Sender == "" {
 		// TODO this is very hacky - we should either insert an empty ghost row automatically
 		//      (and not fetch it at runtime) or make the message sender column nullable.
 		portal.Bridge.GetGhostByID(ctx, "")
+	}
+	if intent == nil {
 		intent = portal.Bridge.Bot
 		if intent == nil {
 			panic(fmt.Errorf("bridge bot is nil"))
