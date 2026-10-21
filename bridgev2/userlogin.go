@@ -212,31 +212,43 @@ func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, params
 	if params.LoadUserLogin == nil {
 		params.LoadUserLogin = user.Bridge.Network.LoadUserLogin
 	}
-	ul, err := user.Bridge.unlockedGetExistingUserLoginByID(ctx, data.ID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check if login already exists: %w", err)
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
+	var ul *UserLogin
+	var err error
+	var disconnectedClient NetworkAPI
+	for {
+		ul, err = user.Bridge.unlockedGetExistingUserLoginByID(ctx, data.ID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check if login already exists: %w", err)
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if ul != nil && ul.UserMXID != user.MXID {
+			if params.DeleteOnConflict {
+				ul.Delete(ctx, status.BridgeState{StateEvent: status.StateLoggedOut, Reason: "LOGIN_OVERRIDDEN_ANOTHER_USER"}, DeleteOpts{
+					LogoutRemote: false,
+					unlocked:     true,
+				})
+				ul = nil
+			} else {
+				return nil, fmt.Errorf("%s is already logged in with that account", ul.UserMXID)
+			}
+		}
+		if ul == nil || params.DontReuseExisting || ul.Client == nil || ul.Client == disconnectedClient {
+			break
+		}
+		// The client may need cacheLock (e.g. for ghost or portal lookups) to finish
+		// handling in-flight events before Disconnect returns, so don't hold it here.
+		// The login is looked up again afterwards in case it changed in the meantime.
+		disconnectedClient = ul.Client
+		user.Bridge.cacheLock.Unlock()
+		disconnectedClient.Disconnect()
+		user.Bridge.cacheLock.Lock()
 	}
 	var doInsert bool
-	if ul != nil && ul.UserMXID != user.MXID {
-		if params.DeleteOnConflict {
-			ul.Delete(ctx, status.BridgeState{StateEvent: status.StateLoggedOut, Reason: "LOGIN_OVERRIDDEN_ANOTHER_USER"}, DeleteOpts{
-				LogoutRemote: false,
-				unlocked:     true,
-			})
-			ul = nil
-		} else {
-			return nil, fmt.Errorf("%s is already logged in with that account", ul.UserMXID)
-		}
-	}
 	if ul != nil {
 		if params.DontReuseExisting {
 			return nil, fmt.Errorf("login already exists")
-		}
-		if ul.Client != nil {
-			ul.Client.Disconnect()
 		}
 		doInsert = false
 		ul.RemoteName = data.RemoteName
