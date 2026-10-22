@@ -193,8 +193,6 @@ type NewLoginParams struct {
 // This will automatically call LoadUserLogin after creating the UserLogin object.
 // The load method defaults to the network connector's LoadUserLogin method, but it can be overridden in params.
 func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, params *NewLoginParams) (*UserLogin, error) {
-	user.Bridge.cacheLock.Lock()
-	defer user.Bridge.cacheLock.Unlock()
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -212,32 +210,46 @@ func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, params
 	if params.LoadUserLogin == nil {
 		params.LoadUserLogin = user.Bridge.Network.LoadUserLogin
 	}
+
+	// Deal with any existing login before taking the cache lock: disconnecting a client may
+	// wait for its in-flight event handling, which can itself need the cache lock.
+	existing, err := user.Bridge.GetExistingUserLoginByID(ctx, data.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if login already exists: %w", err)
+	}
+	var existingClient NetworkAPI
+	if existing != nil && existing.UserMXID != user.MXID {
+		if !params.DeleteOnConflict {
+			return nil, fmt.Errorf("%s is already logged in with that account", existing.UserMXID)
+		}
+		existing.Delete(ctx, status.BridgeState{StateEvent: status.StateLoggedOut, Reason: "LOGIN_OVERRIDDEN_ANOTHER_USER"}, DeleteOpts{
+			LogoutRemote: false,
+		})
+		existing = nil
+	} else if existing != nil {
+		if params.DontReuseExisting {
+			return nil, fmt.Errorf("login already exists")
+		}
+		existingClient = existing.Client
+		if existingClient != nil {
+			existingClient.Disconnect()
+		}
+	}
+
+	user.Bridge.cacheLock.Lock()
+	defer user.Bridge.cacheLock.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	ul, err := user.Bridge.unlockedGetExistingUserLoginByID(ctx, data.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check if login already exists: %w", err)
 	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
+	if ul != existing || (ul != nil && ul.Client != existingClient) {
+		return nil, ErrLoginChangedConcurrently
 	}
 	var doInsert bool
-	if ul != nil && ul.UserMXID != user.MXID {
-		if params.DeleteOnConflict {
-			ul.Delete(ctx, status.BridgeState{StateEvent: status.StateLoggedOut, Reason: "LOGIN_OVERRIDDEN_ANOTHER_USER"}, DeleteOpts{
-				LogoutRemote: false,
-				unlocked:     true,
-			})
-			ul = nil
-		} else {
-			return nil, fmt.Errorf("%s is already logged in with that account", ul.UserMXID)
-		}
-	}
 	if ul != nil {
-		if params.DontReuseExisting {
-			return nil, fmt.Errorf("login already exists")
-		}
-		if ul.Client != nil {
-			ul.Client.Disconnect()
-		}
 		doInsert = false
 		ul.RemoteName = data.RemoteName
 		ul.RemoteProfile = ul.RemoteProfile.Merge(data.RemoteProfile)

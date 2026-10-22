@@ -34,6 +34,10 @@ var ErrResolveIdentifierTryNext = errors.New("that identifier is not available v
 
 var ErrNotLoggedIn = errors.New("not logged in")
 
+// ErrLoginChangedConcurrently is returned by [User.NewLogin] if the existing login was replaced,
+// deleted or created by something else while its old client was being disconnected.
+var ErrLoginChangedConcurrently = errors.New("login was changed concurrently, please try again")
+
 // ErrDirectMediaNotEnabled may be returned by Matrix connectors if [MatrixConnector.GenerateContentURI] is called,
 // but direct media is not enabled.
 var ErrDirectMediaNotEnabled = errors.New("direct media is not enabled")
