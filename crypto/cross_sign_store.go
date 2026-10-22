@@ -98,6 +98,31 @@ func (mach *OlmMachine) storeCrossSigningKeys(ctx context.Context, crossSigningK
 			}
 		}
 
+		if userID == mach.Client.UserID && mach.CrossSigningKeys != nil {
+			ownKeys := mach.CrossSigningKeys.PublicKeys()
+			for _, usage := range userKeys.Usage {
+				var ownKey id.Ed25519
+				switch usage {
+				case id.XSUsageMaster:
+					ownKey = ownKeys.MasterKey
+				case id.XSUsageSelfSigning:
+					ownKey = ownKeys.SelfSigningKey
+				case id.XSUsageUserSigning:
+					ownKey = ownKeys.UserSigningKey
+				default:
+					continue
+				}
+				if _, ok := userKeys.Keys[id.NewKeyID(id.KeyAlgorithmEd25519, ownKey.String())]; !ok {
+					log.Warn().
+						Str("usage", string(usage)).
+						Stringer("private_key", ownKey).
+						Msg("Own cross-signing key changed, dropping cached private keys")
+					mach.CrossSigningKeys = nil
+					break
+				}
+			}
+		}
+
 		// Clear internal cache so that it refreshes from crypto store
 		if userID == mach.Client.UserID && mach.crossSigningPubkeys != nil {
 			log.Debug().Msg("Resetting internal cross-signing key cache")
