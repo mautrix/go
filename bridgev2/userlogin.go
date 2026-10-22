@@ -250,7 +250,7 @@ func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, params
 	}
 	lookupCtx := ctx
 	if existingClient != nil {
-		lookupCtx = user.Bridge.BackgroundCtx
+		lookupCtx = user.Log.WithContext(user.Bridge.BackgroundCtx)
 	}
 	ul, err := user.Bridge.unlockedGetExistingUserLoginByID(lookupCtx, data.ID)
 	if err != nil {
