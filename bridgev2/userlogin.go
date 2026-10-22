@@ -248,11 +248,12 @@ func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, params
 			return nil, err
 		}
 	}
-	ul, err := user.Bridge.unlockedGetExistingUserLoginByID(ctx, data.ID)
+	lookupCtx := ctx
+	if existingClient != nil {
+		lookupCtx = user.Bridge.BackgroundCtx
+	}
+	ul, err := user.Bridge.unlockedGetExistingUserLoginByID(lookupCtx, data.ID)
 	if err != nil {
-		if existingClient != nil {
-			go existingClient.Connect(existing.Log.WithContext(user.Bridge.BackgroundCtx))
-		}
 		return nil, fmt.Errorf("failed to check if login already exists: %w", err)
 	}
 	if ul != existing || (ul != nil && ul.Client != existingClient) {
