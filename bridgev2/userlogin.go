@@ -232,17 +232,27 @@ func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, params
 		}
 		existingClient = existing.Client
 		if existingClient != nil {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			existingClient.Disconnect()
 		}
 	}
 
 	user.Bridge.cacheLock.Lock()
 	defer user.Bridge.cacheLock.Unlock()
-	if err := ctx.Err(); err != nil {
-		return nil, err
+	// Once the existing client has been disconnected, don't bail out on context cancellation,
+	// as that would leave the login in the cache without a connected client.
+	if existingClient == nil {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 	}
 	ul, err := user.Bridge.unlockedGetExistingUserLoginByID(ctx, data.ID)
 	if err != nil {
+		if existingClient != nil {
+			go existingClient.Connect(existing.Log.WithContext(user.Bridge.BackgroundCtx))
+		}
 		return nil, fmt.Errorf("failed to check if login already exists: %w", err)
 	}
 	if ul != existing || (ul != nil && ul.Client != existingClient) {
