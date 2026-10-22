@@ -834,7 +834,10 @@ func (vh *VerificationHelper) onVerificationStart(ctx context.Context, txn Verif
 		}
 	case event.VerificationMethodReciprocate:
 		log.Info().Msg("Received reciprocate start event")
-		if !bytes.Equal(txn.QRCodeSharedSecret, txn.StartEventContent.Secret) {
+		if len(txn.QRCodeSharedSecret) == 0 || len(txn.StartEventContent.Secret) == 0 || vh.qrCodeScanned == nil {
+			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnexpectedMessage, "unexpected reciprocate for non-QR verification")
+			return
+		} else if !bytes.Equal(txn.QRCodeSharedSecret, txn.StartEventContent.Secret) {
 			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeKeyMismatch, "reciprocated shared secret does not match")
 			return
 		}
