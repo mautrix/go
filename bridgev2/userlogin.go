@@ -248,9 +248,10 @@ func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, params
 			return nil, err
 		}
 	}
+	noCancelCtx := user.Bridge.BackgroundCtx
 	lookupCtx := ctx
 	if existingClient != nil {
-		lookupCtx = user.Bridge.BackgroundCtx
+		lookupCtx = noCancelCtx
 	}
 	ul, err := user.Bridge.unlockedGetExistingUserLoginByID(lookupCtx, data.ID)
 	if err != nil {
@@ -279,7 +280,7 @@ func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, params
 		}
 		ul.BridgeState = user.Bridge.NewBridgeStateQueue(ul)
 	}
-	noCancelCtx := ul.Log.WithContext(user.Bridge.BackgroundCtx)
+	noCancelCtx = ul.Log.WithContext(noCancelCtx)
 	err = params.LoadUserLogin(noCancelCtx, ul)
 	if err != nil {
 		return nil, err
