@@ -232,8 +232,18 @@ func (ul *UserLogin) QueueRemoteEvent(evt RemoteEvent) EventHandlingResult {
 }
 
 func (br *Bridge) QueueRemoteEvent(login *UserLogin, evt RemoteEvent) EventHandlingResult {
+	return br.QueueRemoteEventWithContext(br.BackgroundCtx, login, evt)
+}
+
+// QueueRemoteEventWithContext is like QueueRemoteEvent, but gives up if ctx is canceled while
+// waiting for the bridge's cache lock or for space in a full portal event buffer.
+//
+// Network connectors should pass a context that is canceled when their client disconnects,
+// so that a Disconnect which waits for in-flight event handling can't get stuck behind
+// another goroutine holding the cache lock (e.g. NewLogin replacing the client).
+func (br *Bridge) QueueRemoteEventWithContext(ctx context.Context, login *UserLogin, evt RemoteEvent) EventHandlingResult {
 	log := login.Log
-	ctx := log.WithContext(br.BackgroundCtx)
+	ctx = log.WithContext(ctx)
 	maybeUncertain, ok := evt.(RemoteEventWithUncertainPortalReceiver)
 	isUncertain := ok && maybeUncertain.PortalReceiverIsUncertain()
 	key := evt.GetPortalKey()

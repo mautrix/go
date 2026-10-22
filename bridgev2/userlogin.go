@@ -124,13 +124,15 @@ func (br *Bridge) GetUserLoginsInPortal(ctx context.Context, portal networkid.Po
 	if err != nil {
 		return nil, err
 	}
-	br.cacheLock.Lock()
+	br.cacheLock.LockNoCtx()
 	defer br.cacheLock.Unlock()
 	return br.loadManyUserLogins(ctx, nil, logins)
 }
 
 func (br *Bridge) GetExistingUserLoginByID(ctx context.Context, id networkid.UserLoginID) (*UserLogin, error) {
-	br.cacheLock.Lock()
+	if err := br.lockCache(ctx); err != nil {
+		return nil, err
+	}
 	defer br.cacheLock.Unlock()
 	return br.unlockedGetExistingUserLoginByID(ctx, id)
 }
@@ -148,19 +150,19 @@ func (br *Bridge) unlockedGetExistingUserLoginByID(ctx context.Context, id netwo
 }
 
 func (br *Bridge) GetCachedUserLoginByID(id networkid.UserLoginID) *UserLogin {
-	br.cacheLock.Lock()
+	br.cacheLock.LockNoCtx()
 	defer br.cacheLock.Unlock()
 	return br.userLoginsByID[id]
 }
 
 func (br *Bridge) GetAllCachedUserLogins() (logins []*UserLogin) {
-	br.cacheLock.Lock()
+	br.cacheLock.LockNoCtx()
 	defer br.cacheLock.Unlock()
 	return slices.Collect(maps.Values(br.userLoginsByID))
 }
 
 func (br *Bridge) GetCurrentBridgeStates() (states []status.BridgeState) {
-	br.cacheLock.Lock()
+	br.cacheLock.LockNoCtx()
 	defer br.cacheLock.Unlock()
 	if len(br.userLoginsByID) == 0 {
 		return []status.BridgeState{{
@@ -193,7 +195,9 @@ type NewLoginParams struct {
 // This will automatically call LoadUserLogin after creating the UserLogin object.
 // The load method defaults to the network connector's LoadUserLogin method, but it can be overridden in params.
 func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, params *NewLoginParams) (*UserLogin, error) {
-	user.Bridge.cacheLock.Lock()
+	if err := user.Bridge.lockCache(ctx); err != nil {
+		return nil, err
+	}
 	defer user.Bridge.cacheLock.Unlock()
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -323,7 +327,7 @@ func (ul *UserLogin) Delete(ctx context.Context, state status.BridgeState, opts 
 		ul.Log.Err(err).Msg("Failed to delete user login")
 	}
 	if !opts.unlocked {
-		ul.Bridge.cacheLock.Lock()
+		ul.Bridge.cacheLock.LockNoCtx()
 	}
 	delete(ul.User.logins, ul.ID)
 	delete(ul.Bridge.userLoginsByID, ul.ID)

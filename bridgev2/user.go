@@ -88,13 +88,17 @@ func (br *Bridge) unlockedGetUserByMXID(ctx context.Context, userID id.UserID, o
 }
 
 func (br *Bridge) GetUserByMXID(ctx context.Context, userID id.UserID) (*User, error) {
-	br.cacheLock.Lock()
+	if err := br.lockCache(ctx); err != nil {
+		return nil, err
+	}
 	defer br.cacheLock.Unlock()
 	return br.unlockedGetUserByMXID(ctx, userID, false)
 }
 
 func (br *Bridge) GetExistingUserByMXID(ctx context.Context, userID id.UserID) (*User, error) {
-	br.cacheLock.Lock()
+	if err := br.lockCache(ctx); err != nil {
+		return nil, err
+	}
 	defer br.cacheLock.Unlock()
 	return br.unlockedGetUserByMXID(ctx, userID, true)
 }
@@ -160,7 +164,7 @@ func (user *User) DoublePuppet(ctx context.Context) MatrixAPI {
 }
 
 func (user *User) GetUserLoginIDs() []networkid.UserLoginID {
-	user.Bridge.cacheLock.Lock()
+	user.Bridge.cacheLock.LockNoCtx()
 	defer user.Bridge.cacheLock.Unlock()
 	return maps.Keys(user.logins)
 }
@@ -171,7 +175,7 @@ func (user *User) GetCachedUserLogins() []*UserLogin {
 }
 
 func (user *User) GetUserLogins() []*UserLogin {
-	user.Bridge.cacheLock.Lock()
+	user.Bridge.cacheLock.LockNoCtx()
 	defer user.Bridge.cacheLock.Unlock()
 	return maps.Values(user.logins)
 }
@@ -181,7 +185,7 @@ func (user *User) HasTooManyLogins() bool {
 }
 
 func (user *User) GetFormattedUserLogins() string {
-	user.Bridge.cacheLock.Lock()
+	user.Bridge.cacheLock.LockNoCtx()
 	logins := make([]string, len(user.logins))
 	for key, val := range user.logins {
 		logins = append(logins, fmt.Sprintf("* `%s` (%s) - `%s`", key, val.RemoteName, val.BridgeState.GetPrev().StateEvent))
@@ -191,7 +195,7 @@ func (user *User) GetFormattedUserLogins() string {
 }
 
 func (user *User) GetDefaultLogin() *UserLogin {
-	user.Bridge.cacheLock.Lock()
+	user.Bridge.cacheLock.LockNoCtx()
 	defer user.Bridge.cacheLock.Unlock()
 	if len(user.logins) == 0 {
 		return nil

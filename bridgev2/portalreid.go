@@ -63,7 +63,7 @@ func (br *Bridge) ReIDPortal(ctx context.Context, source, target networkid.Porta
 	acquireCacheLock := func() {
 		if !br.cacheLock.TryLock() {
 			log.Debug().Msg("Waiting for global cache lock")
-			br.cacheLock.Lock()
+			br.cacheLock.LockNoCtx()
 			log.Debug().Msg("Acquired global cache lock after waiting")
 		} else {
 			log.Trace().Msg("Acquired global cache lock without waiting")

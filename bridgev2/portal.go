@@ -253,7 +253,7 @@ func (br *Bridge) FindCachedPortalReceiver(id networkid.PortalID, maybeReceiver 
 	if br.Config.SplitPortals {
 		return networkid.PortalKey{ID: id, Receiver: maybeReceiver}
 	}
-	br.cacheLock.Lock()
+	br.cacheLock.LockNoCtx()
 	defer br.cacheLock.Unlock()
 	portal, ok := br.portalsByKey[networkid.PortalKey{
 		ID:       id,
@@ -270,7 +270,9 @@ func (br *Bridge) FindCachedPortalReceiver(id networkid.PortalID, maybeReceiver 
 }
 
 func (br *Bridge) GetPortalByMXID(ctx context.Context, mxid id.RoomID) (*Portal, error) {
-	br.cacheLock.Lock()
+	if err := br.lockCache(ctx); err != nil {
+		return nil, err
+	}
 	defer br.cacheLock.Unlock()
 	cached, ok := br.portalsByMXID[mxid]
 	if ok {
@@ -281,7 +283,9 @@ func (br *Bridge) GetPortalByMXID(ctx context.Context, mxid id.RoomID) (*Portal,
 }
 
 func (br *Bridge) GetAllPortalsWithMXID(ctx context.Context) ([]*Portal, error) {
-	br.cacheLock.Lock()
+	if err := br.lockCache(ctx); err != nil {
+		return nil, err
+	}
 	defer br.cacheLock.Unlock()
 	rows, err := br.DB.Portal.GetAllWithMXID(ctx)
 	if err != nil {
@@ -291,7 +295,9 @@ func (br *Bridge) GetAllPortalsWithMXID(ctx context.Context) ([]*Portal, error) 
 }
 
 func (br *Bridge) GetAllPortals(ctx context.Context) ([]*Portal, error) {
-	br.cacheLock.Lock()
+	if err := br.lockCache(ctx); err != nil {
+		return nil, err
+	}
 	defer br.cacheLock.Unlock()
 	rows, err := br.DB.Portal.GetAll(ctx)
 	if err != nil {
@@ -301,7 +307,9 @@ func (br *Bridge) GetAllPortals(ctx context.Context) ([]*Portal, error) {
 }
 
 func (br *Bridge) GetDMPortalsWith(ctx context.Context, otherUserID networkid.UserID) ([]*Portal, error) {
-	br.cacheLock.Lock()
+	if err := br.lockCache(ctx); err != nil {
+		return nil, err
+	}
 	defer br.cacheLock.Unlock()
 	rows, err := br.DB.Portal.GetAllDMsWith(ctx, otherUserID)
 	if err != nil {
@@ -311,7 +319,9 @@ func (br *Bridge) GetDMPortalsWith(ctx context.Context, otherUserID networkid.Us
 }
 
 func (br *Bridge) GetChildPortals(ctx context.Context, parent networkid.PortalKey) ([]*Portal, error) {
-	br.cacheLock.Lock()
+	if err := br.lockCache(ctx); err != nil {
+		return nil, err
+	}
 	defer br.cacheLock.Unlock()
 	rows, err := br.DB.Portal.GetChildren(ctx, parent)
 	if err != nil {
@@ -321,7 +331,9 @@ func (br *Bridge) GetChildPortals(ctx context.Context, parent networkid.PortalKe
 }
 
 func (br *Bridge) GetDMPortal(ctx context.Context, receiver networkid.UserLoginID, otherUserID networkid.UserID) (*Portal, error) {
-	br.cacheLock.Lock()
+	if err := br.lockCache(ctx); err != nil {
+		return nil, err
+	}
 	defer br.cacheLock.Unlock()
 	dbPortal, err := br.DB.Portal.GetDM(ctx, receiver, otherUserID)
 	if err != nil {
@@ -331,13 +343,17 @@ func (br *Bridge) GetDMPortal(ctx context.Context, receiver networkid.UserLoginI
 }
 
 func (br *Bridge) GetPortalByKey(ctx context.Context, key networkid.PortalKey) (*Portal, error) {
-	br.cacheLock.Lock()
+	if err := br.lockCache(ctx); err != nil {
+		return nil, err
+	}
 	defer br.cacheLock.Unlock()
 	return br.UnlockedGetPortalByKey(ctx, key, false)
 }
 
 func (br *Bridge) GetExistingPortalByKey(ctx context.Context, key networkid.PortalKey) (*Portal, error) {
-	br.cacheLock.Lock()
+	if err := br.lockCache(ctx); err != nil {
+		return nil, err
+	}
 	defer br.cacheLock.Unlock()
 	if key.Receiver == "" || br.Config.SplitPortals {
 		return br.UnlockedGetPortalByKey(ctx, key, true)
@@ -390,6 +406,8 @@ func (portal *Portal) queueEvent(ctx context.Context, evt portalEvent) EventHand
 					return EventHandlingResultQueued
 				case <-portal.deleted:
 					return EventHandlingResultIgnored
+				case <-ctx.Done():
+					return EventHandlingResultFailed.WithError(ctx.Err())
 				case <-time.After(5 * time.Second):
 					zerolog.Ctx(ctx).Error().
 						Str("portal_id", string(portal.ID)).
@@ -694,7 +712,7 @@ func (portal *Portal) FindPreferredLogin(ctx context.Context, user *User, allowR
 	if err != nil {
 		return nil, nil, err
 	}
-	portal.Bridge.cacheLock.Lock()
+	portal.Bridge.cacheLock.LockNoCtx()
 	defer portal.Bridge.cacheLock.Unlock()
 	for _, up := range logins {
 		login, ok := user.logins[up.LoginID]
@@ -2521,7 +2539,7 @@ func (portal *Portal) UpdateMatrixRoomID(
 	}
 	portal.removeInPortalCache(ctx, false)
 	log := zerolog.Ctx(ctx)
-	portal.Bridge.cacheLock.Lock()
+	portal.Bridge.cacheLock.LockNoCtx()
 	// Wrap unlock in a sync.OnceFunc because we want to both defer it to catch early returns
 	// and unlock it before return if nothing goes wrong.
 	unlockCacheLock := sync.OnceFunc(portal.Bridge.cacheLock.Unlock)
@@ -5643,7 +5661,7 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 	portal.NameSet = true
 	portal.MXID = roomID
 	portal.RoomCreated.Set()
-	portal.Bridge.cacheLock.Lock()
+	portal.Bridge.cacheLock.LockNoCtx()
 	portal.Bridge.portalsByMXID[roomID] = portal
 	portal.Bridge.cacheLock.Unlock()
 	portal.updateLogger()
@@ -5741,7 +5759,7 @@ func (portal *Portal) Delete(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	portal.Bridge.cacheLock.Lock()
+	portal.Bridge.cacheLock.LockNoCtx()
 	defer portal.Bridge.cacheLock.Unlock()
 	portal.unlockedDeleteCache()
 	return nil
@@ -5779,7 +5797,7 @@ func (portal *Portal) removeMXID(ctx context.Context, alreadyLocked bool) error 
 	}
 	portal.removeInPortalCache(ctx, alreadyLocked)
 	if !alreadyLocked {
-		portal.Bridge.cacheLock.Lock()
+		portal.Bridge.cacheLock.LockNoCtx()
 		defer portal.Bridge.cacheLock.Unlock()
 	}
 	delete(portal.Bridge.portalsByMXID, oldMXID)

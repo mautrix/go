@@ -48,7 +48,7 @@ type Bridge struct {
 	portalsByKey   map[networkid.PortalKey]*Portal
 	portalsByMXID  map[id.RoomID]*Portal
 	ghostsByID     map[networkid.UserID]*Ghost
-	cacheLock      sync.Mutex
+	cacheLock      exsync.ChanMutex
 
 	didSplitPortals bool
 
@@ -87,6 +87,7 @@ func NewBridge(
 		portalsByKey:   make(map[networkid.PortalKey]*Portal),
 		portalsByMXID:  make(map[id.RoomID]*Portal),
 		ghostsByID:     make(map[networkid.UserID]*Ghost),
+		cacheLock:      exsync.NewChanMutex(),
 
 		wakeupBackfillQueue: make(chan struct{}),
 		manualBackfills:     make(chan *ManualBackfill, 64),
@@ -114,6 +115,16 @@ func (e DBUpgradeError) Error() string {
 
 func (e DBUpgradeError) Unwrap() error {
 	return e.Err
+}
+
+// lockCache acquires the cache lock, giving up if ctx is canceled first. Callers that
+// can be stuck behind a lock holder waiting for them (e.g. a network client whose
+// Disconnect waits for in-flight event handling) rely on this to unwind.
+func (br *Bridge) lockCache(ctx context.Context) error {
+	if !br.cacheLock.Lock(ctx) {
+		return fmt.Errorf("failed to acquire cache lock: %w", ctx.Err())
+	}
+	return nil
 }
 
 func (br *Bridge) Start(ctx context.Context) error {
@@ -476,7 +487,7 @@ func (br *Bridge) stop(isRunOnce bool, timeout time.Duration) {
 	br.stopBackfillQueue.Set()
 	br.Matrix.PreStop()
 	if !isRunOnce {
-		br.cacheLock.Lock()
+		br.cacheLock.LockNoCtx()
 		var wg sync.WaitGroup
 		wg.Add(len(br.userLoginsByID))
 		for _, login := range br.userLoginsByID {

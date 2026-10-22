@@ -91,7 +91,9 @@ func (br *Bridge) GetGhostByMXID(ctx context.Context, mxid id.UserID) (*Ghost, e
 }
 
 func (br *Bridge) GetGhostByID(ctx context.Context, id networkid.UserID) (*Ghost, error) {
-	br.cacheLock.Lock()
+	if err := br.lockCache(ctx); err != nil {
+		return nil, err
+	}
 	defer br.cacheLock.Unlock()
 	ghost, err := br.unlockedGetGhostByID(ctx, id, false)
 	if err != nil {
@@ -103,7 +105,9 @@ func (br *Bridge) GetGhostByID(ctx context.Context, id networkid.UserID) (*Ghost
 }
 
 func (br *Bridge) GetExistingGhostByID(ctx context.Context, id networkid.UserID) (*Ghost, error) {
-	br.cacheLock.Lock()
+	if err := br.lockCache(ctx); err != nil {
+		return nil, err
+	}
 	defer br.cacheLock.Unlock()
 	return br.unlockedGetGhostByID(ctx, id, true)
 }
