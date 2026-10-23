@@ -17,18 +17,19 @@ import (
 type Database struct {
 	*dbutil.Database
 
-	BridgeID            networkid.BridgeID
-	Portal              *PortalQuery
-	Ghost               *GhostQuery
-	Message             *MessageQuery
-	DisappearingMessage *DisappearingMessageQuery
-	Reaction            *ReactionQuery
-	User                *UserQuery
-	UserLogin           *UserLoginQuery
-	UserPortal          *UserPortalQuery
-	BackfillTask        *BackfillTaskQuery
-	KV                  *KVQuery
-	PublicMedia         *PublicMediaQuery
+	BridgeID             networkid.BridgeID
+	Portal               *PortalQuery
+	Ghost                *GhostQuery
+	Message              *MessageQuery
+	DisappearingMessage  *DisappearingMessageQuery
+	Reaction             *ReactionQuery
+	User                 *UserQuery
+	UserLogin            *UserLoginQuery
+	UserPortal           *UserPortalQuery
+	BackfillTask         *BackfillTaskQuery
+	KV                   *KVQuery
+	PublicMedia          *PublicMediaQuery
+	EncryptedDirectMedia *EncryptedDirectMediaQuery
 }
 
 type MetaMerger interface {
@@ -140,6 +141,12 @@ func New(bridgeID networkid.BridgeID, mt MetaTypes, db *dbutil.Database) *Databa
 			BridgeID: bridgeID,
 			QueryHelper: dbutil.MakeQueryHelper(db, func(_ *dbutil.QueryHelper[*PublicMedia]) *PublicMedia {
 				return &PublicMedia{}
+			}),
+		},
+		EncryptedDirectMedia: &EncryptedDirectMediaQuery{
+			BridgeID: bridgeID,
+			QueryHelper: dbutil.MakeQueryHelper(db, func(_ *dbutil.QueryHelper[*EncryptedDirectMedia]) *EncryptedDirectMedia {
+				return &EncryptedDirectMedia{}
 			}),
 		},
 	}
