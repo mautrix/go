@@ -327,11 +327,11 @@ func datePtr(t time.Time) *time.Time {
 	return &t
 }
 
-func (store *SQLCryptoStore) SetGroupSessionKeyBackupVersion(ctx context.Context, sessionID id.SessionID, version id.KeyBackupVersion) error {
+func (store *SQLCryptoStore) SetGroupSessionKeyBackupVersion(ctx context.Context, roomID id.RoomID, sessionID id.SessionID, version id.KeyBackupVersion) error {
 	_, err := store.DB.Exec(
 		ctx,
-		`UPDATE crypto_megolm_inbound_session SET key_backup_version=$1 WHERE session_id=$2 AND account_id=$3`,
-		version, sessionID, store.AccountID,
+		`UPDATE crypto_megolm_inbound_session SET key_backup_version=$1 WHERE session_id=$2 AND room_id=$3 AND account_id=$4`,
+		version, sessionID, roomID, store.AccountID,
 	)
 	return err
 }
@@ -372,12 +372,12 @@ func (store *SQLCryptoStore) PutGroupSession(ctx context.Context, session *Inbou
 			ratchet_safety, received_at, max_age, max_messages, is_scheduled, key_backup_version, key_source,
 			source_user, account_id
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-		ON CONFLICT (session_id, account_id) DO UPDATE
-		    SET withheld_code=NULL, withheld_reason=NULL, sender_key=excluded.sender_key, signing_key=excluded.signing_key,
-		        room_id=excluded.room_id, session=excluded.session, forwarding_chains=excluded.forwarding_chains,
-		        shared_history=excluded.shared_history, ratchet_safety=excluded.ratchet_safety, received_at=excluded.received_at,
-		        max_age=excluded.max_age, max_messages=excluded.max_messages, is_scheduled=excluded.is_scheduled,
-		        key_backup_version=excluded.key_backup_version, key_source=excluded.key_source, source_user=excluded.source_user
+		ON CONFLICT (session_id, room_id, account_id) DO UPDATE
+			SET withheld_code=NULL, withheld_reason=NULL, sender_key=excluded.sender_key, signing_key=excluded.signing_key,
+				session=excluded.session, forwarding_chains=excluded.forwarding_chains, shared_history=excluded.shared_history,
+				ratchet_safety=excluded.ratchet_safety, received_at=excluded.received_at,
+				max_age=excluded.max_age, max_messages=excluded.max_messages, is_scheduled=excluded.is_scheduled,
+				key_backup_version=excluded.key_backup_version, key_source=excluded.key_source, source_user=excluded.source_user
 	`,
 		session.ID(), session.SenderKey, session.SigningKey, session.RoomID, sessionBytes, forwardingChains, session.SharedHistory,
 		ratchetSafety, datePtr(session.ReceivedAt), dbutil.NumPtr(session.MaxAge), dbutil.NumPtr(session.MaxMessages),
@@ -401,8 +401,8 @@ func (store *SQLCryptoStore) GetGroupSession(ctx context.Context, roomID id.Room
 		SELECT sender_key, signing_key, session, forwarding_chains, withheld_code, withheld_reason, shared_history,
 		       ratchet_safety, received_at, max_age, max_messages, is_scheduled, key_backup_version, key_source, source_user
 		FROM crypto_megolm_inbound_session
-		WHERE room_id=$1 AND session_id=$2 AND account_id=$3`,
-		roomID, sessionID, store.AccountID,
+		WHERE account_id=$1 AND room_id=$2 AND session_id=$3`,
+		store.AccountID, roomID, sessionID,
 	).Scan(
 		&senderKey, &signingKey, &sessionBytes, &forwardingChains, &withheldCode, &withheldReason, &sharedHistory,
 		&ratchetSafetyBytes, &receivedAt, &maxAge, &maxMessages, &isScheduled, &version, &keySource, &sourceUser,
@@ -443,12 +443,12 @@ func (store *SQLCryptoStore) GetGroupSession(ctx context.Context, roomID id.Room
 	}, nil
 }
 
-func (store *SQLCryptoStore) RedactGroupSession(ctx context.Context, _ id.RoomID, sessionID id.SessionID, reason string) error {
+func (store *SQLCryptoStore) RedactGroupSession(ctx context.Context, roomID id.RoomID, sessionID id.SessionID, reason string) error {
 	_, err := store.DB.Exec(ctx, `
 		UPDATE crypto_megolm_inbound_session
 		SET withheld_code=$1, withheld_reason=$2, session=NULL, forwarding_chains=NULL
-		WHERE session_id=$3 AND account_id=$4 AND session IS NOT NULL
-	`, event.RoomKeyWithheldBeeperRedacted, "Session redacted: "+reason, sessionID, store.AccountID)
+		WHERE session_id=$3 AND room_id=$4 AND account_id=$5 AND session IS NOT NULL
+	`, event.RoomKeyWithheldBeeperRedacted, "Session redacted: "+reason, sessionID, roomID, store.AccountID)
 	return err
 }
 
@@ -508,7 +508,7 @@ func (store *SQLCryptoStore) PutWithheldGroupSession(ctx context.Context, conten
 	_, err := store.DB.Exec(ctx, `
 		INSERT INTO crypto_megolm_inbound_session (session_id, sender_key, room_id, withheld_code, withheld_reason, received_at, account_id)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		ON CONFLICT (session_id, account_id) DO NOTHING
+		ON CONFLICT (session_id, room_id, account_id) DO NOTHING
 	`, content.SessionID, content.SenderKey, content.RoomID, content.Code, content.Reason, time.Now().UTC(), store.AccountID)
 	return err
 }
