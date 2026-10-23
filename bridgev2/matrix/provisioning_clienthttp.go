@@ -8,6 +8,7 @@ package matrix
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -43,6 +44,15 @@ func (prov *ProvisioningAPI) PostLoginClientHTTP(w http.ResponseWriter, r *http.
 	}
 	// Bypass the size limit set in auth middleware, because the client HTTP response may be large.
 	body := exerrors.Must(r.GetBody())
+	if r.Header.Get("Content-Encoding") == "gzip" {
+		gzipBody, err := gzip.NewReader(body)
+		if err != nil {
+			log.Err(err).Msg("Failed to decompress request body")
+			mautrix.MNotJSON.WithMessage("Failed to decompress request body").Write(w)
+			return
+		}
+		body = gzipBody
+	}
 	body = http.MaxBytesReader(w, body, 10*1024*1024)
 	var resp bridgev2.LoginClientHTTPResponse
 	err := json.NewDecoder(body).Decode(&resp)
