@@ -1,4 +1,4 @@
--- v0 -> v32 (compatible with v9+): Latest revision
+-- v0 -> v33 (compatible with v9+): Latest revision
 CREATE TABLE "user" (
 	bridge_id       TEXT NOT NULL,
 	mxid            TEXT NOT NULL,
@@ -233,4 +233,14 @@ CREATE TABLE public_media (
 	expiry    BIGINT,
 
 	PRIMARY KEY (bridge_id, public_id)
+);
+
+CREATE TABLE encrypted_direct_media (
+	bridge_id   TEXT NOT NULL,
+	media_id    TEXT NOT NULL,
+	floe_key    TEXT,
+	floe_header TEXT,
+	handled_at  BIGINT,
+
+	PRIMARY KEY (bridge_id, media_id)
 );
