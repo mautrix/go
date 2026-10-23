@@ -703,16 +703,12 @@ func (mach *OlmMachine) storeGroupSessionInner(ctx context.Context, igs *Inbound
 			}
 			// The existing session has an earlier index than the new one, but the new one was received directly,
 			// so save the new key source to flag the session as more trusted.
-			existing.KeySource = igs.KeySource
-			existing.ForwardingChains = igs.ForwardingChains
-			existing.SourceUser = igs.SourceUser
+			existing.ImportTrust(igs)
 			igs = existing
 		} else if existing.KeySource == id.KeySourceDirect {
 			// The new session has an earlier index than the existing one, but the existing one was received directly,
 			// so keep the existing key source to keep the session flagged as trusted.
-			igs.KeySource = existing.KeySource
-			igs.ForwardingChains = existing.ForwardingChains
-			igs.SourceUser = existing.SourceUser
+			igs.ImportTrust(existing)
 		}
 
 		// Use oldest received at time

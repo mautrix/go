@@ -166,6 +166,17 @@ func (igs *InboundGroupSession) RatchetTo(index uint32) error {
 	return nil
 }
 
+func (igs *InboundGroupSession) ImportTrust(other *InboundGroupSession) {
+	igs.KeySource = other.KeySource
+	igs.ForwardingChains = other.ForwardingChains
+	igs.SourceUser = other.SourceUser
+	igs.SigningKey = other.SigningKey
+	igs.SenderKey = other.SenderKey
+	if igs.SharedHistory == nil {
+		igs.SharedHistory = other.SharedHistory
+	}
+}
+
 func (igs *InboundGroupSession) export() (*ExportedSession, error) {
 	key, err := igs.Internal.Export(igs.Internal.FirstKnownIndex())
 	if err != nil {
