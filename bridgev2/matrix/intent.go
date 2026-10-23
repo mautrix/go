@@ -97,18 +97,24 @@ func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType
 			if as.Connector.Crypto == nil {
 				return nil, fmt.Errorf("room is encrypted, but bridge isn't configured to support encryption")
 			}
-			if as.Matrix().IsCustomPuppet {
-				if extra.Timestamp.IsZero() {
-					as.Matrix().AddDoublePuppetValue(content)
-				} else {
-					as.Matrix().AddDoublePuppetValueWithTS(content, extra.Timestamp.UnixMilli())
+			addDoublePuppetValue := func(content *event.Content) {
+				if as.Matrix().IsCustomPuppet {
+					if extra.Timestamp.IsZero() {
+						as.Matrix().AddDoublePuppetValue(content)
+					} else {
+						as.Matrix().AddDoublePuppetValueWithTS(content, extra.Timestamp.UnixMilli())
+					}
 				}
 			}
-			err = as.Connector.Crypto.Encrypt(ctx, roomID, eventType, content)
+			addDoublePuppetValue(content)
+			err = as.Connector.encryptWithSizeLimit(ctx, roomID, eventType, content, addDoublePuppetValue)
 			if err != nil {
 				return nil, err
 			}
 			eventType = event.EventEncrypted
+		} else if eventType != event.EventReaction && isContentTooLarge(ctx, eventType, content) {
+			*content = makeTooLargeNotice(content)
+			eventType = event.EventMessage
 		}
 	}
 	return as.Matrix().SendMessageEvent(ctx, roomID, eventType, content, mautrix.ReqSendEvent{Timestamp: extra.Timestamp.UnixMilli(), TransactionID: extra.TransactionID})
