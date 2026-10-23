@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"math"
 
 	"go.mau.fi/util/exerrors"
 
@@ -378,5 +379,17 @@ func (ef *EncryptedFile) DecryptStream(reader io.Reader) io.ReadSeekCloser {
 		hash:         sha256.New(),
 		source:       reader,
 		file:         ef,
+	}
+}
+
+func (ef *EncryptedFile) EncryptedLength(plaintext int64) int64 {
+	switch ef.Version {
+	case VersionAES256CTR:
+		return plaintext
+	case VersionBeeperFLOE:
+		segments := max(int64(math.Ceil(float64(plaintext)/float64(FLOEParams.PtSegLen()))), 1)
+		return plaintext + segments*int64(FLOEParams.SegOverhead())
+	default:
+		return -1
 	}
 }
