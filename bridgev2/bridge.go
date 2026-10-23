@@ -23,6 +23,7 @@ import (
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/bridgev2/status"
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -419,6 +420,15 @@ func (br *Bridge) StartLoginsForUsers(ctx context.Context, users []*User) {
 	}
 
 	br.Log.Info().Msg("Bridge started")
+}
+
+func (br *Bridge) GenerateContentURI(ctx context.Context, roomID id.RoomID, mediaID networkid.MediaID) (id.ContentURIString, *event.EncryptedFileInfo, error) {
+	edm, ok := br.Matrix.(MatrixConnectorWithEncryptedDirectMedia)
+	if ok {
+		return edm.GenerateContentURIWithCrypto(ctx, roomID, mediaID)
+	}
+	mxc, err := br.Matrix.GenerateContentURI(ctx, mediaID)
+	return mxc, nil, err
 }
 
 func (br *Bridge) ResetNetworkConnections() {

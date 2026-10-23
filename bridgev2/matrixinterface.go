@@ -75,6 +75,11 @@ type botIntentGetter interface {
 	BotIntent() MatrixAPI
 }
 
+type MatrixConnectorWithEncryptedDirectMedia interface {
+	MatrixConnector
+	GenerateContentURIWithCrypto(ctx context.Context, roomID id.RoomID, mediaID networkid.MediaID) (id.ContentURIString, *event.EncryptedFileInfo, error)
+}
+
 type MatrixConnectorWithArbitraryRoomState interface {
 	MatrixConnector
 	GetStateEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string) (*event.Event, error)
