@@ -546,9 +546,8 @@ func (store *SQLCryptoStore) postScanInboundGroupSession(sessionBytes, ratchetSa
 	} else {
 		chains = []string{}
 	}
-	var rs RatchetSafety
 	if len(ratchetSafetyBytes) > 0 {
-		err = json.Unmarshal(ratchetSafetyBytes, &rs)
+		err = json.Unmarshal(ratchetSafetyBytes, &safety)
 		if err != nil {
 			err = fmt.Errorf("failed to unmarshal ratchet safety info: %w", err)
 		}
