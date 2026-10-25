@@ -199,6 +199,10 @@ func (lchp *LoginClientHTTPParams) MarshalZerologObject(e *zerolog.Event) {
 		Str("fingerprint", lchp.Fingerprint)
 }
 
+// ClientHTTPResponseGzipContentType marks a client HTTP response submission where the JSON
+// metadata object (without body) is immediately followed by the gzipped raw response body.
+const ClientHTTPResponseGzipContentType = "application/vnd.mautrix.client-http-response+gzip"
+
 type LoginClientHTTPResponse struct {
 	StatusCode  int         `json:"status_code,omitzero"`
 	FinalURL    string      `json:"final_url,omitempty"`
