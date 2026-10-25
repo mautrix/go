@@ -588,6 +588,9 @@ type FetchMessagesResponse struct {
 	// When sending forward backfill (or the first batch in a room), this field can be set
 	// to mark the messages as read immediately after backfilling.
 	MarkRead bool
+	// When sending forward backfill without MarkRead, this field can be set to mark messages
+	// up to this timestamp as read after backfilling.
+	ReadUpTo time.Time
 
 	// If further fetches require requests that take longer than normal message fetches, this can be set to true.
 	// The bridge will then skip this portal in the backfill queue and only paginate further if the user requests it.

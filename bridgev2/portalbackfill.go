@@ -91,6 +91,24 @@ func (portal *Portal) doForwardBackfill(ctx context.Context, source *UserLogin, 
 	err = portal.sendBackfill(ctx, source, resp.Messages, true, resp.MarkRead, false, resp.CompleteCallback)
 	if err != nil {
 		log.Err(err).Msg("Failed to send forward backfill")
+	} else if !resp.MarkRead && !resp.ReadUpTo.IsZero() {
+		portal.markBackfillReadUpTo(ctx, source, resp.ReadUpTo)
+	}
+}
+
+func (portal *Portal) markBackfillReadUpTo(ctx context.Context, source *UserLogin, readUpTo time.Time) {
+	dp := source.User.DoublePuppet(ctx)
+	if dp == nil {
+		return
+	}
+	target, err := portal.Bridge.DB.Message.GetLastNonFakePartAtOrBeforeTime(ctx, portal.PortalKey, readUpTo)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Time("read_up_to", readUpTo).Msg("Failed to get read target after backfill")
+	} else if target != nil {
+		err = dp.MarkRead(ctx, portal.MXID, target.MXID, time.Now())
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to mark room as read after backfill")
+		}
 	}
 }
 
