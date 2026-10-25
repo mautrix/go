@@ -84,7 +84,7 @@ func processResolveIdentifiers(ctx context.Context, br *bridgev2.Bridge, resp []
 		if contact.Chat != nil {
 			if contact.Chat.Portal == nil {
 				var err error
-				contact.Chat.Portal, err = br.GetPortalByKey(ctx, contact.Chat.PortalKey)
+				contact.Chat.Portal, err = br.GetExistingPortalByKey(ctx, contact.Chat.PortalKey)
 				if err != nil {
 					zerolog.Ctx(ctx).Err(err).Msg("Failed to get portal")
 				}
