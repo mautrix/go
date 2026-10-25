@@ -310,9 +310,10 @@ type LoginCookiesParams struct {
 	// even if this URL is not reached, but it should only automatically close the webview after
 	// both cookies and the URL match.
 	WaitForURLPattern string `json:"wait_for_url_pattern,omitempty"`
-	// If set, the client should load the URL and run ExtractJS in a webview that is not shown to the
-	// user.
+	// If true, the client should load the URL and run ExtractJS in a webview that is not shown to the user.
 	Hidden bool `json:"hidden,omitzero"`
+	// If true, running ExtractJS is mandatory. Clients that are unable to do so should fail the login.
+	JSRequired bool `json:"js_required,omitzero"`
 }
 
 func (lcp *LoginCookiesParams) MarshalZerologObject(e *zerolog.Event) {

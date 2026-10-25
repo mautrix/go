@@ -402,7 +402,11 @@ type cookieLoginCommandState struct {
 }
 
 func (clcs *cookieLoginCommandState) prompt(ce *Event) {
-	ce.Reply("Login URL: <%s>", clcs.Data.URL)
+	var suffix string
+	if clcs.Data.JSRequired {
+		suffix = "\n\nNote: This login step requires executing additional JS manually. Choosing another login method is recommended."
+	}
+	ce.Reply("Login URL: <%s>%s", clcs.Data.URL, suffix)
 	StoreCommandState(ce.User, &CommandState{
 		Next:   MinimalCommandHandlerFunc(clcs.submit),
 		Action: "Login",

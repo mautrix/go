@@ -16,9 +16,6 @@ import (
 func Register() {
 	olm.Driver = "goolm"
 
-	olm.GetVersion = func() (major, minor, patch uint8) {
-		return 3, 2, 15
-	}
 	olm.SetPickleKeyImpl = func(key []byte) {
 		panic("gob and json encoding is deprecated and not supported with goolm")
 	}

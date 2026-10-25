@@ -89,6 +89,7 @@ type OlmMachine struct {
 	lastOTKUpload       time.Time
 	receivedOTKsForSelf atomic.Bool
 	repairingOTKs       atomic.Bool
+	otkRepairStarted    atomic.Bool
 
 	CrossSigningKeys    *CrossSigningKeysCache
 	crossSigningPubkeys *CrossSigningPublicKeysCache
@@ -702,16 +703,12 @@ func (mach *OlmMachine) storeGroupSessionInner(ctx context.Context, igs *Inbound
 			}
 			// The existing session has an earlier index than the new one, but the new one was received directly,
 			// so save the new key source to flag the session as more trusted.
-			existing.KeySource = igs.KeySource
-			existing.ForwardingChains = igs.ForwardingChains
-			existing.SourceUser = igs.SourceUser
+			existing.ImportTrust(igs)
 			igs = existing
 		} else if existing.KeySource == id.KeySourceDirect {
 			// The new session has an earlier index than the existing one, but the existing one was received directly,
 			// so keep the existing key source to keep the session flagged as trusted.
-			igs.KeySource = existing.KeySource
-			igs.ForwardingChains = existing.ForwardingChains
-			igs.SourceUser = existing.SourceUser
+			igs.ImportTrust(existing)
 		}
 
 		// Use oldest received at time
@@ -887,6 +884,18 @@ func (mach *OlmMachine) ShareKeys(ctx context.Context, currentOTKCount int) erro
 			Int("server_count", resp.OneTimeKeyCounts.SignedCurve25519).
 			Msg("Fetched current OTK count from server")
 		currentOTKCount = resp.OneTimeKeyCounts.SignedCurve25519
+		if currentOTKCount > int(mach.account.Internal.MaxNumberOfOneTimeKeys()) && mach.otkRepairStarted.CompareAndSwap(false, true) {
+			log.Warn().
+				Int("server_count", currentOTKCount).
+				Msg("Server has more one-time keys than the account can store, repairing")
+			go func() {
+				err := mach.RepairOneTimeKeys(mach.backgroundCtx)
+				if err != nil {
+					log.Err(err).Msg("Failed to repair one-time keys")
+				}
+			}()
+			return nil
+		}
 	}
 	var deviceKeys *mautrix.DeviceKeys
 	if !mach.account.Shared {

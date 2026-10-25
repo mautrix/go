@@ -1,4 +1,4 @@
--- v0 -> v22 (compatible with v20+): Latest revision
+-- v0 -> v23 (compatible with v23+): Latest revision
 CREATE TABLE crypto_account (
 	account_id         TEXT    PRIMARY KEY,
 	device_id          TEXT    NOT NULL,
@@ -57,8 +57,8 @@ CREATE TABLE crypto_olm_message_hash (
 CREATE INDEX crypto_olm_message_hash_account_idx ON crypto_olm_message_hash (account_id);
 
 CREATE TABLE crypto_megolm_inbound_session (
-	account_id         TEXT,
-	session_id         CHAR(43),
+	account_id         TEXT     NOT NULL,
+	session_id         CHAR(43) NOT NULL,
 	sender_key         CHAR(43) NOT NULL,
 	signing_key        CHAR(43),
 	room_id            TEXT     NOT NULL,
@@ -75,7 +75,7 @@ CREATE TABLE crypto_megolm_inbound_session (
 	key_backup_version TEXT NOT NULL DEFAULT '',
 	key_source         TEXT NOT NULL DEFAULT '',
 	source_user        TEXT NOT NULL DEFAULT '',
-	PRIMARY KEY (account_id, session_id)
+	PRIMARY KEY (account_id, room_id, session_id)
 );
 -- Useful index to find keys that need backing up
 CREATE INDEX crypto_megolm_inbound_session_backup_idx ON crypto_megolm_inbound_session(account_id, key_backup_version) WHERE session IS NOT NULL;
