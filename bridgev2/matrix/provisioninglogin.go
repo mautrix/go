@@ -25,6 +25,7 @@ import (
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/status"
+	"maunium.net/go/mautrix/id"
 )
 
 type stepManager struct {
@@ -67,12 +68,16 @@ func (sm *stepManager) WithNonErroringLock(fn func(*stepManager)) {
 
 type ProvLogin struct {
 	ID       string
+	UserMXID id.UserID
 	Process  bridgev2.LoginProcess
 	step     *stepManager
 	Override *bridgev2.UserLogin
 
-	HTTPLock    sync.Mutex
-	fingerprint string
+	HTTPLock         sync.Mutex
+	fingerprint      string
+	streamsLock      sync.Mutex
+	streams          map[string]*loginClientStream
+	websocketEnabled bool
 
 	Ctx       context.Context
 	CancelCtx context.CancelFunc
@@ -108,6 +113,7 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 	ch := make(chan struct{})
 	provLogin := &ProvLogin{
 		ID:        loginID,
+		UserMXID:  user.MXID,
 		Process:   login,
 		Override:  overrideLogin,
 		Ctx:       ctx,
@@ -126,12 +132,18 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 		Msg("Created login process, now starting")
 
 	var rt bridgev2.FingerprintingRoundTripper
+	var wsrt bridgev2.FingerprintingRoundTripper
 	if r.URL.Query().Get("client_http") == "1" {
 		rt = provLogin
 	}
+	if r.URL.Query().Get("client_websocket") == "1" {
+		provLogin.websocketEnabled = true
+		wsrt = provLogin
+	}
 	go prov.executeStep(provLogin, provLogin.Ctx, "start", nil, nil, &bridgev2.LoginStartParams{
-		Override: overrideLogin,
-		HTTP:     rt,
+		Override:      overrideLogin,
+		HTTP:          rt,
+		WebSocketHTTP: wsrt,
 	}, nil)
 	select {
 	case <-ch:
@@ -157,7 +169,7 @@ func (prov *ProvisioningAPI) PostLoginStep(w http.ResponseWriter, r *http.Reques
 	prov.loginsLock.RLock()
 	login, ok := prov.logins[loginID]
 	prov.loginsLock.RUnlock()
-	if !ok {
+	if !ok || login.UserMXID != prov.GetUser(r).MXID {
 		zerolog.Ctx(r.Context()).Warn().Str("login_id", loginID).Msg("Login not found")
 		mautrix.MNotFound.WithMessage("Login not found").Write(w)
 		return
@@ -209,7 +221,7 @@ func (prov *ProvisioningAPI) PostLoginCancel(w http.ResponseWriter, r *http.Requ
 	prov.loginsLock.RLock()
 	login, ok := prov.logins[loginID]
 	prov.loginsLock.RUnlock()
-	if !ok {
+	if !ok || login.UserMXID != prov.GetUser(r).MXID {
 		zerolog.Ctx(r.Context()).Warn().Str("login_id", loginID).Msg("Login not found")
 		mautrix.MNotFound.WithMessage("Login not found").Write(w)
 		return
@@ -223,7 +235,7 @@ func (prov *ProvisioningAPI) PostLoginStepCancel(w http.ResponseWriter, r *http.
 	prov.loginsLock.RLock()
 	login, ok := prov.logins[loginID]
 	prov.loginsLock.RUnlock()
-	if !ok {
+	if !ok || login.UserMXID != prov.GetUser(r).MXID {
 		mautrix.MNotFound.WithMessage("Login not found").Write(w)
 		return
 	}

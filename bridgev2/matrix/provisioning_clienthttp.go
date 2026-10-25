@@ -16,11 +16,13 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/rs/xid"
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exerrors"
 	"go.mau.fi/util/exhttp"
+	"golang.org/x/net/http/httpguts"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
@@ -36,7 +38,7 @@ func (prov *ProvisioningAPI) PostLoginClientHTTP(w http.ResponseWriter, r *http.
 	prov.loginsLock.RLock()
 	login, ok := prov.logins[loginID]
 	prov.loginsLock.RUnlock()
-	if !ok {
+	if !ok || login.UserMXID != prov.GetUser(r).MXID {
 		log.Warn().Str("login_id", loginID).Msg("Login not found")
 		mautrix.MNotFound.WithMessage("Login not found").Write(w)
 		return
@@ -136,6 +138,11 @@ func (p *ProvLogin) SetFingerprint(fingerprint string) {
 
 func (p *ProvLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 	log := zerolog.Ctx(req.Context()).With().Str("login_id", p.ID).Logger()
+	upgrade := strings.EqualFold(req.Header.Get("Upgrade"), "websocket") &&
+		httpguts.HeaderValuesContainsToken(req.Header.Values("Connection"), "upgrade")
+	if upgrade && (!p.websocketEnabled || req.Method != http.MethodGet || req.URL.Scheme != "https") {
+		return nil, fmt.Errorf("client WebSocket upgrade is not supported")
+	}
 	var body []byte
 	if req.Body != nil {
 		var err error
@@ -147,6 +154,21 @@ func (p *ProvLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 	p.HTTPLock.Lock()
 	defer p.HTTPLock.Unlock()
+	var streamID string
+	var stream *loginClientStream
+	if upgrade {
+		var err error
+		streamID, stream, err = p.newClientStream()
+		if err != nil {
+			return nil, err
+		}
+	}
+	streamOpened := false
+	defer func() {
+		if stream != nil && !streamOpened {
+			_ = stream.Close()
+		}
+	}()
 	ch := make(chan *bridgev2.LoginClientHTTPResponse, 1)
 	err := p.step.WithLock(func(sm *stepManager) error {
 		if sm.err != nil {
@@ -168,6 +190,7 @@ func (p *ProvLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 			TxnID:  txnID,
 			ClientHTTPParams: &bridgev2.LoginClientHTTPParams{
 				RequestID:   reqID,
+				StreamID:    streamID,
 				Method:      req.Method,
 				URL:         req.URL.String(),
 				Headers:     req.Header,
@@ -212,6 +235,18 @@ func (p *ProvLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 	if resp.Error != "" {
 		return nil, errors.New(ErrorFromClientPrefix + resp.Error)
 	}
+	var responseBody io.ReadCloser = io.NopCloser(bytes.NewReader(resp.Body))
+	contentLength := int64(len(resp.Body))
+	if resp.StatusCode == http.StatusSwitchingProtocols {
+		if stream == nil || resp.StreamID != streamID || len(resp.Body) != 0 {
+			return nil, fmt.Errorf("invalid client WebSocket upgrade response")
+		}
+		responseBody = stream
+		contentLength = -1
+		streamOpened = true
+	} else if resp.StreamID != "" {
+		return nil, fmt.Errorf("unexpected stream ID in client HTTP response")
+	}
 	if resp.Headers == nil {
 		resp.Headers = make(http.Header)
 	} else {
@@ -233,8 +268,8 @@ func (p *ProvLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 		Proto:         ClientHTTPProto,
 		ProtoMajor:    1,
 		Header:        resp.Headers,
-		Body:          io.NopCloser(bytes.NewReader(resp.Body)),
-		ContentLength: int64(len(resp.Body)),
+		Body:          responseBody,
+		ContentLength: contentLength,
 		Request: &http.Request{
 			Method: req.Method,
 			URL:    finalURL,

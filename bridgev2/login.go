@@ -62,8 +62,9 @@ type FingerprintingRoundTripper interface {
 }
 
 type LoginStartParams struct {
-	Override *UserLogin
-	HTTP     FingerprintingRoundTripper
+	Override      *UserLogin
+	HTTP          FingerprintingRoundTripper
+	WebSocketHTTP FingerprintingRoundTripper
 }
 
 type LoginProcessWithParams interface {
@@ -182,6 +183,7 @@ func (ls *LoginStep) MarshalZerologObject(e *zerolog.Event) {
 
 type LoginClientHTTPParams struct {
 	RequestID string      `json:"request_id"`
+	StreamID  string      `json:"stream_id,omitempty"`
 	Method    string      `json:"method"`
 	URL       string      `json:"url"`
 	Headers   http.Header `json:"headers,omitempty"`
@@ -200,6 +202,7 @@ func (lchp *LoginClientHTTPParams) MarshalZerologObject(e *zerolog.Event) {
 }
 
 type LoginClientHTTPResponse struct {
+	StreamID    string      `json:"stream_id,omitempty"`
 	StatusCode  int         `json:"status_code,omitzero"`
 	FinalURL    string      `json:"final_url,omitempty"`
 	Headers     http.Header `json:"headers,omitempty"`
