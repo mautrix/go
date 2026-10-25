@@ -199,6 +199,8 @@ func (p *ProvLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 				Headers:     req.Header,
 				Body:        body,
 				Fingerprint: p.fingerprint,
+
+				AcceptsGzipResponse: p.acceptsGzipResponse,
 			},
 		}
 		sm.pendingHTTP = ch
