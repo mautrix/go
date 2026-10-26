@@ -23,6 +23,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exsync"
+	"go.mau.fi/util/ptr"
 	"go.mau.fi/util/random"
 	"go.mau.fi/util/retryafter"
 	"golang.org/x/exp/maps"
@@ -2418,8 +2419,19 @@ func (cli *Client) JoinedRooms(ctx context.Context) (resp *RespJoinedRooms, err 
 }
 
 func (cli *Client) PublicRooms(ctx context.Context, req *ReqPublicRooms) (resp *RespPublicRooms, err error) {
-	urlPath := cli.BuildURLWithQuery(ClientURLPath{"v3", "publicRooms"}, req.Query())
-	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	if req.Filter != nil {
+		query := map[string]string{}
+		if req.Server != "" {
+			req = ptr.Clone(req)
+			query["server"] = req.Server
+			req.Server = ""
+		}
+		urlPath := cli.BuildURLWithQuery(ClientURLPath{"v3", "publicRooms"}, query)
+		_, err = cli.MakeRequest(ctx, http.MethodPost, urlPath, req, &resp)
+	} else {
+		urlPath := cli.BuildURLWithQuery(ClientURLPath{"v3", "publicRooms"}, req.Query())
+		_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	}
 	return
 }
 

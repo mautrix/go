@@ -487,11 +487,18 @@ type ReqSendReceipt struct {
 }
 
 type ReqPublicRooms struct {
-	IncludeAllNetworks   bool
-	Limit                int
-	Since                string
-	ThirdPartyInstanceID string
-	Server               string
+	IncludeAllNetworks   bool   `json:"include_all_networks,omitzero"`
+	Limit                int    `json:"limit,omitzero"`
+	Since                string `json:"since,omitempty"`
+	ThirdPartyInstanceID string `json:"third_party_instance_id,omitempty"`
+	Server               string `json:"server,omitempty"`
+
+	Filter *PublicRoomsFilter `json:"filter,omitempty"`
+}
+
+type PublicRoomsFilter struct {
+	GenericSearchTerm string           `json:"generic_search_term,omitempty"`
+	RoomTypes         []event.RoomType `json:"room_types,omitempty"`
 }
 
 func (req *ReqPublicRooms) Query() map[string]string {
