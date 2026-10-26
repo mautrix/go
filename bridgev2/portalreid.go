@@ -153,6 +153,7 @@ func (br *Bridge) ReIDPortal(ctx context.Context, source, target networkid.Porta
 		if err != nil {
 			return ReIDResultError, nil, fmt.Errorf("failed to delete source portal row: %w", err)
 		}
+		ctx = context.WithoutCancel(ctx)
 		go func() {
 			_, err := br.Bot.SendState(ctx, sourcePortal.MXID, event.StateTombstone, "", &event.Content{
 				Parsed: &event.TombstoneEventContent{
