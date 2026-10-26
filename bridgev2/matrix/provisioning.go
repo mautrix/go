@@ -711,7 +711,9 @@ func (prov *ProvisioningAPI) PostResolveMedia(w http.ResponseWriter, r *http.Req
 }
 
 func (prov *ProvisioningAPI) DeleteDirectMediaKeys(w http.ResponseWriter, r *http.Request) {
-	err := prov.br.Bridge.DB.EncryptedDirectMedia.MarkHandled(r.Context(), r.PathValue("mediaID"))
+	mediaIDStr := r.PathValue("mediaID")
+	mediaIDStr = strings.TrimPrefix(mediaIDStr, prov.br.Config.DirectMedia.MediaIDPrefix)
+	err := prov.br.Bridge.DB.EncryptedDirectMedia.MarkHandled(r.Context(), mediaIDStr)
 	if err != nil {
 		mautrix.MUnknown.WithMessage("Failed to mark media as handled").WithInternalError(err).Write(w)
 	} else {

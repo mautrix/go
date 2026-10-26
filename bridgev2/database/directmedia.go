@@ -35,7 +35,7 @@ const (
 		VALUES ($1, $2, $3, $4, $5)
 	`
 	markEncryptedDirectMediaHandledQuery = `
-		UPDATE encrypted_direct_media SET handled_at=$3 WHERE bridge_id=$1 AND media_id=$2
+		UPDATE encrypted_direct_media SET handled_at=$3, floe_key=NULL, floe_header=NULL WHERE bridge_id=$1 AND media_id=$2
 	`
 	getEncryptedDirectMediaQuery = `
 		SELECT bridge_id, media_id, floe_key, floe_header, handled_at
