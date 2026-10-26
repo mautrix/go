@@ -2435,6 +2435,23 @@ func (cli *Client) PublicRooms(ctx context.Context, req *ReqPublicRooms) (resp *
 	return
 }
 
+type roomVisibilityPayload struct {
+	Visibility RoomDirectoryVisibility `json:"visibility"`
+}
+
+func (cli *Client) PublishRoomToDirectory(ctx context.Context, roomID id.RoomID, visibility RoomDirectoryVisibility) error {
+	urlPath := cli.BuildClientURL("v3", "directory", "list", "room", roomID)
+	_, err := cli.MakeRequest(ctx, http.MethodPut, urlPath, roomVisibilityPayload{visibility}, nil)
+	return err
+}
+
+func (cli *Client) GetRoomDirectoryVisibility(ctx context.Context, roomID id.RoomID) (RoomDirectoryVisibility, error) {
+	urlPath := cli.BuildClientURL("v3", "directory", "list", "room", roomID)
+	var resp roomVisibilityPayload
+	_, err := cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	return resp.Visibility, err
+}
+
 // Hierarchy returns a list of rooms that are in the room's hierarchy. See https://spec.matrix.org/v1.4/client-server-api/#get_matrixclientv1roomsroomidhierarchy
 //
 // The hierarchy API is provided to walk the space tree and discover the rooms with their aesthetic details. works in a depth-first manner:

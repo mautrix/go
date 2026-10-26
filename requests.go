@@ -524,6 +524,13 @@ func (req *ReqPublicRooms) Query() map[string]string {
 	return query
 }
 
+type RoomDirectoryVisibility string
+
+const (
+	RoomDirectoryVisibilityPublic  RoomDirectoryVisibility = "public"
+	RoomDirectoryVisibilityPrivate RoomDirectoryVisibility = "private"
+)
+
 // ReqHierarchy contains the parameters for https://spec.matrix.org/v1.4/client-server-api/#get_matrixclientv1roomsroomidhierarchy
 //
 // As it's a GET method, there is no JSON body, so this is only query parameters.
