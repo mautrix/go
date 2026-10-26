@@ -304,7 +304,7 @@ type ReqMakeJoin struct {
 }
 
 type RespMakeJoin struct {
-	RoomVersion id.RoomVersion `json:"room_version"`
+	RoomVersion id.RoomVersion `json:"room_version,omitempty"`
 	Event       PDU            `json:"event"`
 }
 
@@ -325,9 +325,9 @@ type ReqSendKnock struct {
 
 type RespSendJoin struct {
 	AuthChain      []PDU    `json:"auth_chain"`
-	Event          PDU      `json:"event"`
-	MembersOmitted bool     `json:"members_omitted"`
-	ServersInRoom  []string `json:"servers_in_room"`
+	Event          PDU      `json:"event,omitempty"`
+	MembersOmitted bool     `json:"members_omitted,omitempty"`
+	ServersInRoom  []string `json:"servers_in_room,omitempty"`
 	State          []PDU    `json:"state"`
 }
 
