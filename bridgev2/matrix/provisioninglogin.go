@@ -73,6 +73,8 @@ type ProvLogin struct {
 
 	HTTPLock    sync.Mutex
 	fingerprint string
+	// The websocket proxy only forwards JSON bodies, so gzipped client HTTP responses can't pass through it.
+	acceptsGzipResponse bool
 
 	Ctx       context.Context
 	CancelCtx context.CancelFunc
@@ -112,6 +114,8 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 		Override:  overrideLogin,
 		Ctx:       ctx,
 		CancelCtx: cancel,
+
+		acceptsGzipResponse: !prov.br.Websocket,
 		step: &stepManager{
 			started: true,
 			wait:    ch,

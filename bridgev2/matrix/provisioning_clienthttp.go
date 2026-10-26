@@ -8,6 +8,7 @@ package matrix
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -28,6 +29,27 @@ import (
 
 var _ http.RoundTripper = (*ProvLogin)(nil)
 
+const maxClientHTTPResponseSize = 10 * 1024 * 1024
+
+func decodeGzippedClientHTTPResponse(body io.Reader, resp *bridgev2.LoginClientHTTPResponse) error {
+	decoder := json.NewDecoder(body)
+	err := decoder.Decode(resp)
+	if err != nil {
+		return err
+	}
+	gzipBody, err := gzip.NewReader(io.MultiReader(decoder.Buffered(), body))
+	if err != nil {
+		return err
+	}
+	resp.Body, err = io.ReadAll(io.LimitReader(gzipBody, maxClientHTTPResponseSize+1))
+	if err != nil {
+		return err
+	} else if len(resp.Body) > maxClientHTTPResponseSize {
+		return errors.New("decompressed body is too large")
+	}
+	return nil
+}
+
 func (prov *ProvisioningAPI) PostLoginClientHTTP(w http.ResponseWriter, r *http.Request) {
 	log := zerolog.Ctx(r.Context())
 	loginID := r.PathValue("loginProcessID")
@@ -42,10 +64,14 @@ func (prov *ProvisioningAPI) PostLoginClientHTTP(w http.ResponseWriter, r *http.
 		return
 	}
 	// Bypass the size limit set in auth middleware, because the client HTTP response may be large.
-	body := exerrors.Must(r.GetBody())
-	body = http.MaxBytesReader(w, body, 10*1024*1024)
+	body := http.MaxBytesReader(w, exerrors.Must(r.GetBody()), maxClientHTTPResponseSize)
 	var resp bridgev2.LoginClientHTTPResponse
-	err := json.NewDecoder(body).Decode(&resp)
+	var err error
+	if r.Header.Get("Content-Type") == bridgev2.ClientHTTPResponseGzipContentType {
+		err = decodeGzippedClientHTTPResponse(body, &resp)
+	} else {
+		err = json.NewDecoder(body).Decode(&resp)
+	}
 	if err != nil {
 		log.Err(err).Msg("Failed to decode request body")
 		mautrix.MNotJSON.WithMessage("Failed to decode request body").Write(w)
@@ -173,6 +199,8 @@ func (p *ProvLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 				Headers:     req.Header,
 				Body:        body,
 				Fingerprint: p.fingerprint,
+
+				AcceptsGzipResponse: p.acceptsGzipResponse,
 			},
 		}
 		sm.pendingHTTP = ch
