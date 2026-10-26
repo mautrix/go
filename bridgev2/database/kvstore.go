@@ -41,16 +41,21 @@ const (
 )
 
 func (kvq *KVQuery) Get(ctx context.Context, key Key) string {
-	var value string
-	err := kvq.QueryRow(ctx, getKVQuery, kvq.BridgeID, key).Scan(&value)
+	value, err := kvq.GetWithError(ctx, key)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		zerolog.Ctx(ctx).Err(err).Str("key", string(key)).Msg("Failed to get key from kvstore")
 	}
 	return value
 }
 
+func (kvq *KVQuery) GetWithError(ctx context.Context, key Key) (string, error) {
+	var value string
+	err := kvq.QueryRow(ctx, getKVQuery, kvq.BridgeID, key).Scan(&value)
+	return value, err
+}
+
 func (kvq *KVQuery) Set(ctx context.Context, key Key, value string) {
-	_, err := kvq.Exec(ctx, setKVQuery, kvq.BridgeID, key, value)
+	err := kvq.SetWithError(ctx, key, value)
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).
 			Str("key", string(key)).
@@ -59,11 +64,21 @@ func (kvq *KVQuery) Set(ctx context.Context, key Key, value string) {
 	}
 }
 
+func (kvq *KVQuery) SetWithError(ctx context.Context, key Key, value string) error {
+	_, err := kvq.Exec(ctx, setKVQuery, kvq.BridgeID, key, value)
+	return err
+}
+
 func (kvq *KVQuery) Delete(ctx context.Context, key Key) {
-	_, err := kvq.Exec(ctx, deleteKVQuery, kvq.BridgeID, key)
+	err := kvq.DeleteWithError(ctx, key)
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).
 			Str("key", string(key)).
 			Msg("Failed to delete key in kvstore")
 	}
+}
+
+func (kvq *KVQuery) DeleteWithError(ctx context.Context, key Key) error {
+	_, err := kvq.Exec(ctx, deleteKVQuery, kvq.BridgeID, key)
+	return err
 }
