@@ -101,7 +101,7 @@ func (br *Connector) generateContentURIInternal(mediaID networkid.MediaID, encry
 }
 
 func (br *Connector) GenerateContentURIWithCrypto(ctx context.Context, roomID id.RoomID, mediaID networkid.MediaID) (id.ContentURIString, *event.EncryptedFileInfo, error) {
-	if roomID != "" {
+	if roomID != "" && br.Config.DirectMedia.Encrypted {
 		if encrypted, err := br.isEncrypted(ctx, roomID); err != nil {
 			return "", nil, fmt.Errorf("failed to check if room is encrypted: %w", err)
 		} else if encrypted {

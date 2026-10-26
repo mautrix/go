@@ -352,6 +352,9 @@ public_media:
 direct_media:
     # Should custom mxc:// URIs be used instead of reuploading media?
     enabled: false
+    # Should direct media be encrypted when sending to encrypted rooms?
+    # This uses non-standard encryption (FLOE) instead of the standard AES-CTR, so it won't work in most clients.
+    encrypted: false
     # The server name to use for the custom mxc:// URIs.
     # This server name will effectively be a real Matrix server, it just won't implement anything other than media.
     # You must either set up .well-known delegation from this domain to the bridge, or proxy the domain directly to the bridge.
