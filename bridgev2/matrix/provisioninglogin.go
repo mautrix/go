@@ -71,9 +71,8 @@ type ProvLogin struct {
 	step     *stepManager
 	Override *bridgev2.UserLogin
 
-	HTTPLock    sync.Mutex
-	fingerprint string
-	// The websocket proxy only forwards JSON bodies, so gzipped client HTTP responses can't pass through it.
+	HTTPLock            sync.Mutex
+	fingerprint         string
 	acceptsGzipResponse bool
 
 	Ctx       context.Context
@@ -115,6 +114,7 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 		Ctx:       ctx,
 		CancelCtx: cancel,
 
+		// The HTTP over websocket proxy only allows JSON bodies, so the custom gzip format can't be used.
 		acceptsGzipResponse: !prov.br.Websocket,
 		step: &stepManager{
 			started: true,

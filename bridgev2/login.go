@@ -187,9 +187,8 @@ type LoginClientHTTPParams struct {
 	Headers   http.Header `json:"headers,omitempty"`
 	Body      []byte      `json:"body,omitempty"`
 
-	Fingerprint string `json:"fingerprint,omitempty"`
-	// If true, the response may be submitted using ClientHTTPResponseGzipContentType.
-	AcceptsGzipResponse bool `json:"accepts_gzip_response,omitempty"`
+	Fingerprint         string `json:"fingerprint,omitempty"`
+	AcceptsGzipResponse bool   `json:"accepts_gzip_response,omitzero"`
 }
 
 func (lchp *LoginClientHTTPParams) MarshalZerologObject(e *zerolog.Event) {
@@ -202,8 +201,6 @@ func (lchp *LoginClientHTTPParams) MarshalZerologObject(e *zerolog.Event) {
 		Bool("accepts_gzip_response", lchp.AcceptsGzipResponse)
 }
 
-// ClientHTTPResponseGzipContentType marks a client HTTP response submission where the JSON
-// metadata object (without body) is immediately followed by the gzipped raw response body.
 const ClientHTTPResponseGzipContentType = "application/vnd.mautrix.client-http-response+gzip"
 
 type LoginClientHTTPResponse struct {
