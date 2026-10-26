@@ -147,6 +147,7 @@ func (prov *ProvisioningAPI) Init() {
 	prov.Router.HandleFunc("POST /v3/image_pack/import", prov.ImportImagePack)
 	prov.Router.HandleFunc("GET /v3/image_pack/list", prov.ListImagePacks)
 	prov.Router.HandleFunc("POST /v3/resolve_media/{eventID}", prov.PostResolveMedia)
+	prov.Router.HandleFunc("DELETE /v3/direct_media_keys/{mediaID}", prov.DeleteDirectMediaKeys)
 
 	if prov.br.Config.Provisioning.EnableSessionTransfers {
 		prov.log.Debug().Msg("Enabling session transfer API")
@@ -707,6 +708,15 @@ func (prov *ProvisioningAPI) PostResolveMedia(w http.ResponseWriter, r *http.Req
 		return
 	}
 	exhttp.WriteJSONResponse(w, http.StatusOK, resp)
+}
+
+func (prov *ProvisioningAPI) DeleteDirectMediaKeys(w http.ResponseWriter, r *http.Request) {
+	err := prov.br.Bridge.DB.EncryptedDirectMedia.MarkHandled(r.Context(), r.PathValue("mediaID"))
+	if err != nil {
+		mautrix.MUnknown.WithMessage("Failed to mark media as handled").WithInternalError(err).Write(w)
+	} else {
+		w.WriteHeader(http.StatusNoContent)
+	}
 }
 
 type ReqExportCredentials struct {
