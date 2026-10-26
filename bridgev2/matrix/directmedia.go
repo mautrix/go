@@ -109,9 +109,11 @@ func (br *Connector) GenerateContentURIWithCrypto(ctx context.Context, roomID id
 			if err != nil {
 				return "", nil, err
 			}
+			mediaIDStr := exerrors.Must(mxc.Parse()).FileID
+			mediaIDStr = strings.TrimPrefix(mediaIDStr, br.Config.DirectMedia.MediaIDPrefix)
 			floeFile := attachment.NewFLOEFile()
 			err = br.Bridge.DB.EncryptedDirectMedia.Put(ctx, &database.EncryptedDirectMedia{
-				MediaID:    exerrors.Must(mxc.Parse()).FileID,
+				MediaID:    mediaIDStr,
 				FLOEKey:    floeFile.FLOEKey,
 				FLOEHeader: floeFile.FLOEHeader,
 			})
@@ -138,12 +140,13 @@ func (br *Connector) ParseContentURI(ctx context.Context, mxc id.ContentURIStrin
 	} else if parsed.Homeserver != br.MediaProxy.GetServerName() {
 		return nil, fmt.Errorf("mxc URI homeserver does not match media proxy server name")
 	}
-	mediaID, _, err := br.parseMediaID(parsed.FileID)
+	mediaIDStr := strings.TrimPrefix(parsed.FileID, br.Config.DirectMedia.MediaIDPrefix)
+	mediaID, _, err := br.parseMediaID(mediaIDStr)
 	return mediaID, err
 }
 
 func (br *Connector) parseMediaID(mediaIDStr string) (networkid.MediaID, bool, error) {
-	mediaID, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(mediaIDStr, br.Config.DirectMedia.MediaIDPrefix))
+	mediaID, err := base64.RawURLEncoding.DecodeString(mediaIDStr)
 	var encrypted bool
 	minLength := len(MediaIDPrefix) + MediaIDTruncatedHashLength + 1
 	if err != nil || len(mediaID) < minLength {
@@ -170,6 +173,7 @@ func (br *Connector) parseMediaID(mediaIDStr string) (networkid.MediaID, bool, e
 }
 
 func (br *Connector) getDirectMedia(ctx context.Context, mediaIDStr string, params map[string]string) (response mediaproxy.GetMediaResponse, err error) {
+	mediaIDStr = strings.TrimPrefix(mediaIDStr, br.Config.DirectMedia.MediaIDPrefix)
 	remoteMediaID, encrypted, err := br.parseMediaID(mediaIDStr)
 	if err != nil {
 		return response, err
