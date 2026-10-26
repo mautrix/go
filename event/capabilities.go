@@ -69,6 +69,7 @@ type RoomFeatures struct {
 	DeleteChat            bool `json:"delete_chat,omitzero"`
 	DeleteChatForEveryone bool `json:"delete_chat_for_everyone,omitzero"`
 	BlockUser             bool `json:"block_user,omitzero"`
+	NotUnblock            bool `json:"not_unblock,omitzero"`
 	ReportSpam            bool `json:"report_spam,omitzero"`
 
 	MessageRequest *MessageRequestFeatures `json:"message_request,omitzero"`
@@ -398,6 +399,7 @@ func (rf *RoomFeatures) Hash() []byte {
 	hashBool(hasher, "delete_chat", rf.DeleteChat)
 	hashBool(hasher, "delete_chat_for_everyone", rf.DeleteChatForEveryone)
 	hashBool(hasher, "block_user", rf.BlockUser)
+	hashBool(hasher, "not_unblock", rf.NotUnblock)
 	hashBool(hasher, "report_spam", rf.ReportSpam)
 	hashValue(hasher, "message_request", rf.MessageRequest)
 
