@@ -205,8 +205,8 @@ func (portal *PortalInternals) HandleRemoteMessage(ctx context.Context, source *
 	return (*Portal)(portal).handleRemoteMessage(ctx, source, evt)
 }
 
-func (portal *PortalInternals) SendRemoteErrorNotice(ctx context.Context, intent MatrixAPI, err error, ts time.Time, evtTypeName string) {
-	(*Portal)(portal).sendRemoteErrorNotice(ctx, intent, err, ts, evtTypeName)
+func (portal *PortalInternals) SendRemoteErrorNotice(ctx context.Context, intent MatrixAPI, err error, ts time.Time, evtTypeName string, remoteID networkid.MessageID) {
+	(*Portal)(portal).sendRemoteErrorNotice(ctx, intent, err, ts, evtTypeName, remoteID)
 }
 
 func (portal *PortalInternals) HandleRemoteEdit(ctx context.Context, source *UserLogin, evt RemoteEdit) EventHandlingResult {

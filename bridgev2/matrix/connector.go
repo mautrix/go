@@ -112,7 +112,12 @@ var (
 	_ bridgev2.MatrixConnectorWithNameDisambiguation     = (*Connector)(nil)
 	_ bridgev2.MatrixConnectorWithURLPreviews            = (*Connector)(nil)
 	_ bridgev2.MatrixConnectorWithAnalytics              = (*Connector)(nil)
+	_ bridgev2.MatrixConnectorWithErrorNoticeSettings    = (*Connector)(nil)
 )
+
+func (br *Connector) ShouldSendMessageErrorNotices() bool {
+	return br.Config.Matrix.MessageErrorNotices
+}
 
 func NewConnector(cfg *bridgeconfig.Config) *Connector {
 	c := &Connector{}

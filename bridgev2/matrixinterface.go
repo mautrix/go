@@ -152,6 +152,11 @@ type MatrixConnectorWithNotifications interface {
 	DisplayNotification(ctx context.Context, data *DirectNotificationData)
 }
 
+type MatrixConnectorWithErrorNoticeSettings interface {
+	MatrixConnector
+	ShouldSendMessageErrorNotices() bool
+}
+
 type MatrixConnectorWithHTTPSettings interface {
 	MatrixConnector
 	GetHTTPClientSettings() exhttp.ClientSettings

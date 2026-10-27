@@ -108,6 +108,9 @@ type Portal struct {
 	eventsLock sync.Mutex
 	eventIdx   int
 
+	remoteErrorNotices     map[string]struct{}
+	remoteErrorNoticesLock sync.Mutex
+
 	backfillLock             sync.Mutex
 	forwardBackfillLock      sync.Mutex
 	nextBackfillDoneCallback func(error)
@@ -3266,7 +3269,7 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 			return EventHandlingResultIgnored
 		} else {
 			log.Err(err).Msg("Failed to convert remote message")
-			portal.sendRemoteErrorNotice(ctx, intent, err, ts, "message")
+			portal.sendRemoteErrorNotice(ctx, intent, err, ts, "message", evt.GetID())
 			return EventHandlingResultFailed.WithError(err)
 		}
 	}
@@ -3280,7 +3283,32 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 	return
 }
 
-func (portal *Portal) sendRemoteErrorNotice(ctx context.Context, intent MatrixAPI, err error, ts time.Time, evtTypeName string) {
+const maxRemoteErrorNoticeKeys = 256
+
+func (portal *Portal) shouldSendRemoteErrorNotice(evtTypeName string, remoteID networkid.MessageID) bool {
+	if cfg, ok := portal.Bridge.Matrix.(MatrixConnectorWithErrorNoticeSettings); ok && !cfg.ShouldSendMessageErrorNotices() {
+		return false
+	}
+	if remoteID == "" {
+		return true
+	}
+	key := evtTypeName + ":" + string(remoteID)
+	portal.remoteErrorNoticesLock.Lock()
+	defer portal.remoteErrorNoticesLock.Unlock()
+	if _, alreadySent := portal.remoteErrorNotices[key]; alreadySent {
+		return false
+	}
+	if portal.remoteErrorNotices == nil || len(portal.remoteErrorNotices) >= maxRemoteErrorNoticeKeys {
+		portal.remoteErrorNotices = make(map[string]struct{})
+	}
+	portal.remoteErrorNotices[key] = struct{}{}
+	return true
+}
+
+func (portal *Portal) sendRemoteErrorNotice(ctx context.Context, intent MatrixAPI, err error, ts time.Time, evtTypeName string, remoteID networkid.MessageID) {
+	if !portal.shouldSendRemoteErrorNotice(evtTypeName, remoteID) {
+		return
+	}
 	resp, sendErr := intent.SendMessage(ctx, portal.MXID, event.EventMessage, &event.Content{
 		Parsed: &event.MessageEventContent{
 			MsgType:  event.MsgNotice,
@@ -3349,7 +3377,7 @@ func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, e
 		return EventHandlingResultIgnored
 	} else if err != nil {
 		log.Err(err).Msg("Failed to convert remote edit")
-		portal.sendRemoteErrorNotice(ctx, intent, err, ts, "edit")
+		portal.sendRemoteErrorNotice(ctx, intent, err, ts, "edit", evt.GetTargetMessage())
 		return EventHandlingResultFailed.WithError(err)
 	}
 	res := portal.sendConvertedEdit(ctx, source, existing[0].ID, evt.GetSender().Sender, converted, intent, ts, getStreamOrder(evt))
