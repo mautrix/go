@@ -1667,6 +1667,7 @@ func (portal *Portal) handleMatrixEdit(
 	log.UpdateContext(func(c zerolog.Context) zerolog.Context {
 		return c.Str("edit_target_remote_id", string(editTarget.ID))
 	})
+	prevEditCount := editTarget.EditCount
 	err = editingAPI.HandleMatrixEdit(ctx, &MatrixEdit{
 		MatrixEventBase: MatrixEventBase[*event.MessageEventContent]{
 			Event:      evt,
@@ -1681,6 +1682,9 @@ func (portal *Portal) handleMatrixEdit(
 	if err != nil {
 		log.Err(err).Msg("Failed to handle Matrix edit")
 		return EventHandlingResultFailed.WithMSSError(err)
+	}
+	if editTarget.EditCount == prevEditCount {
+		editTarget.EditCount++
 	}
 	err = portal.Bridge.DB.Message.Update(ctx, editTarget)
 	if err != nil {
