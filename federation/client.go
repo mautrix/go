@@ -326,7 +326,7 @@ type ReqSendKnock struct {
 type RespSendJoin struct {
 	AuthChain      []PDU    `json:"auth_chain"`
 	Event          PDU      `json:"event,omitempty"`
-	MembersOmitted bool     `json:"members_omitted,omitempty"`
+	MembersOmitted bool     `json:"members_omitted,omitzero"`
 	ServersInRoom  []string `json:"servers_in_room,omitempty"`
 	State          []PDU    `json:"state"`
 }
