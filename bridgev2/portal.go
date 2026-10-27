@@ -3437,13 +3437,13 @@ func (portal *Portal) sendConvertedEdit(
 		if err != nil {
 			log.Err(err).Stringer("part_mxid", part.MXID).Msg("Failed to redact message part deleted in edit")
 			errorList = append(errorList, fmt.Errorf("failed to redact message part deleted in edit: %w", err))
-		} else {
-			log.Debug().
-				Stringer("redaction_event_id", resp.EventID).
-				Stringer("redacted_event_id", part.MXID).
-				Str("part_id", string(part.ID)).
-				Msg("Sent redaction of message part to Matrix")
+			continue
 		}
+		log.Debug().
+			Stringer("redaction_event_id", resp.EventID).
+			Stringer("redacted_event_id", part.MXID).
+			Str("part_id", string(part.ID)).
+			Msg("Sent redaction of message part to Matrix")
 		deletedParts = append(deletedParts, part.RowID)
 	}
 	var addedParts []*database.Message
