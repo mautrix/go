@@ -221,9 +221,15 @@ func (p *ProvLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 	var resp *bridgev2.LoginClientHTTPResponse
+	var streamDone <-chan struct{}
+	if stream != nil {
+		streamDone = stream.done
+	}
 	select {
 	case resp = <-ch:
 		// yay
+	case <-streamDone:
+		return nil, fmt.Errorf("client WebSocket closed during upgrade")
 	case <-p.Ctx.Done():
 		log.Warn().Msg("Login context cancelled during client HTTP request")
 		return nil, fmt.Errorf("login context cancelled during client HTTP request: %w", p.Ctx.Err())
@@ -241,6 +247,13 @@ func (p *ProvLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 		if stream == nil || resp.StreamID != streamID || len(resp.Body) != 0 {
 			return nil, fmt.Errorf("invalid client WebSocket upgrade response")
 		}
+		if _, err := stream.waitConn(req.Context()); err != nil {
+			if req.Context().Err() != nil {
+				p.CancelCtx()
+			}
+			return nil, err
+		}
+		stream.opening.Stop()
 		responseBody = stream
 		contentLength = -1
 		streamOpened = true

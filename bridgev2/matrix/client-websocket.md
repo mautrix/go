@@ -1,70 +1,44 @@
-# Client WebSockets during login
+# Login WebSocket byte tunnels
 
-Provisioning clients can advertise `client_websocket=1` when starting a login.
-Connectors implementing `LoginProcessWithParams` then receive an optional
-`LoginStartParams.WebSocketHTTP` transport. It can be installed in an HTTP client
-used by a WebSocket library that accepts upgraded `io.ReadWriteCloser` bodies.
-The existing `client_http=1` capability is independent and unchanged.
+Provisioning clients advertise `client_websocket=2` when starting a login. The
+connector receives an optional `LoginStartParams.WebSocketHTTP` transport, which
+can be passed to its WebSocket library through an ordinary `http.Client`.
+Version 2 is intentionally incompatible with the earlier long-poll prototype;
+clients and bridges that don't recognize it keep their normal login path.
 
-The connector keeps ownership of the WebSocket protocol, encryption, login
-state, and reconnection. The provisioning client opens the remote HTTPS
-connection and relays raw bytes. It must not add another layer of WebSocket
-framing. Streams exist only for the lifetime of the login.
+An outgoing WebSocket upgrade creates a `client_http` step with a `stream_id`.
+The SDK opens the remote HTTPS connection, retains the raw upgraded response
+body, and opens a second WebSocket to:
 
-## Upgrade
+```
+GET /v3/login/streams/{loginProcessID}/{streamID}
+```
 
-A WebSocket HTTP GET produces a normal `client_http` login step with an additional
-`stream_id`. The client forwards the handshake and returns its status and headers
-through the existing client HTTP submission endpoint. On a successful 101
-response, it echoes `stream_id` and leaves `body` empty. Otherwise it returns an
-ordinary HTTP response or error, without a stream ID.
+This endpoint uses normal provisioning authentication and requires the login's
+owner. Each stream accepts only one tunnel attachment. The SDK wraps the tunnel
+in `websocket.NetConn` with binary messages and copies bytes between it and the
+remote upgraded connection in both directions. It starts copying **before**
+submitting the remote 101 status, headers and stream ID through the existing
+client HTTP response endpoint. That submission may wait until the connector
+has exchanged enough data to produce a QR or another user-facing step.
 
-The client must start the relay concurrently with submitting the handshake:
-submission can wait for the next user-facing step, which may itself depend on
-traffic over the stream. Stream workers must survive step transitions and must
-not inherit the deadline of an individual provisioning request.
+The framework returns its side of the tunnel as the upgraded HTTP response's
+`io.ReadWriteCloser`. The connector's existing WebSocket implementation still
+owns remote framing, compression, control messages and network encryption.
+The tunnel itself doesn't interpret messages or preserve their boundaries.
 
-## Relay
+There are no polling endpoints, sequence numbers, acknowledgements, replay
+queues or transparent reconnects. EOF/error closes the stream. The SDK must
+close both connections when either copy ends. Loss of the tunnel fails that
+connection rather than attempting to resume it.
 
-Routes are relative to the provisioning prefix and require the same authenticated
-user as the login:
+The tunnel lives across login-step transitions, not across completed logins.
+Cancellation, completion and the login's 30-minute deadline close its streams.
+An upgrade that isn't completed within a minute also closes. At most eight
+streams are allocated per login, with spent IDs retained until login removal
+to prevent reattachment. Clients must restrict remote destinations and keep
+their own stream copies bounded.
 
-* `GET /v3/login/streams/{loginProcessID}/{streamID}/poll` returns a
-  `LoginClientStreamPacket`. It waits up to 20 seconds. An empty packet with
-  sequence zero is a heartbeat, not EOF.
-* `POST /v3/login/streams/{loginProcessID}/{streamID}/exchange` accepts a
-  `LoginClientStreamExchange` and returns `LoginClientStreamExchangeResponse`.
-
-Both directions use independent sequences starting at one. Packets contain up to
-64 KiB of raw bytes (base64 in JSON). A terminal packet has `closed: true`, with
-an optional bounded error. Sequence zero is not valid for submitted packets.
-
-The client writes polled bytes to the remote connection in order, then sends
-`ack` in an exchange. Polls repeat the same unacknowledged packet. A duplicate
-packet is acknowledged without writing it twice. A sequence gap is an error.
-The bridge's `Write` returns success only after this acknowledgement.
-
-Remote bytes are submitted in the exchange's `packet` field. Its response's
-`ack` is the last accepted client-to-bridge sequence. Retry the same packet when
-an HTTP response is lost. Only one data submission may be outstanding per
-stream, but acknowledgement-only exchanges must remain independent: otherwise
-backpressure on reads could deadlock writes. Accepted data is buffered with a
-256 KiB limit; a full buffer backpressures further submissions.
-
-HTTP retries do not reopen the remote connection. A failed socket write,
-unrecoverable relay error or sequence gap terminates the stream rather than
-replaying ambiguous bytes onto another socket. A terminal poll packet overrides
-outstanding data and must close the client connection even if its sequence skips
-an unacknowledged packet. Closing a failed stream never acknowledges that data.
-
-## Lifetime and limits
-
-Login cancellation, completion or timeout closes every stream. An idle stream
-also closes after a minute without poll/exchange activity. Closed stream records
-remain available for retries until the login is removed. At most eight streams
-can be allocated per login, including closed records.
-
-Clients must bound their own buffers and relay request deadlines, close sockets
-on SDK shutdown/cancellation, restrict destination URLs, and avoid logging raw
-payloads or authentication headers. A login-complete response is not permission
-to retain a device-relayed connection for normal messaging.
+The gateway must forward WebSocket upgrades, including `Hijack` through response
+writer wrappers. An HTTP request/response serialization path cannot carry this
+tunnel without additional routing support.
