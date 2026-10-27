@@ -133,7 +133,7 @@ func (prov *ProvisioningAPI) Init() {
 	prov.Router.HandleFunc("POST /v3/login/step/{loginProcessID}/{stepID}/{stepType}", prov.PostLoginStep)
 	prov.Router.HandleFunc("POST /v3/login/step/{loginProcessID}/{stepID}/cancel", prov.PostLoginStepCancel)
 	prov.Router.HandleFunc("POST /v3/login/client_http/{loginProcessID}/{txnID}/{reqID}", prov.PostLoginClientHTTP)
-	prov.Router.HandleFunc("GET /v3/login/streams/{loginProcessID}/{streamID}", prov.GetLoginClientWebSocket)
+	prov.Router.HandleFunc("GET /v3/login/client_websocket/{loginProcessID}/{streamID}", prov.GetLoginClientWebSocket)
 	prov.Router.HandleFunc("POST /v3/login/cancel/{loginProcessID}", prov.PostLoginCancel)
 	prov.Router.HandleFunc("POST /v3/logout/{loginID}", prov.PostLogout)
 	prov.Router.HandleFunc("GET /v3/logins", prov.GetLogins)

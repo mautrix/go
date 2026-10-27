@@ -136,7 +136,7 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 	if r.URL.Query().Get("client_http") == "1" {
 		rt = provLogin
 	}
-	if r.URL.Query().Get("client_websocket") == "2" {
+	if r.URL.Query().Get("client_websocket") == "2" && !prov.br.Websocket {
 		provLogin.websocketEnabled = true
 		wsrt = provLogin
 	}
