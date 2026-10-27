@@ -3437,6 +3437,9 @@ func (portal *Portal) sendConvertedEdit(
 		if err != nil {
 			log.Err(err).Stringer("part_mxid", part.MXID).Msg("Failed to redact message part deleted in edit")
 			errorList = append(errorList, fmt.Errorf("failed to redact message part deleted in edit: %w", err))
+			if errors.Is(err, mautrix.MNotFound) || errors.Is(err, mautrix.MForbidden) {
+				deletedParts = append(deletedParts, part.RowID)
+			}
 			continue
 		}
 		log.Debug().
