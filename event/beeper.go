@@ -261,6 +261,63 @@ func (content *MessageEventContent) RemovePerMessageProfileFallback() {
 	}
 }
 
+// BeeperForwarded marks a message as forwarded on the remote network.
+type BeeperForwarded struct {
+	HasFallback bool `json:"has_fallback,omitzero"`
+}
+
+const (
+	ForwardedFallbackText = "↷ Forwarded"
+	ForwardedFallbackHTML = "<p data-mx-forwarded-notice><em>↷ Forwarded</em></p>"
+)
+
+var HTMLForwardedFallbackRegex = regexp.MustCompile(`^<p\s+data-mx-forwarded-notice(?:="")?\s*><em>↷ Forwarded</em></p\s*>`)
+
+func (content *MessageEventContent) AddForwardedFallback() {
+	if content.BeeperForwarded == nil || content.BeeperForwarded.HasFallback {
+		return
+	}
+	isMedia := content.MsgType.IsMedia()
+	if !isMedia && !content.MsgType.IsText() {
+		return
+	}
+	content.BeeperForwarded.HasFallback = true
+	if isMedia && (content.FileName == "" || content.FileName == content.Body) {
+		content.FileName = content.Body
+		content.Body = ForwardedFallbackText
+		content.Format = FormatHTML
+		content.FormattedBody = ForwardedFallbackHTML
+		return
+	}
+	content.EnsureHasHTML()
+	content.Body = ForwardedFallbackText + "\n\n" + content.Body
+	content.FormattedBody = ForwardedFallbackHTML + content.FormattedBody
+}
+
+func (content *MessageEventContent) RemoveForwardedFallback() {
+	if content == nil {
+		return
+	}
+	if content.NewContent != nil && content.NewContent != content {
+		content.NewContent.RemoveForwardedFallback()
+	}
+	if content.BeeperForwarded == nil || !content.BeeperForwarded.HasFallback {
+		return
+	}
+	content.BeeperForwarded.HasFallback = false
+	if content.MsgType.IsMedia() && content.Body == ForwardedFallbackText {
+		content.Body = content.FileName
+	} else {
+		content.Body = strings.TrimPrefix(content.Body, ForwardedFallbackText+"\n\n")
+	}
+	if content.Format == FormatHTML {
+		content.FormattedBody = HTMLForwardedFallbackRegex.ReplaceAllLiteralString(content.FormattedBody, "")
+		if content.FormattedBody == "" {
+			content.Format = ""
+		}
+	}
+}
+
 type BeeperStreamInfo struct {
 	UserID             id.UserID                   `json:"user_id"`
 	DeviceID           id.DeviceID                 `json:"device_id,omitempty"`

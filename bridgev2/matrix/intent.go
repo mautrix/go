@@ -89,6 +89,7 @@ func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType
 	if (eventType != event.EventReaction || as.Connector.Config.Encryption.MSC4392) && eventType != event.EventRedaction {
 		msgContent, ok := content.Parsed.(*event.MessageEventContent)
 		if ok && eventType == event.EventMessage {
+			msgContent.AddForwardedFallback()
 			msgContent.AddPerMessageProfileFallback()
 		}
 		if encrypted, err := as.Connector.isEncrypted(ctx, roomID); err != nil {

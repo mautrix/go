@@ -140,6 +140,7 @@ type MessageEventContent struct {
 
 	MessageSendRetry             *BeeperRetryMetadata     `json:"com.beeper.message_send_retry,omitempty"`
 	BeeperPerMessageProfile      *BeeperPerMessageProfile `json:"com.beeper.per_message_profile,omitempty"`
+	BeeperForwarded              *BeeperForwarded         `json:"com.beeper.forwarded,omitempty"`
 	BeeperActionMessage          *BeeperActionMessage     `json:"com.beeper.action_message,omitempty"`
 	BeeperLinkPreviews           []*BeeperLinkPreview     `json:"com.beeper.linkpreviews,omitzero"`
 	BeeperStream                 *BeeperStreamInfo        `json:"com.beeper.stream,omitempty"`
