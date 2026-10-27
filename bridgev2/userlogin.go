@@ -553,10 +553,10 @@ func (ul *UserLogin) FillBridgeState(state status.BridgeState) status.BridgeStat
 	state.RemoteName = ul.RemoteName
 	state.RemoteProfile = ul.RemoteProfile
 	if space := ul.SpaceRoom; space != "" {
-		if state.Info == nil {
-			state.Info = make(map[string]any)
-		}
-		state.Info["personal_filtering_space"] = space
+		info := make(map[string]any, len(state.Info)+1)
+		maps.Copy(info, state.Info)
+		info["personal_filtering_space"] = space
+		state.Info = info
 	}
 	filler, ok := ul.Client.(status.BridgeStateFiller)
 	if ok {
