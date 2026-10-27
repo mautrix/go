@@ -17,6 +17,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/rs/xid"
+
 	"maunium.net/go/mautrix"
 )
 
