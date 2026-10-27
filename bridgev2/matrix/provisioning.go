@@ -476,6 +476,8 @@ type WritableError interface {
 func RespondWithError(w http.ResponseWriter, err error, message string) {
 	if we, ok := errors.AsType[WritableError](err); ok {
 		we.Write(w)
+	} else if errors.Is(err, bridgev2.ErrNotLoggedIn) {
+		mautrix.MForbidden.WithMessage("Login is not logged in").Write(w)
 	} else {
 		mautrix.MUnknown.WithMessage(message).WithInternalError(err).Write(w)
 	}
