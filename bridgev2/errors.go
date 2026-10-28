@@ -34,6 +34,10 @@ var ErrResolveIdentifierTryNext = errors.New("that identifier is not available v
 
 var ErrNotLoggedIn = errors.New("not logged in")
 
+// ErrLoginChangedConcurrently is returned by [User.NewLogin] if the existing login was replaced,
+// deleted or created by something else while its old client was being disconnected.
+var ErrLoginChangedConcurrently = errors.New("login was changed concurrently, please try again")
+
 // ErrDirectMediaNotEnabled may be returned by Matrix connectors if [MatrixConnector.GenerateContentURI] is called,
 // but direct media is not enabled.
 var ErrDirectMediaNotEnabled = errors.New("direct media is not enabled")
@@ -80,6 +84,7 @@ var (
 	ErrMediaConvertFailed               error = WrapErrorInStatus(errors.New("failed to convert media")).WithMessage("failed to convert media").WithIsCertain(true).WithSendNotice(true)
 	ErrMembershipNotSupported           error = WrapErrorInStatus(errors.New("this bridge does not support changing group membership")).WithIsCertain(true).WithErrorAsMessage().WithSendNotice(false).WithErrorReason(event.MessageStatusUnsupported)
 	ErrDeleteChatNotSupported           error = WrapErrorInStatus(errors.New("this bridge does not support deleting chats")).WithIsCertain(true).WithErrorAsMessage().WithSendNotice(false).WithErrorReason(event.MessageStatusUnsupported)
+	ErrAcceptMessageRequestNotSupported error = WrapErrorInStatus(errors.New("this bridge does not support accepting message requests")).WithIsCertain(true).WithErrorAsMessage().WithSendNotice(false).WithErrorReason(event.MessageStatusUnsupported)
 	ErrBlockUserNotSupported            error = WrapErrorInStatus(errors.New("this bridge does not support blocking users")).WithIsCertain(true).WithErrorAsMessage().WithSendNotice(false).WithErrorReason(event.MessageStatusUnsupported)
 	ErrNonDMBlockUser                   error = WrapErrorInStatus(errors.New("blocking users can only be done in DMs")).WithIsCertain(true).WithErrorAsMessage().WithSendNotice(false).WithErrorReason(event.MessageStatusUnsupported)
 	ErrPowerLevelsNotSupported          error = WrapErrorInStatus(errors.New("this bridge does not support changing group power levels")).WithIsCertain(true).WithErrorAsMessage().WithSendNotice(false).WithErrorReason(event.MessageStatusUnsupported)

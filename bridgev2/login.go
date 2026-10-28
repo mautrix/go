@@ -189,7 +189,8 @@ type LoginClientHTTPParams struct {
 	Headers   http.Header `json:"headers,omitempty"`
 	Body      []byte      `json:"body,omitempty"`
 
-	Fingerprint string `json:"fingerprint,omitempty"`
+	Fingerprint         string `json:"fingerprint,omitempty"`
+	AcceptsGzipResponse bool   `json:"accepts_gzip_response,omitzero"`
 }
 
 func (lchp *LoginClientHTTPParams) MarshalZerologObject(e *zerolog.Event) {
@@ -198,8 +199,11 @@ func (lchp *LoginClientHTTPParams) MarshalZerologObject(e *zerolog.Event) {
 		Str("url", lchp.URL).
 		Int("header_count", len(lchp.Headers)).
 		Int("body_length", len(lchp.Body)).
-		Str("fingerprint", lchp.Fingerprint)
+		Str("fingerprint", lchp.Fingerprint).
+		Bool("accepts_gzip_response", lchp.AcceptsGzipResponse)
 }
+
+const ClientHTTPResponseGzipContentType = "application/vnd.mautrix.client-http-response+gzip"
 
 type LoginClientHTTPResponse struct {
 	StreamID    string      `json:"stream_id,omitempty"`

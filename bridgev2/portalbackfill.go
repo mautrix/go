@@ -91,6 +91,30 @@ func (portal *Portal) doForwardBackfill(ctx context.Context, source *UserLogin, 
 	err = portal.sendBackfill(ctx, source, resp.Messages, true, resp.MarkRead, false, resp.CompleteCallback)
 	if err != nil {
 		log.Err(err).Msg("Failed to send forward backfill")
+	} else if !resp.MarkRead && !resp.ReadUpTo.IsZero() && !resp.ReadUpTo.Before(resp.Messages[0].Timestamp) &&
+		!portal.isPastUnreadThreshold(resp.Messages) {
+		portal.markBackfillReadUpTo(ctx, source, resp.ReadUpTo)
+	}
+}
+
+func (portal *Portal) isPastUnreadThreshold(messages []*BackfillMessage) bool {
+	unreadThreshold := time.Duration(portal.Bridge.Config.Backfill.UnreadHoursThreshold) * time.Hour
+	return unreadThreshold > 0 && time.Since(messages[len(messages)-1].Timestamp) > unreadThreshold
+}
+
+func (portal *Portal) markBackfillReadUpTo(ctx context.Context, source *UserLogin, readUpTo time.Time) {
+	dp := source.User.DoublePuppet(ctx)
+	if dp == nil {
+		return
+	}
+	target, err := portal.Bridge.DB.Message.GetLastNonFakePartAtOrBeforeTime(ctx, portal.PortalKey, readUpTo)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Time("read_up_to", readUpTo).Msg("Failed to get read target after backfill")
+	} else if target != nil {
+		err = dp.MarkRead(ctx, portal.MXID, target.MXID, time.Now())
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to mark room as read after backfill")
+		}
 	}
 }
 
@@ -329,8 +353,7 @@ func (portal *Portal) sendBackfill(
 	done func(),
 ) error {
 	canBatchSend := portal.Bridge.Matrix.GetCapabilities().BatchSending
-	unreadThreshold := time.Duration(portal.Bridge.Config.Backfill.UnreadHoursThreshold) * time.Hour
-	forceMarkRead := unreadThreshold > 0 && time.Since(messages[len(messages)-1].Timestamp) > unreadThreshold
+	forceMarkRead := portal.isPastUnreadThreshold(messages)
 	zerolog.Ctx(ctx).Info().
 		Int("message_count", len(messages)).
 		Bool("batch_send", canBatchSend).

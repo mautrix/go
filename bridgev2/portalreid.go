@@ -86,6 +86,10 @@ func (br *Bridge) ReIDPortal(ctx context.Context, source, target networkid.Porta
 		log.Debug().Msg("Acquired source portal room creation lock after waiting")
 	}
 	defer sourcePortal.roomCreateLock.Unlock()
+	if sourcePortal.PortalKey != source || sourcePortal.backgroundCtx.Err() != nil {
+		log.Debug().Msg("Source portal was re-ID'd or deleted while waiting for lock, re-ID is no-op")
+		return ReIDResultNoOp, nil, nil
+	}
 	if sourcePortal.MXID == "" {
 		log.Info().Msg("Source portal doesn't have Matrix room, deleting row")
 		err = sourcePortal.unlockedDelete(ctx)
@@ -149,6 +153,7 @@ func (br *Bridge) ReIDPortal(ctx context.Context, source, target networkid.Porta
 		if err != nil {
 			return ReIDResultError, nil, fmt.Errorf("failed to delete source portal row: %w", err)
 		}
+		ctx = context.WithoutCancel(ctx)
 		go func() {
 			_, err := br.Bot.SendState(ctx, sourcePortal.MXID, event.StateTombstone, "", &event.Content{
 				Parsed: &event.TombstoneEventContent{

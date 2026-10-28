@@ -513,18 +513,81 @@ paths:
       operationId: viewLimitedMedia
       parameters:
       - $ref: '#/components/parameters/loginID'
-      - {name: eventID, in: path, required: true, schema: {type: string}}
+      - name: eventID
+        in: path
+        required: true
+        schema:
+          type: string
       requestBody:
         required: true
         content:
           application/json:
-              schema: {type: object, required: [com.beeper.view_limited], properties: {com.beeper.view_limited: {type: object}}}
+            schema:
+              type: object
+              required: [com.beeper.view_limited]
+              properties:
+                com.beeper.view_limited:
+                  type: object
       responses:
-        200: {description: View consumed.}
-        400: {description: Invalid view limit.}
-        401: {$ref: '#/components/responses/Unauthorized'}
-        404: {description: Message or login not found for this user.}
-        500: {$ref: '#/components/responses/InternalError'}
+        200:
+          description: View consumed.
+        400:
+          description: Invalid view limit.
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        404:
+          description: Message or login not found for this user.
+        500:
+          $ref: '#/components/responses/InternalError'
+  /v3/resolve_media/{eventID}:
+    post:
+      tags: [ misc ]
+      summary: Request a manual fetch of a media message that wasn't fetched during bridging.
+      operationId: resolveMedia
+      parameters:
+      - $ref: '#/components/parameters/loginID'
+      - name: eventID
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [com.beeper.unresolved_media]
+              properties:
+                com.beeper.unresolved_media:
+                  type: object
+      responses:
+        200:
+          description: Media resolved and edited in Matrix.
+        400:
+          description: Invalid unresolved media payload.
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        404:
+          description: Message or login not found for this user.
+        500:
+          $ref: '#/components/responses/InternalError'
+  /v3/direct_media_keys/{mediaID}:
+    post:
+      tags: [ misc ]
+      summary: Delete the encryption keys for a given encrypted direct media MXC
+      operationId: deleteDirectMediaKeys
+      parameters:
+      - name: mediaID
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        204:
+          description: Media keys deleted
+        500:
+          $ref: '#/components/responses/InternalError'
 components:
   parameters:
     sncIdentifier:
@@ -1067,6 +1130,15 @@ components:
           type: string
           format: byte
           description: The request body encoded as base64.
+        fingerprint:
+          type: string
+          description: An arbitrary identifier for the TLS fingerprint that the client should use.
+        accepts_gzip_response:
+          type: boolean
+          description: |
+            If true, the client can send the response to the bridge such that the body is gzipped
+            and appended as raw bytes after the metadata JSON object. The content type for such
+            requests is `application/vnd.mautrix.client-http-response+gzip`.
     LoginClientHTTPResponse:
       type: object
       description: The result of an HTTP request executed by the client.

@@ -148,6 +148,7 @@ func (prov *ProvisioningAPI) Init() {
 	prov.Router.HandleFunc("POST /v3/image_pack/import", prov.ImportImagePack)
 	prov.Router.HandleFunc("GET /v3/image_pack/list", prov.ListImagePacks)
 	prov.Router.HandleFunc("POST /v3/resolve_media/{eventID}", prov.PostResolveMedia)
+	prov.Router.HandleFunc("DELETE /v3/direct_media_keys/{mediaID}", prov.DeleteDirectMediaKeys)
 
 	if prov.br.Config.Provisioning.EnableSessionTransfers {
 		prov.log.Debug().Msg("Enabling session transfer API")
@@ -476,6 +477,8 @@ type WritableError interface {
 func RespondWithError(w http.ResponseWriter, err error, message string) {
 	if we, ok := errors.AsType[WritableError](err); ok {
 		we.Write(w)
+	} else if errors.Is(err, bridgev2.ErrNotLoggedIn) {
+		mautrix.MForbidden.WithMessage("Login is not logged in").Write(w)
 	} else {
 		mautrix.MUnknown.WithMessage(message).WithInternalError(err).Write(w)
 	}
@@ -708,6 +711,17 @@ func (prov *ProvisioningAPI) PostResolveMedia(w http.ResponseWriter, r *http.Req
 		return
 	}
 	exhttp.WriteJSONResponse(w, http.StatusOK, resp)
+}
+
+func (prov *ProvisioningAPI) DeleteDirectMediaKeys(w http.ResponseWriter, r *http.Request) {
+	mediaIDStr := r.PathValue("mediaID")
+	mediaIDStr = strings.TrimPrefix(mediaIDStr, prov.br.Config.DirectMedia.MediaIDPrefix)
+	err := prov.br.Bridge.DB.EncryptedDirectMedia.MarkHandled(r.Context(), mediaIDStr)
+	if err != nil {
+		mautrix.MUnknown.WithMessage("Failed to mark media as handled").WithInternalError(err).Write(w)
+	} else {
+		w.WriteHeader(http.StatusNoContent)
+	}
 }
 
 type ReqExportCredentials struct {

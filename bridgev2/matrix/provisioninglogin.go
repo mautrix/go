@@ -73,11 +73,12 @@ type ProvLogin struct {
 	step     *stepManager
 	Override *bridgev2.UserLogin
 
-	HTTPLock         sync.Mutex
-	fingerprint      string
-	streamsLock      sync.Mutex
-	streams          map[string]*loginClientStream
-	websocketEnabled bool
+	HTTPLock            sync.Mutex
+	fingerprint         string
+	streamsLock         sync.Mutex
+	streams             map[string]*loginClientStream
+	websocketEnabled    bool
+	acceptsGzipResponse bool
 
 	Ctx       context.Context
 	CancelCtx context.CancelFunc
@@ -118,6 +119,9 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 		Override:  overrideLogin,
 		Ctx:       ctx,
 		CancelCtx: cancel,
+
+		// The HTTP over websocket proxy only allows JSON bodies, so the custom gzip format can't be used.
+		acceptsGzipResponse: !prov.br.Websocket,
 		step: &stepManager{
 			started: true,
 			wait:    ch,

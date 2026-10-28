@@ -23,6 +23,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exsync"
+	"go.mau.fi/util/ptr"
 	"go.mau.fi/util/random"
 	"go.mau.fi/util/retryafter"
 	"golang.org/x/exp/maps"
@@ -2418,9 +2419,37 @@ func (cli *Client) JoinedRooms(ctx context.Context) (resp *RespJoinedRooms, err 
 }
 
 func (cli *Client) PublicRooms(ctx context.Context, req *ReqPublicRooms) (resp *RespPublicRooms, err error) {
-	urlPath := cli.BuildURLWithQuery(ClientURLPath{"v3", "publicRooms"}, req.Query())
-	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	if req.Filter != nil {
+		query := map[string]string{}
+		if req.Server != "" {
+			req = ptr.Clone(req)
+			query["server"] = req.Server
+			req.Server = ""
+		}
+		urlPath := cli.BuildURLWithQuery(ClientURLPath{"v3", "publicRooms"}, query)
+		_, err = cli.MakeRequest(ctx, http.MethodPost, urlPath, req, &resp)
+	} else {
+		urlPath := cli.BuildURLWithQuery(ClientURLPath{"v3", "publicRooms"}, req.Query())
+		_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	}
 	return
+}
+
+type roomVisibilityPayload struct {
+	Visibility RoomDirectoryVisibility `json:"visibility"`
+}
+
+func (cli *Client) PublishRoomToDirectory(ctx context.Context, roomID id.RoomID, visibility RoomDirectoryVisibility) error {
+	urlPath := cli.BuildClientURL("v3", "directory", "list", "room", roomID)
+	_, err := cli.MakeRequest(ctx, http.MethodPut, urlPath, roomVisibilityPayload{visibility}, nil)
+	return err
+}
+
+func (cli *Client) GetRoomDirectoryVisibility(ctx context.Context, roomID id.RoomID) (RoomDirectoryVisibility, error) {
+	urlPath := cli.BuildClientURL("v3", "directory", "list", "room", roomID)
+	var resp roomVisibilityPayload
+	_, err := cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	return resp.Visibility, err
 }
 
 // Hierarchy returns a list of rooms that are in the room's hierarchy. See https://spec.matrix.org/v1.4/client-server-api/#get_matrixclientv1roomsroomidhierarchy
