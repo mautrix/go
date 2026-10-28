@@ -267,13 +267,13 @@ func (p *ProvLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 	if resp.Error != "" {
 		return nil, errors.New(ErrorFromClientPrefix + resp.Error)
 	}
-	var responseBody io.ReadCloser = io.NopCloser(bytes.NewReader(resp.Body))
+	responseBody := io.NopCloser(bytes.NewReader(resp.Body))
 	contentLength := int64(len(resp.Body))
 	if resp.StatusCode == http.StatusSwitchingProtocols {
 		if stream == nil || resp.StreamID != streamID || len(resp.Body) != 0 {
 			return nil, fmt.Errorf("invalid client WebSocket upgrade response")
 		}
-		if _, err := stream.waitConn(req.Context()); err != nil {
+		if _, err = stream.waitConn(req.Context()); err != nil {
 			if req.Context().Err() != nil {
 				p.CancelCtx()
 			}
