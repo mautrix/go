@@ -2006,7 +2006,7 @@ func (portal *Portal) handleMatrixAcceptMessageRequest(
 	}
 	api, ok := sender.Client.(MessageRequestAcceptingNetworkAPI)
 	if !ok {
-		return EventHandlingResultIgnored.WithMSSError(ErrDeleteChatNotSupported)
+		return EventHandlingResultIgnored.WithMSSError(ErrAcceptMessageRequestNotSupported)
 	}
 	err := api.HandleMatrixAcceptMessageRequest(ctx, &MatrixAcceptMessageRequest{
 		Event:   evt,
