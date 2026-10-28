@@ -43,6 +43,7 @@ type BridgeStateQueue struct {
 	destroyed     bool
 
 	unknownErrorReconnects int
+	skipNextDedup          atomic.Bool
 }
 
 func (br *Bridge) SendGlobalBridgeState(ctx context.Context, state status.BridgeState) {
@@ -262,6 +263,7 @@ func (bsq *BridgeStateQueue) unknownErrorReconnect(triggeredBy status.BridgeStat
 		log.Err(err).Msg("Failed to recreate client after unknown error")
 		return
 	}
+	bsq.skipNextDedup.Store(true)
 	bsq.login.Client.Connect(ctx)
 	log.Debug().Msg("Reconnection finished")
 }
@@ -305,7 +307,7 @@ func (bsq *BridgeStateQueue) waitForReconnect(
 }
 
 func (bsq *BridgeStateQueue) immediateSendBridgeState(state status.BridgeState) {
-	if bsq.prevSent != nil && bsq.prevSent.ShouldDeduplicate(&state) {
+	if !bsq.skipNextDedup.Swap(false) && bsq.prevSent != nil && bsq.prevSent.ShouldDeduplicate(&state) {
 		bsq.login.Log.Debug().
 			Str("state_event", string(state.StateEvent)).
 			Msg("Not sending bridge state as it's a duplicate")
