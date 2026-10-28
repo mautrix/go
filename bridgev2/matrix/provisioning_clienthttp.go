@@ -17,13 +17,11 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 
 	"github.com/rs/xid"
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exerrors"
 	"go.mau.fi/util/exhttp"
-	"golang.org/x/net/http/httpguts"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
@@ -164,8 +162,8 @@ func (p *ProvLogin) SetFingerprint(fingerprint string) {
 
 func (p *ProvLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 	log := zerolog.Ctx(req.Context()).With().Str("login_id", p.ID).Logger()
-	upgrade := strings.EqualFold(req.Header.Get("Upgrade"), "websocket") &&
-		httpguts.HeaderValuesContainsToken(req.Header.Values("Connection"), "upgrade")
+	upgrade := req.Header.Get("Upgrade") == "websocket" &&
+		req.Header.Get("Connection") == "Upgrade"
 	if upgrade && (!p.websocketEnabled || req.Method != http.MethodGet || req.URL.Scheme != "https") {
 		return nil, fmt.Errorf("client WebSocket upgrade is not supported")
 	}
