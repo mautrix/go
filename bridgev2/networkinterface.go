@@ -708,7 +708,7 @@ type PollResults struct {
 type PollAnswerResult struct {
 	ID               string             `json:"id"`
 	Voters           int                `json:"voters"`
-	Chosen           bool               `json:"chosen,omitempty"`
+	Chosen           bool               `json:"chosen,omitzero"`
 	RecentVoters     []networkid.UserID `json:"-"`
 	RecentVoterMXIDs []id.UserID        `json:"recent_voters,omitempty"`
 }

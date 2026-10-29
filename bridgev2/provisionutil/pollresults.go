@@ -8,10 +8,12 @@ package provisionutil
 
 import (
 	"context"
-	"time"
+
+	"go.mau.fi/util/exslices"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
+	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -35,8 +37,6 @@ func FetchPollResults(ctx context.Context, login *bridgev2.UserLogin, mxid id.Ev
 	} else if portal == nil || portal.MXID == "" {
 		return nil, bridgev2.RespError(mautrix.MNotFound.WithMessage("Room not found"))
 	}
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
-	defer cancel()
 	results, err := api.FetchPollResults(ctx, portal, msg)
 	if err != nil {
 		return nil, err
@@ -44,14 +44,12 @@ func FetchPollResults(ctx context.Context, login *bridgev2.UserLogin, mxid id.Ev
 		return nil, bridgev2.RespError(mautrix.MNotFound.WithMessage("Poll not found"))
 	}
 	for _, answer := range results.Answers {
-		answer.RecentVoterMXIDs = make([]id.UserID, len(answer.RecentVoters))
-		for i, voter := range answer.RecentVoters {
+		answer.RecentVoterMXIDs = exslices.CastFunc(answer.RecentVoters, func(voter networkid.UserID) id.UserID {
 			if login.Client.IsThisUser(ctx, voter) {
-				answer.RecentVoterMXIDs[i] = login.UserMXID
-			} else {
-				answer.RecentVoterMXIDs[i] = login.Bridge.Matrix.GhostIntent(voter).GetMXID()
+				return login.UserMXID
 			}
-		}
+			return login.Bridge.Matrix.FormatGhostMXID(voter)
+		})
 	}
 	return results, nil
 }
