@@ -511,7 +511,7 @@ func (prov *ProvisioningAPI) GetPollResults(w http.ResponseWriter, r *http.Reque
 	if login == nil {
 		return
 	}
-	resp, err := prov.br.Bridge.FetchPollResults(r.Context(), login, id.EventID(r.PathValue("eventID")))
+	resp, err := provisionutil.FetchPollResults(r.Context(), login, id.EventID(r.PathValue("eventID")))
 	if err != nil {
 		RespondWithError(w, err, "Failed to fetch poll results")
 		return
