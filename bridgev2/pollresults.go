@@ -66,6 +66,8 @@ func (br *Bridge) FetchPollResults(ctx context.Context, login *UserLogin, mxid i
 	results, err := handler.FetchPollResults(ctx, portal, msg)
 	if err != nil {
 		return nil, err
+	} else if results == nil {
+		return nil, mautrix.MNotFound.WithMessage("Poll not found")
 	}
 	resp := &RespPollResults{
 		Closed:      results.Closed,
