@@ -38,7 +38,8 @@ var (
 )
 
 const (
-	VersionAES256CTR  = "v2"
+	VersionAES256CTR = "v2"
+	// VersionBeeperFLOE is described at https://github.com/matrix-org/matrix-spec-proposals/pull/4571
 	VersionBeeperFLOE = "com.beeper.floe.v1"
 )
 
