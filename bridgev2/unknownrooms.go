@@ -15,28 +15,51 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-func (br *Bridge) CleanupUnknownRooms(ctx context.Context) {
+func (br *Bridge) startUnknownRoomCleanup(ctx context.Context) {
+	if br.Background || !br.Config.CleanupUnknownRooms || br.DB.KV.Get(ctx, database.KeyUnknownRoomsCleanedUp) == "true" {
+		return
+	}
 	log := zerolog.Ctx(ctx).With().Str("action", "cleanup unknown rooms").Logger()
 	ctx = log.WithContext(ctx)
+	rooms, err := br.findUnknownRooms(ctx)
+	if err != nil {
+		log.Err(err).Msg("Failed to find unknown rooms")
+		return
+	}
+	log.Info().Int("room_count", len(rooms)).Msg("Found unknown rooms to delete")
+	go br.deleteUnknownRooms(log.WithContext(br.BackgroundCtx), rooms)
+}
+
+func (br *Bridge) findUnknownRooms(ctx context.Context) ([]id.RoomID, error) {
 	lister, ok := br.Bot.(MatrixAPIWithRoomListing)
 	if !ok {
-		log.Warn().Msg("Bridge bot doesn't support listing rooms, skipping cleanup")
-		return
+		zerolog.Ctx(ctx).Warn().Msg("Bridge bot doesn't support listing rooms, skipping cleanup")
+		return nil, nil
 	}
 	rooms, err := lister.GetJoinedRooms(ctx)
 	if err != nil {
-		log.Err(err).Msg("Failed to get joined rooms of bridge bot")
-		return
+		return nil, err
 	}
 	knownRooms, err := br.getKnownRooms(ctx)
 	if err != nil {
-		log.Err(err).Msg("Failed to get known rooms")
-		return
+		return nil, err
 	}
+	unknownRooms := make([]id.RoomID, 0)
+	for _, roomID := range rooms {
+		if _, known := knownRooms[roomID]; !known {
+			unknownRooms = append(unknownRooms, roomID)
+		}
+	}
+	return unknownRooms, nil
+}
+
+func (br *Bridge) deleteUnknownRooms(ctx context.Context, rooms []id.RoomID) {
+	log := zerolog.Ctx(ctx)
 	var deletedCount, failedCount int
 	for _, roomID := range rooms {
-		if _, known := knownRooms[roomID]; known {
-			continue
+		if ctx.Err() != nil {
+			log.Warn().Msg("Bridge is stopping, cleanup will continue on next start")
+			return
 		}
 		portal, err := br.DB.Portal.GetByMXID(ctx, roomID)
 		if err != nil {
