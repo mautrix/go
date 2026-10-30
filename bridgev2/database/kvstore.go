@@ -21,6 +21,7 @@ type Key string
 
 const (
 	KeySplitPortalsEnabled     Key = "split_portals_enabled"
+	KeyUnknownRoomsCleanedUp   Key = "unknown_rooms_cleaned_up"
 	KeyBridgeInfoVersion       Key = "bridge_info_version"
 	KeyEncryptionStateResynced Key = "encryption_state_resynced"
 	KeyRecoveryKey             Key = "recovery_key"

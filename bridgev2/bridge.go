@@ -216,6 +216,7 @@ func (br *Bridge) StartConnectors(ctx context.Context) error {
 	if br.Network.GetCapabilities().DisappearingMessages && !br.Background {
 		go br.DisappearLoop.Start()
 	}
+	br.startUnknownRoomCleanup(ctx)
 	return nil
 }
 

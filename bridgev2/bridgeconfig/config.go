@@ -71,6 +71,7 @@ type BridgeConfig struct {
 	AsyncEvents                   bool               `yaml:"async_events"`
 	SplitPortals                  bool               `yaml:"split_portals"`
 	ResendBridgeInfo              bool               `yaml:"resend_bridge_info"`
+	CleanupUnknownRooms           bool               `yaml:"cleanup_unknown_rooms"`
 	NoBridgeInfoStateKey          bool               `yaml:"no_bridge_info_state_key"`
 	BridgeStatusNotices           string             `yaml:"bridge_status_notices"`
 	TransientStateDebounce        time.Duration      `yaml:"transient_state_debounce"`
