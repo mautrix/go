@@ -233,13 +233,17 @@ func (c *Client) TimestampToEvent(ctx context.Context, serverName string, roomID
 	return
 }
 
-func (c *Client) QueryProfile(ctx context.Context, serverName string, userID id.UserID) (resp *mautrix.RespUserProfile, err error) {
-	err = c.Query(ctx, serverName, "profile", url.Values{"user_id": {userID.String()}}, &resp)
+func (c *Client) QueryProfile(ctx context.Context, userID id.UserID) (resp *mautrix.RespUserProfile, err error) {
+	err = c.Query(ctx, userID.Homeserver(), "profile", url.Values{"user_id": {userID.String()}}, &resp)
 	return
 }
 
-func (c *Client) QueryDirectory(ctx context.Context, serverName string, roomAlias id.RoomAlias) (resp *mautrix.RespAliasResolve, err error) {
-	err = c.Query(ctx, serverName, "directory", url.Values{"room_alias": {roomAlias.String()}}, &resp)
+func (c *Client) QueryDirectory(ctx context.Context, roomAlias id.RoomAlias) (resp *mautrix.RespAliasResolve, err error) {
+	_, _, homeserver := id.ParseCommonIdentifier(roomAlias)
+	if homeserver == "" {
+		return nil, errors.New("room alias is missing a homeserver part")
+	}
+	err = c.Query(ctx, homeserver, "directory", url.Values{"room_alias": {roomAlias.String()}}, &resp)
 	return
 }
 
