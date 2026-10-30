@@ -19,9 +19,8 @@ bridge:
     split_portals: false
     # Should the bridge resend `m.bridge` events to all portals on startup?
     resend_bridge_info: false
-    # Should the bridge delete rooms that have its bridge info but no portal in the database?
-    # This only runs once, on the first startup after it's enabled, and only checks rooms the
-    # users are joined to through double puppeting.
+    # Should the bridge delete rooms the bridge bot is in that aren't portals, management rooms or spaces?
+    # This only runs once, on the first startup after it's enabled.
     cleanup_unknown_rooms: false
     # Should `m.bridge` events be sent without a state key?
     # By default, the bridge uses a unique key that won't conflict with other bridges.

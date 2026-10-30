@@ -13,7 +13,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -848,9 +847,4 @@ func (as *ASIntent) GetJoinedRooms(ctx context.Context) ([]id.RoomID, error) {
 		return nil, err
 	}
 	return resp.JoinedRooms, nil
-}
-
-func (as *ASIntent) GetRoomState(ctx context.Context, roomID id.RoomID) (evts []*event.Event, err error) {
-	_, err = as.Matrix().MakeRequest(ctx, http.MethodGet, as.Matrix().BuildClientURL("v3", "rooms", roomID, "state"), nil, &evts)
-	return
 }

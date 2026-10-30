@@ -261,5 +261,4 @@ type MatrixAPIWithArbitraryRoomState interface {
 type MatrixAPIWithRoomListing interface {
 	MatrixAPI
 	GetJoinedRooms(ctx context.Context) ([]id.RoomID, error)
-	GetRoomState(ctx context.Context, roomID id.RoomID) ([]*event.Event, error)
 }
