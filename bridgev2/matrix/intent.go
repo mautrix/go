@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/fallocate"
+	"go.mau.fi/util/progress"
 	"golang.org/x/exp/slices"
 
 	"maunium.net/go/mautrix"
@@ -227,6 +229,39 @@ func makeMediaSizeError(size, limit int64) error {
 	return fmt.Errorf("%w (%.2f MB > %.2f MB)", bridgev2.ErrMediaTooLarge, float64(size)/1000/1000, float64(limit)/1000/1000)
 }
 
+var errMediaDownloadStalled = errors.New("media download stalled")
+
+func (as *ASIntent) download(ctx context.Context, cancel context.CancelCauseFunc, uri id.ContentURI) (*http.Response, error) {
+	cli := as.Matrix().Client
+	if cli.Client == nil || cli.Client.Timeout <= 0 {
+		return cli.Download(ctx, uri)
+	}
+	stallTimeout := cli.Client.Timeout
+	httpClient := *cli.Client
+	httpClient.Timeout = 0
+	timer := time.AfterFunc(stallTimeout, func() {
+		cancel(errMediaDownloadStalled)
+	})
+	context.AfterFunc(ctx, func() {
+		timer.Stop()
+	})
+	resp, err := cli.DownloadWithParams(ctx, uri, mautrix.DownloadExtra{Client: &httpClient})
+	if err != nil {
+		return nil, downloadError(ctx, err)
+	}
+	resp.Body = progress.NewReader(resp.Body, func(int) {
+		timer.Reset(stallTimeout)
+	}).WithUpdateInterval(0)
+	return resp, nil
+}
+
+func downloadError(ctx context.Context, err error) error {
+	if cause := context.Cause(ctx); errors.Is(cause, errMediaDownloadStalled) && !errors.Is(err, cause) {
+		return fmt.Errorf("%w: %w", cause, err)
+	}
+	return err
+}
+
 func (as *ASIntent) DownloadMedia(ctx context.Context, uri id.ContentURIString, file *event.EncryptedFileInfo) ([]byte, error) {
 	if file != nil {
 		uri = file.URL
@@ -235,7 +270,9 @@ func (as *ASIntent) DownloadMedia(ctx context.Context, uri id.ContentURIString, 
 	if err != nil {
 		return nil, err
 	}
-	resp, err := as.Matrix().Download(ctx, parsedURI)
+	ctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	resp, err := as.download(ctx, cancel, parsedURI)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +284,7 @@ func (as *ASIntent) DownloadMedia(ctx context.Context, uri id.ContentURIString, 
 	data, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 	_ = resp.Body.Close()
 	if err != nil {
-		return nil, err
+		return nil, downloadError(ctx, err)
 	} else if int64(len(data)) > limit {
 		return nil, fmt.Errorf("in-memory %w", makeMediaSizeError(-1, limit))
 	}
@@ -280,7 +317,9 @@ func (as *ASIntent) DownloadMediaToFile(ctx context.Context, uri id.ContentURISt
 		_ = tempFile.Close()
 		_ = os.Remove(tempFile.Name())
 	}()
-	resp, err := as.Matrix().Download(ctx, parsedURI)
+	ctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	resp, err := as.download(ctx, cancel, parsedURI)
 	if err != nil {
 		return fmt.Errorf("failed to send download request: %w", err)
 	}
@@ -301,7 +340,7 @@ func (as *ASIntent) DownloadMediaToFile(ctx context.Context, uri id.ContentURISt
 	var n int64
 	n, err = io.Copy(tempFile, io.LimitReader(reader, as.Connector.MaxDownloadSize+1))
 	if err != nil {
-		return fmt.Errorf("failed to read response: %w", err)
+		return fmt.Errorf("failed to read response: %w", downloadError(ctx, err))
 	} else if n > as.Connector.MaxDownloadSize {
 		return makeMediaSizeError(-1, as.Connector.MaxDownloadSize)
 	}
