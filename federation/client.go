@@ -240,9 +240,6 @@ func (c *Client) QueryProfile(ctx context.Context, userID id.UserID) (resp *maut
 
 func (c *Client) QueryDirectory(ctx context.Context, roomAlias id.RoomAlias) (resp *mautrix.RespAliasResolve, err error) {
 	_, _, homeserver := id.ParseCommonIdentifier(roomAlias)
-	if homeserver == "" {
-		return nil, errors.New("room alias is missing a homeserver part")
-	}
 	err = c.Query(ctx, homeserver, "directory", url.Values{"room_alias": {roomAlias.String()}}, &resp)
 	return
 }
