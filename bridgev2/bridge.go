@@ -236,6 +236,9 @@ func (br *Bridge) PostStart(ctx context.Context) {
 		br.ResendBridgeInfo(ctx, doResendBridgeInfo, doResendCapabilities)
 	}
 	br.DB.KV.Set(ctx, database.KeyBridgeInfoVersion, fmt.Sprintf("%d,%d", expectedBridgeInfoVer, expectedCapVer))
+	if br.Config.CleanupUnknownRooms && br.DB.KV.Get(ctx, database.KeyUnknownRoomsCleanedUp) != "true" {
+		br.CleanupUnknownRooms(ctx)
+	}
 }
 
 func (br *Bridge) GetBeeperStreamPublisher() BeeperStreamPublisher {
