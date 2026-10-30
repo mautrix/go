@@ -144,6 +144,7 @@ func (prov *ProvisioningAPI) Init() {
 	prov.Router.HandleFunc("POST /v3/create_group/{type}", prov.PostCreateGroup)
 	prov.Router.HandleFunc("POST /v3/backfill/{roomID}", prov.PostPaginate)
 	prov.Router.HandleFunc("POST /v3/view_limited_media/{eventID}", prov.PostViewLimitedMedia)
+	prov.Router.HandleFunc("GET /v3/poll_results/{eventID}", prov.GetPollResults)
 	prov.Router.HandleFunc("GET /v3/image_pack/import", prov.ImportImagePack)
 	prov.Router.HandleFunc("POST /v3/image_pack/import", prov.ImportImagePack)
 	prov.Router.HandleFunc("GET /v3/image_pack/list", prov.ListImagePacks)
@@ -503,6 +504,19 @@ func (prov *ProvisioningAPI) PostViewLimitedMedia(w http.ResponseWriter, r *http
 		return
 	}
 	exhttp.WriteEmptyJSONResponse(w, http.StatusOK)
+}
+
+func (prov *ProvisioningAPI) GetPollResults(w http.ResponseWriter, r *http.Request) {
+	login := prov.GetLoginForRequest(w, r)
+	if login == nil {
+		return
+	}
+	resp, err := provisionutil.FetchPollResults(r.Context(), login, id.EventID(r.PathValue("eventID")))
+	if err != nil {
+		RespondWithError(w, err, "Failed to fetch poll results")
+		return
+	}
+	exhttp.WriteJSONResponse(w, http.StatusOK, resp)
 }
 
 func (prov *ProvisioningAPI) doResolveIdentifier(w http.ResponseWriter, r *http.Request, createChat bool) {

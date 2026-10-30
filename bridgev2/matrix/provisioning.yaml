@@ -539,6 +539,54 @@ paths:
           description: Message or login not found for this user.
         500:
           $ref: '#/components/responses/InternalError'
+  /v3/poll_results/{eventID}:
+    get:
+      tags: [ misc ]
+      summary: Get the current results of a poll from the remote network.
+      description: Only available when the room features have poll_results_api set. Answer IDs match the ones in the poll start event, and recent_voters is only included when the network shows who voted.
+      operationId: getPollResults
+      parameters:
+      - $ref: '#/components/parameters/loginID'
+      - name: eventID
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        200:
+          description: Current poll results.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [closed, total_voters, answers]
+                properties:
+                  closed:
+                    type: boolean
+                  total_voters:
+                    type: integer
+                  answers:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, voters]
+                      properties:
+                        id:
+                          type: string
+                        voters:
+                          type: integer
+                        chosen:
+                          type: boolean
+                        recent_voters:
+                          type: array
+                          items:
+                            type: string
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        404:
+          description: Message or login not found for this user.
+        500:
+          $ref: '#/components/responses/InternalError'
   /v3/resolve_media/{eventID}:
     post:
       tags: [ misc ]

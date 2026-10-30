@@ -691,6 +691,28 @@ type ViewLimitedMediaHandlingNetworkAPI interface {
 	HandleMatrixViewLimitedMedia(context.Context, *MatrixViewLimitedMedia) error
 }
 
+// PollResultsFetchingNetworkAPI is an optional interface that network connectors can implement
+// to let clients fetch the current results of a poll from the remote network.
+// This is meant for networks where individual votes can't be bridged as poll response events.
+type PollResultsFetchingNetworkAPI interface {
+	NetworkAPI
+	FetchPollResults(ctx context.Context, portal *Portal, msg *database.Message) (*PollResults, error)
+}
+
+type PollResults struct {
+	Closed      bool                `json:"closed"`
+	TotalVoters int                 `json:"total_voters"`
+	Answers     []*PollAnswerResult `json:"answers"`
+}
+
+type PollAnswerResult struct {
+	ID               string             `json:"id"`
+	Voters           int                `json:"voters"`
+	Chosen           bool               `json:"chosen,omitzero"`
+	RecentVoters     []networkid.UserID `json:"-"`
+	RecentVoterMXIDs []id.UserID        `json:"recent_voters,omitempty"`
+}
+
 // ChatViewingNetworkAPI is an optional interface that network connectors can implement to handle viewing chat status.
 type ChatViewingNetworkAPI interface {
 	NetworkAPI
