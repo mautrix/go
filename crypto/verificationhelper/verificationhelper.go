@@ -658,6 +658,7 @@ func (vh *VerificationHelper) onVerificationRequest(ctx context.Context, evt *ev
 		if txn.TransactionID == verificationRequest.TransactionID && txn.VerificationState == VerificationStateRequested {
 			vh.activeTransactionsLock.Unlock()
 			log.Info().Msg("Received pending verification request again")
+			vh.expireTransactionAt(txn.TransactionID, txn.ExpirationTime.Time)
 			vh.verificationRequested(ctx, txn.TransactionID, txn.TheirUserID, txn.TheirDeviceID)
 			return
 		} else if txn.TransactionID == verificationRequest.TransactionID {
