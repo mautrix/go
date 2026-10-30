@@ -602,6 +602,9 @@ var ErrNotConfiguredForAuth = errors.New("client not configured for authenticati
 var ErrServerNameFiltered = errors.New("refusing to make a request")
 
 func (c *Client) compileRequest(ctx context.Context, params RequestParams) (*http.Request, error) {
+	if !id.ValidateServerName(params.ServerName) {
+		return nil, ErrInvalidServerName
+	}
 	if c.AllowServer != nil && !c.AllowServer(params.ServerName) {
 		return nil, fmt.Errorf("%w to %s", ErrServerNameFiltered, params.ServerName)
 	}
