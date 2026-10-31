@@ -1016,6 +1016,11 @@ type MatrixMembershipResult struct {
 	RedirectTo networkid.UserID
 }
 
+type UserProfileHandlingNetworkAPI interface {
+	NetworkAPI
+	HandleMatrixUserProfile(ctx context.Context, name *string, avatar *id.ContentURIString) error
+}
+
 type MembershipHandlingNetworkAPI interface {
 	NetworkAPI
 	HandleMatrixMembership(ctx context.Context, msg *MatrixMembershipChange) (*MatrixMembershipResult, error)

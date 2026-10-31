@@ -80,6 +80,11 @@ type MatrixConnectorWithEncryptedDirectMedia interface {
 	GenerateContentURIWithCrypto(ctx context.Context, roomID id.RoomID, mediaID networkid.MediaID) (id.ContentURIString, *event.EncryptedFileInfo, error)
 }
 
+type MatrixConnectorWithProfile interface {
+	MatrixConnector
+	GetProfile(ctx context.Context, userID id.UserID) (*mautrix.RespUserProfile, error)
+}
+
 type MatrixConnectorWithArbitraryRoomState interface {
 	MatrixConnector
 	GetStateEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string) (*event.Event, error)
