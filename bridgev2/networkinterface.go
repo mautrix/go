@@ -905,6 +905,7 @@ type ProvisioningCapabilities struct {
 	ResolveIdentifier ResolveIdentifierCapabilities    `json:"resolve_identifier"`
 	GroupCreation     map[string]GroupTypeCapabilities `json:"group_creation"`
 	ImagePackImport   bool                             `json:"image_pack_import,omitzero"`
+	ProfileUpdate     bool                             `json:"profile_update,omitzero"`
 }
 
 type ResolveIdentifierCapabilities struct {
@@ -1014,6 +1015,16 @@ type MatrixMembershipChange struct {
 
 type MatrixMembershipResult struct {
 	RedirectTo networkid.UserID
+}
+
+type ProfileUpdateParams struct {
+	Name   *string              `json:"name,omitempty"`
+	Avatar *id.ContentURIString `json:"avatar,omitempty"`
+}
+
+type ProfileUpdatingNetworkAPI interface {
+	NetworkAPI
+	UpdateProfile(ctx context.Context, params *ProfileUpdateParams) error
 }
 
 type MembershipHandlingNetworkAPI interface {

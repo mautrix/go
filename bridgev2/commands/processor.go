@@ -50,7 +50,7 @@ func NewProcessor(bridge *bridgev2.Bridge) bridgev2.CommandProcessor {
 		CommandID, CommandUnbridge, CommandBridge, CommandSyncChat, CommandMute,
 		CommandDeleteChat, CommandBlockUser, CommandFilter,
 		CommandSudo, CommandDoIn,
-		CommandImportImagePack,
+		CommandImportImagePack, CommandSetProfile,
 	)
 	return proc
 }
