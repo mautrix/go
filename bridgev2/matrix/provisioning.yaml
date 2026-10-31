@@ -505,6 +505,48 @@ paths:
           $ref: '#/components/responses/LoginNotFound'
         501:
           $ref: '#/components/responses/NotSupported'
+  /v3/profile:
+    post:
+      tags: [ auth ]
+      summary: Update the profile of a selected remote account.
+      description: Only available when provisioning.profile_update is true. Omitted fields are unchanged. Empty values request removal if the network supports it. The Matrix profile is not modified.
+      operationId: updateProfile
+      parameters:
+      - name: login_id
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/UserLoginID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              anyOf:
+              - required: [name]
+              - required: [avatar]
+              properties:
+                name:
+                  type: string
+                avatar:
+                  type: string
+                  description: MXC URI of the uploaded image, or an empty string to remove it.
+      responses:
+        200:
+          description: Profile updated.
+        400:
+          description: Missing login ID or invalid profile fields.
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        403:
+          description: Login is not logged in.
+        404:
+          $ref: '#/components/responses/LoginNotFound'
+        500:
+          $ref: '#/components/responses/InternalError'
+        501:
+          $ref: '#/components/responses/NotSupported'
   /v3/view_limited_media/{eventID}:
     post:
       tags: [ misc ]

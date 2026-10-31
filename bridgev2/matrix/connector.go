@@ -706,10 +706,6 @@ func (br *Connector) GetMembers(ctx context.Context, roomID id.RoomID) (map[id.U
 	return output, nil
 }
 
-func (br *Connector) GetProfile(ctx context.Context, userID id.UserID) (*mautrix.RespUserProfile, error) {
-	return br.Bot.GetProfile(ctx, userID)
-}
-
 func (br *Connector) GetMemberInfo(ctx context.Context, roomID id.RoomID, userID id.UserID) (*event.MemberEventContent, error) {
 	// TODO fetch from network sometimes?
 	return br.AS.StateStore.GetMember(ctx, roomID, userID)
