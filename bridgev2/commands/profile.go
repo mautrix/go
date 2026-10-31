@@ -14,16 +14,16 @@ var CommandSetProfile = &FullHandler{
 	Name: "set-profile",
 	Help: HelpMeta{
 		Section:     HelpSectionAuth,
-		Description: "Update a remote account's name or avatar",
-		Args:        "<_login ID_> <name|avatar> <_value_>",
+		Description: "Update a remote account's name or avatar (omit the value to request removal)",
+		Args:        "<_login ID_> <name|avatar> [_value_]",
 	},
 	RequiresLogin: true,
 	NetworkAPI:    NetworkAPIImplements[bridgev2.ProfileUpdatingNetworkAPI],
 }
 
 func fnSetProfile(ce *Event) {
-	if len(ce.Args) < 3 {
-		ce.Reply("Usage: `$cmdprefix set-profile <login ID> <name|avatar> <value>`\n\nYour logins:\n\n%s", ce.User.GetFormattedUserLogins())
+	if len(ce.Args) < 2 {
+		ce.Reply("Usage: `$cmdprefix set-profile <login ID> <name|avatar> [value]`\n\nYour logins:\n\n%s", ce.User.GetFormattedUserLogins())
 		return
 	}
 	login := ce.Bridge.GetCachedUserLoginByID(networkid.UserLoginID(ce.Args[0]))
@@ -37,11 +37,14 @@ func fnSetProfile(ce *Event) {
 		name := strings.Join(ce.Args[2:], " ")
 		params.Name = &name
 	case "avatar":
-		if len(ce.Args) != 3 {
-			ce.Reply("Usage: `$cmdprefix set-profile <login ID> avatar <mxc URI>`")
+		if len(ce.Args) > 3 {
+			ce.Reply("Usage: `$cmdprefix set-profile <login ID> avatar [mxc URI]`")
 			return
 		}
-		avatar := id.ContentURIString(ce.Args[2])
+		var avatar id.ContentURIString
+		if len(ce.Args) == 3 {
+			avatar = id.ContentURIString(ce.Args[2])
+		}
 		params.Avatar = &avatar
 	default:
 		ce.Reply("Profile field must be `name` or `avatar`")
