@@ -61,6 +61,9 @@ type Bridge struct {
 	stopBackfillQueue   *exsync.Event
 	manualBackfills     chan *ManualBackfill
 
+	wakeupThreadBackfillQueue chan struct{}
+	stopThreadBackfillQueue   *exsync.Event
+
 	BackgroundCtx       context.Context
 	cancelBackgroundCtx context.CancelFunc
 }
@@ -92,6 +95,9 @@ func NewBridge(
 		wakeupBackfillQueue: make(chan struct{}),
 		manualBackfills:     make(chan *ManualBackfill, 64),
 		stopBackfillQueue:   exsync.NewEvent(),
+
+		wakeupThreadBackfillQueue: make(chan struct{}, 1),
+		stopThreadBackfillQueue:   exsync.NewEvent(),
 	}
 	if br.Config == nil {
 		br.Config = &bridgeconfig.BridgeConfig{CommandPrefix: "!bridge"}
@@ -434,6 +440,7 @@ func (br *Bridge) StartLoginsForUsers(ctx context.Context, users []*User) {
 	}
 	if !br.Background {
 		go br.RunBackfillQueue()
+		go br.RunThreadBackfillQueue()
 	}
 
 	br.Log.Info().Msg("Bridge started")
@@ -501,6 +508,7 @@ func (br *Bridge) stop(isRunOnce bool, timeout time.Duration) {
 	br.stopping.Store(true)
 	br.DisappearLoop.Stop()
 	br.stopBackfillQueue.Set()
+	br.stopThreadBackfillQueue.Set()
 	br.Matrix.PreStop()
 	if !isRunOnce {
 		br.cacheLock.Lock()

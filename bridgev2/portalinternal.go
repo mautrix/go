@@ -389,12 +389,16 @@ func (portal *PortalInternals) DoBackwardsBackfill(ctx context.Context, source *
 	return (*Portal)(portal).doBackwardsBackfill(ctx, source, task, resp)
 }
 
-func (portal *PortalInternals) FetchThreadBackfill(ctx context.Context, source *UserLogin, anchor *database.Message) *FetchMessagesResponse {
-	return (*Portal)(portal).fetchThreadBackfill(ctx, source, anchor)
+func (portal *PortalInternals) FetchThreadBackfill(ctx context.Context, source *UserLogin, anchor *database.Message, aggressiveDedup bool) (*FetchMessagesResponse, error) {
+	return (*Portal)(portal).fetchThreadBackfill(ctx, source, anchor, aggressiveDedup)
 }
 
 func (portal *PortalInternals) DoThreadBackfill(ctx context.Context, source *UserLogin, threadID networkid.MessageID) error {
 	return (*Portal)(portal).doThreadBackfill(ctx, source, threadID)
+}
+
+func (portal *PortalInternals) DoDeferredThreadBackfill(ctx context.Context, source *UserLogin, threadID networkid.MessageID) error {
+	return (*Portal)(portal).doDeferredThreadBackfill(ctx, source, threadID)
 }
 
 func (portal *PortalInternals) CutoffMessages(ctx context.Context, messages []*BackfillMessage, aggressiveDedup, forward bool, lastMessage *database.Message) []*BackfillMessage {

@@ -27,6 +27,7 @@ type Database struct {
 	UserLogin            *UserLoginQuery
 	UserPortal           *UserPortalQuery
 	BackfillTask         *BackfillTaskQuery
+	ThreadBackfillTask   *ThreadBackfillTaskQuery
 	KV                   *KVQuery
 	PublicMedia          *PublicMediaQuery
 	EncryptedDirectMedia *EncryptedDirectMediaQuery
@@ -131,6 +132,12 @@ func New(bridgeID networkid.BridgeID, mt MetaTypes, db *dbutil.Database) *Databa
 			BridgeID: bridgeID,
 			QueryHelper: dbutil.MakeQueryHelper(db, func(_ *dbutil.QueryHelper[*BackfillTask]) *BackfillTask {
 				return &BackfillTask{}
+			}),
+		},
+		ThreadBackfillTask: &ThreadBackfillTaskQuery{
+			BridgeID: bridgeID,
+			QueryHelper: dbutil.MakeQueryHelper(db, func(_ *dbutil.QueryHelper[*ThreadBackfillTask]) *ThreadBackfillTask {
+				return &ThreadBackfillTask{}
 			}),
 		},
 		KV: &KVQuery{

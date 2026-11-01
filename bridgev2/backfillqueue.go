@@ -378,3 +378,92 @@ func (portal *Portal) doBackfillTask(ctx context.Context, source *UserLogin, tas
 	task.NextDispatchMinTS = task.CompletedAt.Add(batchDelay)
 	return true, nil
 }
+
+func (br *Bridge) WakeupThreadBackfillQueue() {
+	select {
+	case br.wakeupThreadBackfillQueue <- struct{}{}:
+	default:
+	}
+}
+
+func (br *Bridge) RunThreadBackfillQueue() {
+	if !br.Config.Backfill.Enabled || br.Config.Backfill.Threads.MaxInitialMessages <= 0 || !br.Matrix.GetCapabilities().BatchSending {
+		return
+	}
+	log := br.Log.With().Str("component", "thread backfill queue").Logger()
+	ctx, cancel := context.WithCancel(log.WithContext(context.Background()))
+	br.stopThreadBackfillQueue.Clear()
+	stopChan := br.stopThreadBackfillQueue.GetChan()
+	go func() {
+		<-stopChan
+		cancel()
+	}()
+	log.Info().Msg("Thread backfill queue starting")
+	for {
+		var delay time.Duration
+		var wakeup chan struct{}
+		task, err := br.DB.ThreadBackfillTask.GetNext(ctx)
+		if err != nil {
+			log.Err(err).Msg("Failed to get next thread backfill task")
+			delay = BackfillQueueErrorBackoff
+		} else if task == nil {
+			delay = BackfillQueueMaxEmptyBackoff
+			wakeup = br.wakeupThreadBackfillQueue
+		} else if !br.doThreadBackfillTask(ctx, task) {
+			delay = BackfillQueueErrorBackoff
+		}
+		select {
+		case <-wakeup:
+		case <-stopChan:
+			log.Info().Msg("Stopping thread backfill queue")
+			return
+		case <-time.After(delay):
+		}
+	}
+}
+
+func (br *Bridge) doThreadBackfillTask(ctx context.Context, task *database.ThreadBackfillTask) bool {
+	log := zerolog.Ctx(ctx).With().
+		Object("portal_key", task.PortalKey).
+		Str("login_id", string(task.UserLoginID)).
+		Str("thread_id", string(task.ThreadRootID)).
+		Logger()
+	ctx = log.WithContext(ctx)
+	defer func() {
+		if v := recover(); v != nil {
+			log.Err(exerrors.RecoverToError(v)).
+				Bytes(zerolog.ErrorStackFieldName, debug.Stack()).
+				Msg("Panic in thread backfill queue")
+		}
+	}()
+	err := br.DB.ThreadBackfillTask.Postpone(ctx, task, time.Now().Add(database.UnfinishedBackfillBackoff))
+	if err != nil {
+		log.Err(err).Msg("Failed to mark thread backfill task as dispatched")
+		return false
+	}
+	portal, err := br.GetExistingPortalByKey(ctx, task.PortalKey)
+	if err != nil {
+		log.Err(err).Msg("Failed to get portal for thread backfill task")
+		return false
+	}
+	login, err := br.GetExistingUserLoginByID(ctx, task.UserLoginID)
+	if err != nil {
+		log.Err(err).Msg("Failed to get user login for thread backfill task")
+		return false
+	}
+	if portal == nil || portal.MXID == "" || login == nil {
+		log.Debug().Msg("Portal or user login not found, dropping thread backfill task")
+	} else if !login.Client.IsLoggedIn() {
+		log.Debug().Msg("User login not logged in, postponing thread backfill task")
+		return true
+	} else if err = portal.doDeferredThreadBackfill(ctx, login, task.ThreadRootID); err != nil {
+		log.Warn().Err(err).Time("next_dispatch_min_ts", task.NextDispatchMinTS).Msg("Thread backfill failed, postponing task")
+		return false
+	}
+	err = br.DB.ThreadBackfillTask.Delete(ctx, task)
+	if err != nil {
+		log.Err(err).Msg("Failed to delete thread backfill task")
+		return false
+	}
+	return true
+}
