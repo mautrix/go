@@ -113,6 +113,8 @@ paths:
              (from either step 1 or step 2) if the user wants to try again.
            * If step type `complete` is returned, the login finished successfully.
            * Otherwise, go to step 3 with the new data.
+
+        Note: `client_http` steps will only ever be returned if the client explicitly opts into it via the query parameter.
       operationId: startLogin
       parameters:
       - name: login_id
@@ -123,10 +125,23 @@ paths:
           $ref: '#/components/schemas/UserLoginID'
       - name: client_http
         in: query
-        description: Whether the client supports client HTTP proxying.
+        description: |
+          Whether the client supports client HTTP proxying.
+          If set, `client_http` steps may be returned during the login flow.
         required: false
         schema:
           type: number
+          enum: [1]
+      - name: client_websocket
+        in: query
+        description: |
+          Whether the client supports client websocket proxying.
+          If set, `client_http` steps may include a `stream_id` to indicate the response needs a full duplex tunnel.
+          See the `/client_websocket` endpoint for details.
+        required: false
+        schema:
+          type: number
+          enum: [2]
       - name: flowID
         in: path
         description: The login flow ID to use.
@@ -213,6 +228,12 @@ paths:
     post:
       tags: [ auth ]
       summary: Submit an HTTP response executed by the client in a login process.
+      description: |
+        This endpoint is used to submit responses to `client_http` steps.
+        Only ever used if the login start request opted in with the `client_http=1` query param.
+
+        If the request parameters have a `stream_id` field, the stream is opened in parallel using
+        the `/client_websocket` endpoint.
       operationId: submitLoginStepClientHTTP
       parameters:
       - $ref: '#/components/parameters/loginProcessID'
@@ -230,6 +251,47 @@ paths:
           $ref: '#/components/responses/LoginStepSubmitted'
         400:
           $ref: '#/components/responses/BadRequest'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        404:
+          $ref: '#/components/responses/LoginProcessNotFound'
+        500:
+          $ref: '#/components/responses/InternalError'
+      security:
+      - matrix_auth: [ ]
+  /v3/login/client_websocket/{loginProcessID}/{streamID}:
+    get:
+      tags: [ auth ]
+      summary: Open a tunnel connection for transmitting data through a client-opened websocket.
+      description: |
+        This endpoint is used to tunnel streams for client websocket steps.
+        Only ever used if the login start request opted in with the `client_websocket=2` query param.
+
+        The flow for client websockets is:
+
+        0. The client receives a `client_http` step with a `stream_id` set and appropriate headers like
+           `Connection: Upgrade` and `Upgrade: websocket` already set. The client may validate the presence
+           of those headers, but must not modify them.
+        1. The client makes a HTTP request using the parameters in the step. This is the "upstream connection".
+           The client MUST NOT do websocket protocol handling itself here.
+        2. The client submits the HTTP response normally via the `/client_http` endpoint.
+        3. In parallel with the `/client_http` call, if the upstream connection response status code was 101,
+           the client opens a normal websocket to the bridge via this endpoint. This is the "websocket tunnel".
+        4. For each message received on the websocket tunnel, the client writes the raw bytes to the upstream
+           connection. Whenever bytes are received from the upstream connection, the client sends them as a
+           binary message in the websocket tunnel.
+      operationId: openClientWebsocketTunnel
+      parameters:
+      - $ref: '#/components/parameters/loginProcessID'
+      - name: streamID
+        in: path
+        description: The stream ID returned in the client_websocket login step.
+        required: true
+        schema:
+          type: string
+      responses:
+        101:
+          description: Successfully opened a tunnel connection
         401:
           $ref: '#/components/responses/Unauthorized'
         404:
@@ -1207,6 +1269,11 @@ components:
         request_id:
           type: string
           description: An opaque identifier that must be copied into the response.
+        stream_id:
+          type: string
+          description: |
+            An opaque identifier that means the request is a websocket initialization.
+            See the /client_websocket endpoint for documentation.
         method:
           type: string
           description: The HTTP method to use.

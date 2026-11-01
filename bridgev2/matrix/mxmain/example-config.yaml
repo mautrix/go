@@ -194,7 +194,7 @@ database:
 homeserver:
     # The address that this appservice can use to connect to the homeserver.
     # Local addresses without HTTPS are generally recommended when the bridge is running on the same machine,
-    # but https also works if they run on different machines.
+    # but https also works if they run on different machines. Unix sockets can be used with the `unix:` scheme.
     address: http://example.localhost:8008
     # The domain of the homeserver (also known as server_name, used for MXIDs, etc).
     domain: example.com
@@ -240,6 +240,7 @@ appservice:
 
     # The hostname and port where this appservice should listen.
     # For Docker, you generally have to change the hostname to 0.0.0.0.
+    # If the value starts with a /, it's treated as a Unix socket path.
     hostname: 127.0.0.1
     port: $<<or .DefaultPort 8008>>
 

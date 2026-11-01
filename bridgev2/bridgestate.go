@@ -245,7 +245,7 @@ func (bsq *BridgeStateQueue) unknownErrorReconnect(triggeredBy status.BridgeStat
 	} else if len(bsq.ch) > 0 {
 		log.Warn().Msg("Not reconnecting as there are unsent bridge states")
 		return
-	} else if prevUnsent.StateEvent != status.StateUnknownError || prev.StateEvent != status.StateUnknownError {
+	} else if prevUnsent.StateEvent != status.StateUnknownError || prev.StateEvent != status.StateUnknownError || prevUnsent.BlockAutoReconnect {
 		log.Debug().Msg("Not reconnecting as the previous state was not an unknown error")
 		return
 	} else if bsq.unknownErrorReconnects > bsq.bridge.Config.UnknownErrorMaxAutoReconnects {
@@ -313,7 +313,7 @@ func (bsq *BridgeStateQueue) immediateSendBridgeState(state status.BridgeState) 
 			Msg("Not sending bridge state as it's a duplicate")
 		return
 	}
-	if state.StateEvent == status.StateUnknownError {
+	if state.StateEvent == status.StateUnknownError && !state.BlockAutoReconnect {
 		go bsq.unknownErrorReconnect(state)
 	} else if state.StateEvent == status.StateConnected {
 		bsq.unknownErrorReconnects = 0

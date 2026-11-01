@@ -133,6 +133,9 @@ type BridgeState struct {
 
 	Reason string         `json:"reason,omitempty"`
 	Info   map[string]any `json:"info,omitempty"`
+
+	// If true, the unknown error auto-reconnect loop will not be triggered for this state.
+	BlockAutoReconnect bool `json:"-"`
 }
 
 type GlobalBridgeState struct {
