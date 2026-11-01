@@ -125,7 +125,9 @@ paths:
           $ref: '#/components/schemas/UserLoginID'
       - name: client_http
         in: query
-        description: Whether the client supports client HTTP proxying.
+        description: |
+          Whether the client supports client HTTP proxying.
+          If set, `client_http` steps may be returned during the login flow.
         required: false
         schema:
           type: number
@@ -134,7 +136,8 @@ paths:
         in: query
         description: |
           Whether the client supports client websocket proxying.
-          If set, client_http steps may include a `stream_id` to indicate the response needs a full duplex tunnel.
+          If set, `client_http` steps may include a `stream_id` to indicate the response needs a full duplex tunnel.
+          See the `/client_websocket` endpoint for details.
         required: false
         schema:
           type: number
@@ -228,6 +231,9 @@ paths:
       description: |
         This endpoint is used to submit responses to `client_http` steps.
         Only ever used if the login start request opted in with the `client_http=1` query param.
+
+        If the request parameters have a `stream_id` field, the stream is opened in parallel using
+        the `/client_websocket` endpoint.
       operationId: submitLoginStepClientHTTP
       parameters:
       - $ref: '#/components/parameters/loginProcessID'
@@ -260,6 +266,20 @@ paths:
       description: |
         This endpoint is used to tunnel streams for client websocket steps.
         Only ever used if the login start request opted in with the `client_websocket=2` query param.
+
+        The flow for client websockets is:
+
+        0. The client receives a `client_http` step with a `stream_id` set and appropriate headers like
+           `Connection: Upgrade` and `Upgrade: websocket` already set. The client may validate the presence
+           of those headers, but must not modify them.
+        1. The client makes a HTTP request using the parameters in the step. This is the "upstream connection".
+           The client MUST NOT do websocket protocol handling itself here.
+        2. The client submits the HTTP response normally via the `/client_http` endpoint.
+        3. In parallel with the `/client_http` call, if the upstream connection response status code was 101,
+           the client opens a normal websocket to the bridge via this endpoint. This is the "websocket tunnel".
+        4. For each message received on the websocket tunnel, the client writes the raw bytes to the upstream
+           connection. Whenever bytes are received from the upstream connection, the client sends them as a
+           binary message in the websocket tunnel.
       operationId: openClientWebsocketTunnel
       parameters:
       - $ref: '#/components/parameters/loginProcessID'
@@ -1211,17 +1231,7 @@ components:
           type: string
           description: |
             An opaque identifier that means the request is a websocket initialization.
-
-            When set, the flow is:
-
-            1. The client makes a HTTP request using the parameters here, which must already include upgrade headers.
-               This is the "upstream connection". The client MUST NOT do websocket protocol handling itself here.
-            2. The client submits the HTTP response normally via the `/client_http` endpoint.
-            3. If the response status code was 101, the client opens a normal websocket to the bridge via the
-               `/client_websocket` endpoint. This is the "websocket tunnel".
-            4. For each message received on the websocket tunnel, the client writes the raw bytes to the upstream
-               connection. Whenever bytes are received from the upstream connection, the client sends them as a
-               binary message in the websocket tunnel.
+            See the /client_websocket endpoint for documentation.
         method:
           type: string
           description: The HTTP method to use.
