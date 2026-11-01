@@ -72,6 +72,7 @@ const (
 	getFirstMessageInThread                    = getMessageBaseQuery + `WHERE bridge_id=$1 AND room_id=$2 AND room_receiver=$3 AND (id=$4 OR thread_root_id=$4) ORDER BY thread_root_id NULLS FIRST, timestamp ASC, id ASC, part_id ASC LIMIT 1`
 	getLastMessageInThread                     = getMessageBaseQuery + `WHERE bridge_id=$1 AND room_id=$2 AND room_receiver=$3 AND (id=$4 OR thread_root_id=$4) ORDER BY thread_root_id NULLS LAST, timestamp DESC, id DESC, part_id DESC LIMIT 1`
 	getLastNInPortal                           = getMessageBaseQuery + `WHERE bridge_id=$1 AND room_id=$2 AND room_receiver=$3 ORDER BY timestamp DESC, id DESC, part_id DESC LIMIT $4`
+	getAllMessagesInPortalOldestFirst          = getMessageBaseQuery + `WHERE bridge_id=$1 AND room_id=$2 AND room_receiver=$3 ORDER BY timestamp ASC, id ASC, part_id ASC`
 
 	getLastMessagePartAtOrBeforeTimeQuery                       = getMessageBaseQuery + `WHERE bridge_id = $1 AND room_id=$2 AND room_receiver=$3 AND timestamp<=$4 ORDER BY timestamp DESC, id DESC, part_id DESC LIMIT 1`
 	getLastNonFakeMessagePartAtOrBeforeTimeQuery                = getMessageBaseQuery + `WHERE bridge_id = $1 AND room_id=$2 AND room_receiver=$3 AND timestamp<=$4 AND mxid NOT LIKE '~fake:%' ORDER BY timestamp DESC, id DESC, part_id DESC LIMIT 1`
@@ -193,6 +194,10 @@ func (mq *MessageQuery) GetLastThreadMessage(ctx context.Context, portal network
 
 func (mq *MessageQuery) GetLastNInPortal(ctx context.Context, portal networkid.PortalKey, n int) ([]*Message, error) {
 	return mq.QueryMany(ctx, getLastNInPortal, mq.BridgeID, portal.ID, portal.Receiver, n)
+}
+
+func (mq *MessageQuery) IterPortalMessages(ctx context.Context, portal networkid.PortalKey) dbutil.RowIter[*Message] {
+	return mq.QueryManyIter(ctx, getAllMessagesInPortalOldestFirst, mq.BridgeID, portal.ID, portal.Receiver)
 }
 
 func (mq *MessageQuery) Insert(ctx context.Context, msg *Message) error {
