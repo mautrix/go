@@ -218,7 +218,7 @@ func (portal *Portal) doBackwardsBackfill(ctx context.Context, source *UserLogin
 	return false, nil
 }
 
-func (portal *Portal) fetchThreadBackfill(ctx context.Context, source *UserLogin, anchor *database.Message, aggressiveDedup bool) (*FetchMessagesResponse, error) {
+func (portal *Portal) fetchThreadBackfill(ctx context.Context, source *UserLogin, anchor *database.Message) (*FetchMessagesResponse, error) {
 	log := zerolog.Ctx(ctx)
 	resp, err := source.Client.(BackfillingNetworkAPI).FetchMessages(ctx, FetchMessagesParams{
 		Portal:        portal,
@@ -237,7 +237,7 @@ func (portal *Portal) fetchThreadBackfill(ctx context.Context, source *UserLogin
 		log.Debug().Msg("No messages to backfill")
 		return nil, nil
 	}
-	resp.Messages = portal.cutoffMessages(ctx, resp.Messages, aggressiveDedup || resp.AggressiveDeduplication, true, anchor)
+	resp.Messages = portal.cutoffMessages(ctx, resp.Messages, resp.AggressiveDeduplication, true, anchor)
 	if len(resp.Messages) == 0 {
 		log.Warn().Msg("No messages left to backfill after cutting off old messages")
 		if resp.CompleteCallback != nil {
@@ -262,30 +262,77 @@ func (portal *Portal) doThreadBackfill(ctx context.Context, source *UserLogin, t
 		log.Warn().Msg("No messages found in thread?")
 		return nil
 	}
-	resp, _ := portal.fetchThreadBackfill(ctx, source, anchorMessage, false)
+	resp, _ := portal.fetchThreadBackfill(ctx, source, anchorMessage)
 	if resp != nil {
 		return portal.sendBackfill(ctx, source, resp.Messages, true, resp.MarkRead, true, resp.CompleteCallback)
 	}
 	return nil
 }
 
-func (portal *Portal) doDeferredThreadBackfill(ctx context.Context, source *UserLogin, threadID networkid.MessageID) error {
-	portal.backfillLock.Lock()
-	defer portal.backfillLock.Unlock()
-	root, err := portal.Bridge.DB.Message.GetFirstPartByID(ctx, portal.Receiver, threadID)
+func (portal *Portal) doDeferredThreadBackfill(ctx context.Context, source *UserLogin, task *database.ThreadBackfillTask) error {
+	root, err := portal.Bridge.DB.Message.GetFirstPartByID(ctx, portal.Receiver, task.ThreadRootID)
 	if err != nil {
 		return fmt.Errorf("failed to get thread root message: %w", err)
 	} else if root == nil {
 		zerolog.Ctx(ctx).Warn().Msg("Thread root message not found")
 		return nil
 	}
-	resp, err := portal.fetchThreadBackfill(ctx, source, root, true)
+	resp, err := portal.fetchThreadBackfill(ctx, source, root)
 	if err != nil {
 		return err
 	} else if resp == nil {
 		return nil
 	}
-	err = portal.sendBatch(ctx, source, resp.Messages, true, false, true)
+	mergedCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	errCh := make(chan error, 1)
+	evt := &portalThreadBackfillEvent{
+		ctx:    mergedCtx,
+		source: source,
+		task:   task,
+		root:   root,
+		resp:   resp,
+		cb: func(err error) {
+			select {
+			case errCh <- err:
+			default:
+			}
+		},
+	}
+	if portal.Bridge.Config.PortalEventBuffer == 0 {
+		go portal.queueEvent(mergedCtx, evt)
+	} else {
+		portal.queueEvent(mergedCtx, evt)
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-portal.deleted:
+		return ErrPortalIsDeleted
+	case err = <-errCh:
+		return err
+	}
+}
+
+func (portal *Portal) sendDeferredThreadBackfill(ctx context.Context, source *UserLogin, task *database.ThreadBackfillTask, root *database.Message, resp *FetchMessagesResponse) error {
+	portal.backfillLock.Lock()
+	defer portal.backfillLock.Unlock()
+	resp.Messages = portal.cutoffMessages(ctx, resp.Messages, true, true, root)
+	if len(resp.Messages) == 0 {
+		if resp.CompleteCallback != nil {
+			resp.CompleteCallback()
+		}
+		return nil
+	}
+	markRead := task.MarkRead && (resp.MarkRead || portal.isPastUnreadThreshold(resp.Messages))
+	if markRead {
+		lastMessages, err := portal.Bridge.DB.Message.GetLastNInPortal(ctx, portal.PortalKey, 1)
+		if err != nil {
+			return fmt.Errorf("failed to get last message in portal: %w", err)
+		}
+		markRead = len(lastMessages) == 0 || !lastMessages[0].Timestamp.After(task.QueuedAt)
+	}
+	err := portal.sendBatch(ctx, source, resp.Messages, true, markRead, true)
 	if err != nil {
 		return err
 	}
@@ -567,7 +614,7 @@ func (portal *Portal) fetchThreadInsideBatch(ctx context.Context, source *UserLo
 		Str("thread_id", string(dbMsg.ID)).
 		Logger()
 	ctx = log.WithContext(ctx)
-	resp, _ := portal.fetchThreadBackfill(ctx, source, dbMsg, false)
+	resp, _ := portal.fetchThreadBackfill(ctx, source, dbMsg)
 	if resp != nil {
 		for _, msg := range resp.Messages {
 			portal.compileBatchMessage(ctx, source, msg, out, true)
@@ -637,12 +684,15 @@ func (portal *Portal) sendBatch(ctx context.Context, source *UserLogin, messages
 		}
 	}
 	if len(out.DeferredThreads) > 0 {
+		queuedAt := time.Now()
 		for _, threadID := range out.DeferredThreads {
 			err = portal.Bridge.DB.ThreadBackfillTask.Insert(ctx, &database.ThreadBackfillTask{
 				PortalKey:         portal.PortalKey,
 				ThreadRootID:      threadID,
 				UserLoginID:       source.ID,
-				NextDispatchMinTS: time.Now(),
+				MarkRead:          markRead,
+				QueuedAt:          queuedAt,
+				NextDispatchMinTS: queuedAt,
 			})
 			if err != nil {
 				zerolog.Ctx(ctx).Err(err).

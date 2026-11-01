@@ -25,17 +25,21 @@ type ThreadBackfillTask struct {
 	PortalKey         networkid.PortalKey
 	ThreadRootID      networkid.MessageID
 	UserLoginID       networkid.UserLoginID
+	MarkRead          bool
+	QueuedAt          time.Time
 	NextDispatchMinTS time.Time
 }
 
 const (
 	insertThreadBackfillTaskQuery = `
-		INSERT INTO thread_backfill_task (bridge_id, portal_id, portal_receiver, thread_root_id, user_login_id, next_dispatch_min_ts)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO thread_backfill_task (
+			bridge_id, portal_id, portal_receiver, thread_root_id, user_login_id, mark_read, queued_at, next_dispatch_min_ts
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		ON CONFLICT (bridge_id, portal_id, portal_receiver, thread_root_id) DO NOTHING
 	`
 	getNextThreadBackfillTaskQuery = `
-		SELECT bridge_id, portal_id, portal_receiver, thread_root_id, user_login_id, next_dispatch_min_ts
+		SELECT bridge_id, portal_id, portal_receiver, thread_root_id, user_login_id, mark_read, queued_at, next_dispatch_min_ts
 		FROM thread_backfill_task
 		WHERE bridge_id=$1 AND next_dispatch_min_ts<$2
 		ORDER BY next_dispatch_min_ts LIMIT 1
@@ -70,11 +74,15 @@ func (tbtq *ThreadBackfillTaskQuery) Delete(ctx context.Context, task *ThreadBac
 }
 
 func (tbt *ThreadBackfillTask) Scan(row dbutil.Scannable) (*ThreadBackfillTask, error) {
-	var nextDispatchMinTS int64
-	err := row.Scan(&tbt.BridgeID, &tbt.PortalKey.ID, &tbt.PortalKey.Receiver, &tbt.ThreadRootID, &tbt.UserLoginID, &nextDispatchMinTS)
+	var queuedAt, nextDispatchMinTS int64
+	err := row.Scan(
+		&tbt.BridgeID, &tbt.PortalKey.ID, &tbt.PortalKey.Receiver, &tbt.ThreadRootID, &tbt.UserLoginID,
+		&tbt.MarkRead, &queuedAt, &nextDispatchMinTS,
+	)
 	if err != nil {
 		return nil, err
 	}
+	tbt.QueuedAt = time.Unix(0, queuedAt)
 	tbt.NextDispatchMinTS = time.Unix(0, nextDispatchMinTS)
 	return tbt, nil
 }
@@ -86,6 +94,8 @@ func (tbt *ThreadBackfillTask) sqlVariables() []any {
 		tbt.PortalKey.Receiver,
 		tbt.ThreadRootID,
 		tbt.UserLoginID,
+		tbt.MarkRead,
+		tbt.QueuedAt.UnixNano(),
 		tbt.NextDispatchMinTS.UnixNano(),
 	}
 }

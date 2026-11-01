@@ -456,7 +456,7 @@ func (br *Bridge) doThreadBackfillTask(ctx context.Context, task *database.Threa
 	} else if !login.Client.IsLoggedIn() {
 		log.Debug().Msg("User login not logged in, postponing thread backfill task")
 		return true
-	} else if err = portal.doDeferredThreadBackfill(ctx, login, task.ThreadRootID); err != nil {
+	} else if err = portal.doDeferredThreadBackfill(ctx, login, task); err != nil {
 		log.Warn().Err(err).Time("next_dispatch_min_ts", task.NextDispatchMinTS).Msg("Thread backfill failed, postponing task")
 		return false
 	}

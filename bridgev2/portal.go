@@ -56,9 +56,19 @@ type portalCreateEvent struct {
 	cb     func(error)
 }
 
-func (pme *portalMatrixEvent) isPortalEvent() {}
-func (pre *portalRemoteEvent) isPortalEvent() {}
-func (pre *portalCreateEvent) isPortalEvent() {}
+type portalThreadBackfillEvent struct {
+	ctx    context.Context
+	source *UserLogin
+	task   *database.ThreadBackfillTask
+	root   *database.Message
+	resp   *FetchMessagesResponse
+	cb     func(error)
+}
+
+func (pme *portalMatrixEvent) isPortalEvent()         {}
+func (pre *portalRemoteEvent) isPortalEvent()         {}
+func (pre *portalCreateEvent) isPortalEvent()         {}
+func (pte *portalThreadBackfillEvent) isPortalEvent() {}
 
 type portalEvent interface {
 	isPortalEvent()
@@ -568,6 +578,8 @@ func (portal *Portal) getEventCtxWithLog(rawEvt any, idx int) context.Context {
 		return ctx
 	case *portalCreateEvent:
 		return evt.ctx
+	case *portalThreadBackfillEvent:
+		return evt.ctx
 	default:
 		panic(fmt.Errorf("invalid type %T in getEventCtxWithLog", evt))
 	}
@@ -591,6 +603,8 @@ func (portal *Portal) handleSingleEvent(ctx context.Context, rawEvt any, doneCal
 				}
 			case *portalCreateEvent:
 				evt.cb(fmt.Errorf("portal creation panicked"))
+			case *portalThreadBackfillEvent:
+				evt.cb(fmt.Errorf("thread backfill panicked"))
 			}
 			portal.Bridge.TrackAnalytics("", "Bridge Event Handler Panic", map[string]any{
 				"error":        err.Error(),
@@ -638,6 +652,10 @@ func (portal *Portal) handleSingleEvent(ctx context.Context, rawEvt any, doneCal
 		res = portal.handleRemoteEvent(ctx, evt.source, evt.evtType, evt.evt)
 	case *portalCreateEvent:
 		err := portal.createMatrixRoomInLoop(evt.ctx, evt.source, evt.info, nil)
+		res.Success = err == nil
+		evt.cb(err)
+	case *portalThreadBackfillEvent:
+		err := portal.sendDeferredThreadBackfill(evt.ctx, evt.source, evt.task, evt.root, evt.resp)
 		res.Success = err == nil
 		evt.cb(err)
 	default:
