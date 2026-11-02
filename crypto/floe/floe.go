@@ -26,7 +26,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"hash"
 )
 
 type FloeHash uint8
@@ -34,6 +33,7 @@ type FloeAead uint8
 
 const (
 	SHA384            FloeHash = 0
+	SHA384FullHKDF    FloeHash = 1
 	AesGcm256         FloeAead = 0
 	dekPurpose        string   = "DEK:"
 	headerTagPurpose  string   = "HEADER_TAG:"
@@ -142,16 +142,26 @@ func (a FloeAead) TagLen() int {
 	}
 }
 
+func hkdfSHA384Full(secret []byte, info string, keyLength int) ([]byte, error) {
+	return hkdf.Key(sha512.New384, secret, nil, info, keyLength)
+}
+
+func hkdfSHA384ExpandOnly(secret []byte, info string, keyLength int) ([]byte, error) {
+	return hkdf.Expand(sha512.New384, secret, info, keyLength)
+}
+
 func (p FloeParams) kdf(baseKey, iv, aad []byte, purpose string, length int) ([]byte, error) {
 	if len(iv) != int(p.IvLen) {
 		return nil, errors.New("invalid IV length")
 	}
 	hkdfInfo := p.encoded()
 
-	var hash func() hash.Hash
+	var hkdfFunc func(secret []byte, info string, keyLength int) ([]byte, error)
 	switch p.Hash {
+	case SHA384FullHKDF:
+		hkdfFunc = hkdfSHA384Full
 	case SHA384:
-		hash = sha512.New384
+		hkdfFunc = hkdfSHA384ExpandOnly
 	default:
 		return nil, errors.New("unsupported hash function")
 	}
@@ -161,7 +171,7 @@ func (p FloeParams) kdf(baseKey, iv, aad []byte, purpose string, length int) ([]
 	hkdfInfo = append(hkdfInfo, iv...)
 	hkdfInfo = append(hkdfInfo, purpose...)
 	hkdfInfo = append(hkdfInfo, aad...)
-	result, err := hkdf.Expand(hash, baseKey, string(hkdfInfo), length)
+	result, err := hkdfFunc(baseKey, string(hkdfInfo), length)
 	if err != nil {
 		return nil, err
 	}
