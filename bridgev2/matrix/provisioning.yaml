@@ -409,6 +409,14 @@ paths:
           - type: string
             const: all
             description: Log out of all logins
+      - name: blocking_cleanup
+        in: query
+        description: |
+          Whether to wait for room cleanup to finish before responding.
+          By default, the login is deleted immediately and portal rooms are cleaned up in the background.
+        required: false
+        schema:
+          type: boolean
       responses:
         200:
           description: Login was successfully deleted

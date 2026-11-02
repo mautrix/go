@@ -407,13 +407,18 @@ func (prov *ProvisioningAPI) GetCapabilities(w http.ResponseWriter, r *http.Requ
 func (prov *ProvisioningAPI) PostLogout(w http.ResponseWriter, r *http.Request) {
 	user := prov.GetUser(r)
 	userLoginID := networkid.UserLoginID(r.PathValue("loginID"))
+	state := status.BridgeState{StateEvent: status.StateLoggedOut}
+	opts := bridgev2.DeleteOpts{
+		LogoutRemote:    true,
+		BlockingCleanup: r.URL.Query().Get("blocking_cleanup") == "true",
+	}
 	if userLoginID == "all" {
 		for {
 			login := user.GetDefaultLogin()
 			if login == nil {
 				break
 			}
-			login.Logout(r.Context())
+			login.Delete(r.Context(), state, opts)
 		}
 	} else {
 		userLogin := prov.br.Bridge.GetCachedUserLoginByID(userLoginID)
@@ -421,7 +426,7 @@ func (prov *ProvisioningAPI) PostLogout(w http.ResponseWriter, r *http.Request) 
 			mautrix.MNotFound.WithMessage("Login not found").Write(w)
 			return
 		}
-		userLogin.Logout(r.Context())
+		userLogin.Delete(r.Context(), state, opts)
 	}
 	exhttp.WriteEmptyJSONResponse(w, http.StatusOK)
 }
