@@ -142,6 +142,7 @@ func (prov *ProvisioningAPI) Init() {
 	prov.Router.HandleFunc("GET /v3/resolve_identifier/{identifier}", prov.GetResolveIdentifier)
 	prov.Router.HandleFunc("POST /v3/create_dm/{identifier}", prov.PostCreateDM)
 	prov.Router.HandleFunc("POST /v3/create_group/{type}", prov.PostCreateGroup)
+	prov.Router.HandleFunc("POST /v3/profile", prov.PostUpdateProfile)
 	prov.Router.HandleFunc("POST /v3/backfill/{roomID}", prov.PostPaginate)
 	prov.Router.HandleFunc("POST /v3/view_limited_media/{eventID}", prov.PostViewLimitedMedia)
 	prov.Router.HandleFunc("GET /v3/poll_results/{eventID}", prov.GetPollResults)
@@ -602,6 +603,26 @@ func (prov *ProvisioningAPI) PostCreateGroup(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	exhttp.WriteJSONResponse(w, http.StatusOK, resp)
+}
+
+func (prov *ProvisioningAPI) PostUpdateProfile(w http.ResponseWriter, r *http.Request) {
+	login, failed := prov.GetExplicitLoginForRequest(w, r)
+	if failed {
+		return
+	} else if login == nil {
+		mautrix.MInvalidParam.WithMessage("login_id is required").Write(w)
+		return
+	}
+	var req bridgev2.ProfileUpdateParams
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		mautrix.MNotJSON.WithMessage("Failed to decode request body").Write(w)
+		return
+	}
+	if err := provisionutil.UpdateProfile(r.Context(), login, &req); err != nil {
+		RespondWithError(w, err, "Failed to update profile")
+		return
+	}
+	exhttp.WriteEmptyJSONResponse(w, http.StatusOK)
 }
 
 func (prov *ProvisioningAPI) PostPaginate(w http.ResponseWriter, r *http.Request) {
