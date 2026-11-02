@@ -12,7 +12,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"net/url"
 	"path"
 	"strings"
@@ -380,16 +379,7 @@ func (as *AppService) StartWebsocket(ctx context.Context, baseURL string, onConn
 	} else if parsed.Scheme == "https" {
 		parsed.Scheme = "wss"
 	}
-	ws, resp, err := websocket.Dial(ctx, parsed.String(), &websocket.DialOptions{
-		HTTPClient: as.HTTPClient,
-		HTTPHeader: http.Header{
-			"Authorization": []string{fmt.Sprintf("Bearer %s", as.Registration.AppToken)},
-			"User-Agent":    []string{as.UserAgent},
-
-			"X-Mautrix-Process-ID":        []string{as.ProcessID},
-			"X-Mautrix-Websocket-Version": []string{"3"},
-		},
-	})
+	ws, resp, err := as.dialWebsocket(ctx, parsed.String())
 	if resp != nil && resp.StatusCode >= 400 {
 		var errResp mautrix.RespError
 		err = json.NewDecoder(resp.Body).Decode(&errResp)
