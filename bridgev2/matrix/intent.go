@@ -840,3 +840,11 @@ func (as *ASIntent) GetEvent(ctx context.Context, roomID id.RoomID, eventID id.E
 func (as *ASIntent) GetStateEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string) (*event.Event, error) {
 	return as.Matrix().FullStateEvent(ctx, roomID, eventType, stateKey)
 }
+
+func (as *ASIntent) GetJoinedRooms(ctx context.Context) ([]id.RoomID, error) {
+	resp, err := as.Matrix().JoinedRooms(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return resp.JoinedRooms, nil
+}

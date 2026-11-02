@@ -34,6 +34,7 @@ const (
 		SELECT bridge_id, mxid, management_room, access_token FROM "user"
 	`
 	getUserByMXIDQuery = getUserBaseQuery + `WHERE bridge_id=$1 AND mxid=$2`
+	getAllUsersQuery   = getUserBaseQuery + `WHERE bridge_id=$1`
 	insertUserQuery    = `
 		INSERT INTO "user" (bridge_id, mxid, management_room, access_token)
 		VALUES ($1, $2, $3, $4)
@@ -46,6 +47,10 @@ const (
 
 func (uq *UserQuery) GetByMXID(ctx context.Context, userID id.UserID) (*User, error) {
 	return uq.QueryOne(ctx, getUserByMXIDQuery, uq.BridgeID, userID)
+}
+
+func (uq *UserQuery) GetAll(ctx context.Context) ([]*User, error) {
+	return uq.QueryMany(ctx, getAllUsersQuery, uq.BridgeID)
 }
 
 func (uq *UserQuery) Insert(ctx context.Context, user *User) error {
