@@ -42,7 +42,7 @@ const (
 
 func (h FloeHash) Length() int {
 	switch h {
-	case SHA384:
+	case SHA384, SHA384FullHKDF:
 		return 48
 	default:
 		panic("Unsupported hash function")
