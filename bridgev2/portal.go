@@ -176,6 +176,9 @@ func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, que
 		}
 	}
 	portal.updateLogger()
+	if cfg := br.Network.GetCapabilities().OutgoingMessageTimeouts; cfg != nil {
+		go portal.pendingMessageTimeoutLoop(portal.Log.WithContext(portal.backgroundCtx), cfg)
+	}
 	if br.Config.PortalEventBuffer != 0 {
 		portal.events = make(chan portalEvent, br.Config.PortalEventBuffer)
 		go portal.eventLoop()
@@ -401,11 +404,6 @@ func (portal *Portal) queueEvent(ctx context.Context, evt portalEvent) EventHand
 }
 
 func (portal *Portal) eventLoop() {
-	if cfg := portal.Bridge.Network.GetCapabilities().OutgoingMessageTimeouts; cfg != nil {
-		ctx, cancel := context.WithCancel(portal.Log.WithContext(portal.backgroundCtx))
-		go portal.pendingMessageTimeoutLoop(ctx, cfg)
-		defer cancel()
-	}
 	for i := 0; ; i++ {
 		select {
 		case rawEvt := <-portal.events:
@@ -1433,9 +1431,11 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 	}
 	message := wrappedMsgEvt.fillDBMessage(resp.DB)
 	if resp.Pending {
+		portal.outgoingMessagesLock.Lock()
 		for _, save := range wrappedMsgEvt.pendingSaves {
 			save.ackedAt = time.Now()
 		}
+		portal.outgoingMessagesLock.Unlock()
 	} else {
 		if resp.DB == nil {
 			log.Error().Msg("Network connector didn't return a message to save")
