@@ -37,13 +37,14 @@ type RoomFeatures struct {
 
 	LocationMessage CapabilitySupportLevel `json:"location_message,omitzero"`
 
-	Poll                 CapabilitySupportLevel `json:"poll,omitzero"`
-	PollEnd              CapabilitySupportLevel `json:"poll_end,omitzero"`
-	PollHiddenVotes      CapabilitySupportLevel `json:"poll_hidden_votes,omitzero"`
-	PollDuplicateOptions CapabilitySupportLevel `json:"poll_duplicate_options,omitzero"`
-	PollMaxOptions       int                    `json:"poll_max_options,omitzero"`
-	PollOptionMaxLength  int                    `json:"poll_option_max_length,omitzero"`
-	PollResultsAPI       bool                   `json:"poll_results_api,omitzero"`
+	Poll                   CapabilitySupportLevel `json:"poll,omitzero"`
+	PollEnd                CapabilitySupportLevel `json:"poll_end,omitzero"`
+	PollHiddenVotes        CapabilitySupportLevel `json:"poll_hidden_votes,omitzero"`
+	PollDuplicateOptions   CapabilitySupportLevel `json:"poll_duplicate_options,omitzero"`
+	PollMaxOptions         int                    `json:"poll_max_options,omitzero"`
+	PollMultipleChoiceOnly bool                   `json:"poll_multiple_choice_only,omitzero"`
+	PollOptionMaxLength    int                    `json:"poll_option_max_length,omitzero"`
+	PollResultsAPI         bool                   `json:"poll_results_api,omitzero"`
 
 	Thread CapabilitySupportLevel `json:"thread,omitzero"`
 	Reply  CapabilitySupportLevel `json:"reply,omitzero"`
@@ -371,6 +372,7 @@ func (rf *RoomFeatures) Hash() []byte {
 	hashValue(hasher, "poll_hidden_votes", rf.PollHiddenVotes)
 	hashValue(hasher, "poll_duplicate_options", rf.PollDuplicateOptions)
 	hashInt(hasher, "poll_max_options", rf.PollMaxOptions)
+	hashBool(hasher, "poll_multiple_choice_only", rf.PollMultipleChoiceOnly)
 	hashInt(hasher, "poll_option_max_length", rf.PollOptionMaxLength)
 	hashBool(hasher, "poll_results_api", rf.PollResultsAPI)
 	hashValue(hasher, "thread", rf.Thread)
