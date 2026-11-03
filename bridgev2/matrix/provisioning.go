@@ -634,12 +634,8 @@ func (prov *ProvisioningAPI) PostPaginate(w http.ResponseWriter, r *http.Request
 		return
 	}
 	log := zerolog.Ctx(r.Context())
-	login := prov.GetLoginForRequest(w, r)
-	if login == nil {
-		return
-	} else if login.Client == nil || !login.Client.IsLoggedIn() {
-		log.Debug().Str("login_id", string(login.ID)).Msg("Paginate requested with logged out login")
-		mautrix.MForbidden.WithMessage("Login is not logged in").Write(w)
+	login, failed := prov.GetExplicitLoginForRequest(w, r)
+	if failed {
 		return
 	}
 	targetRoomID := id.RoomID(r.PathValue("roomID"))
@@ -647,10 +643,37 @@ func (prov *ProvisioningAPI) PostPaginate(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		log.Err(err).Msg("Failed to get portal for pagination")
 		RespondWithError(w, err, "Internal error getting portal")
+		return
 	} else if portal == nil {
 		log.Debug().Stringer("target_room_id", targetRoomID).Msg("Paginate requested for unknown portal room")
 		mautrix.MNotFound.WithMessage("Portal not found").Write(w)
-	} else if task, err := prov.br.Bridge.DB.BackfillTask.GetNextForPortal(r.Context(), portal.PortalKey, false); err != nil {
+		return
+	}
+	if login == nil {
+		login, _, err = portal.FindPreferredLogin(r.Context(), prov.GetUser(r), false)
+		if err != nil {
+			RespondWithError(w, err, "Internal error getting login for portal")
+			return
+		}
+	} else if portal.Receiver != "" && portal.Receiver != login.ID {
+		mautrix.MForbidden.WithMessage("Login is not the portal receiver").Write(w)
+		return
+	} else if portal.Receiver == "" {
+		userPortal, err := prov.br.Bridge.DB.UserPortal.Get(r.Context(), login.UserLogin, portal.PortalKey)
+		if err != nil {
+			RespondWithError(w, err, "Internal error getting login for portal")
+			return
+		} else if userPortal == nil {
+			mautrix.MForbidden.WithMessage("Login is not in portal").Write(w)
+			return
+		}
+	}
+	if login.Client == nil || !login.Client.IsLoggedIn() {
+		log.Debug().Str("login_id", string(login.ID)).Msg("Paginate requested with logged out login")
+		mautrix.MForbidden.WithMessage("Login is not logged in").Write(w)
+		return
+	}
+	if task, err := prov.br.Bridge.DB.BackfillTask.GetNextForPortal(r.Context(), portal.PortalKey, false); err != nil {
 		log.Err(err).Msg("Failed to get backfill task for portal")
 		RespondWithError(w, err, "Internal error getting backfill task")
 	} else if task == nil {
