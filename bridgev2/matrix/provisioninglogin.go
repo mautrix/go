@@ -38,10 +38,11 @@ type stepManager struct {
 
 	reqCounter int
 
-	pendingHTTP chan *bridgev2.LoginClientHTTPResponse
-	stepCancel  context.CancelCauseFunc
-	stepResult  *stepExecutionResult
-	cancelling  bool
+	pendingHTTP      chan *bridgev2.LoginClientHTTPResponse
+	httpLogRedactors []*bridgev2.ClientHTTPLogRedactor
+	stepCancel       context.CancelCauseFunc
+	stepResult       *stepExecutionResult
+	cancelling       bool
 }
 
 type stepExecutionResult struct {
@@ -64,6 +65,15 @@ func (sm *stepManager) WithNonErroringLock(fn func(*stepManager)) {
 	sm.lock.Lock()
 	defer sm.lock.Unlock()
 	fn(sm)
+}
+
+func (sm *stepManager) redactError(err error) error {
+	sm.WithNonErroringLock(func(sm *stepManager) {
+		for _, redactor := range sm.httpLogRedactors {
+			err = redactor.RedactError(err)
+		}
+	})
+	return err
 }
 
 type ProvLogin struct {
@@ -459,7 +469,7 @@ func (prov *ProvisioningAPI) executeStep(
 	defer func() {
 		v := recover()
 		if v != nil {
-			err := exerrors.RecoverToError(v)
+			err := login.step.redactError(exerrors.RecoverToError(v))
 			zerolog.Ctx(ctx).
 				Err(err).
 				Bytes(zerolog.ErrorStackFieldName, debug.Stack()).
@@ -507,6 +517,7 @@ func (prov *ProvisioningAPI) executeStep(
 	default:
 		panic("Impossible state")
 	}
+	err = login.step.redactError(err)
 	if errors.Is(err, bridgev2.ErrLoginStepCancelled) && currentStepType == bridgev2.LoginStepTypeDisplayAndWait {
 		login.step.WithNonErroringLock(func(sm *stepManager) {
 			stepResult.err = err

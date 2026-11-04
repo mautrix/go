@@ -97,12 +97,16 @@ func (prov *ProvisioningAPI) PostLoginClientHTTP(w http.ResponseWriter, r *http.
 			return mautrix.MBadState.WithMessage("Request ID does not match")
 		}
 		if sm.pendingHTTP != nil {
+			for _, redactor := range sm.httpLogRedactors {
+				resp.Error = redactor.Redact(resp.Error)
+			}
+			headerCount := len(resp.Headers)
 			select {
 			case sm.pendingHTTP <- &resp:
 				log.Debug().
 					Str("req_id", reqID).
 					Int("status_code", resp.StatusCode).
-					Int("header_count", len(resp.Headers)).
+					Int("header_count", headerCount).
 					Int("body_length", len(resp.Body)).
 					Str("error_msg", resp.Error).
 					Str("used_fingerprint", resp.Fingerprint).
@@ -162,6 +166,14 @@ func (p *ProvLogin) SetFingerprint(fingerprint string) {
 
 func (p *ProvLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 	log := zerolog.Ctx(req.Context()).With().Str("login_id", p.ID).Logger()
+	redactor := bridgev2.NewClientHTTPLogRedactor(req.Context(), req.URL)
+	var logURL fmt.Stringer = req.URL
+	if redactor != nil {
+		logURL = redactor
+		p.step.WithNonErroringLock(func(sm *stepManager) {
+			sm.httpLogRedactors = append(sm.httpLogRedactors, redactor)
+		})
+	}
 	upgrade := req.Header.Get("Upgrade") == "websocket" &&
 		req.Header.Get("Connection") == "Upgrade"
 	if upgrade && (!p.websocketEnabled || req.Method != http.MethodGet || req.URL.Scheme != "https") {
@@ -217,6 +229,7 @@ func (p *ProvLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 				StreamID:    streamID,
 				Method:      req.Method,
 				URL:         req.URL.String(),
+				LogRedactor: redactor,
 				Headers:     req.Header,
 				Body:        body,
 				Fingerprint: p.fingerprint,
@@ -231,14 +244,14 @@ func (p *ProvLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 			log.Debug().
 				Str("req_id", reqID).
 				Str("method", req.Method).
-				Stringer("url", req.URL).
+				Stringer("url", logURL).
 				Msg("Waiting for client HTTP response")
 		} else {
 			// This should probably never happen
 			log.Warn().
 				Str("req_id", reqID).
 				Str("method", req.Method).
-				Stringer("url", req.URL).
+				Stringer("url", logURL).
 				Msg("Login step isn't waiting when client http request was made")
 		}
 		return nil

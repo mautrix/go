@@ -189,14 +189,19 @@ type LoginClientHTTPParams struct {
 	Headers   http.Header `json:"headers,omitempty"`
 	Body      []byte      `json:"body,omitempty"`
 
-	Fingerprint         string `json:"fingerprint,omitempty"`
-	AcceptsGzipResponse bool   `json:"accepts_gzip_response,omitzero"`
+	Fingerprint         string                 `json:"fingerprint,omitempty"`
+	AcceptsGzipResponse bool                   `json:"accepts_gzip_response,omitzero"`
+	LogRedactor         *ClientHTTPLogRedactor `json:"-"`
 }
 
 func (lchp *LoginClientHTTPParams) MarshalZerologObject(e *zerolog.Event) {
+	logURL := lchp.URL
+	if lchp.LogRedactor != nil {
+		logURL = lchp.LogRedactor.String()
+	}
 	e.Str("request_id", lchp.RequestID).
 		Str("method", lchp.Method).
-		Str("url", lchp.URL).
+		Str("url", logURL).
 		Int("header_count", len(lchp.Headers)).
 		Int("body_length", len(lchp.Body)).
 		Str("fingerprint", lchp.Fingerprint).
