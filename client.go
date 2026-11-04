@@ -1709,6 +1709,13 @@ func (cli *Client) CreateRoom(ctx context.Context, req *ReqCreateRoom) (resp *Re
 	return
 }
 
+// UpgradeRoom upgrades the given room to a new room version. See https://spec.matrix.org/v1.16/client-server-api/#post_matrixclientv3roomsroomidupgrade
+func (cli *Client) UpgradeRoom(ctx context.Context, roomID id.RoomID, req *ReqUpgradeRoom) (resp *RespUpgradeRoom, err error) {
+	urlPath := cli.BuildClientURL("v3", "rooms", roomID, "upgrade")
+	_, err = cli.MakeRequest(ctx, http.MethodPost, urlPath, req, &resp)
+	return
+}
+
 // LeaveRoom leaves the given room. See https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3roomsroomidleave
 func (cli *Client) LeaveRoom(ctx context.Context, roomID id.RoomID, optionalReq ...*ReqLeave) (resp *RespLeaveRoom, err error) {
 	req := &ReqLeave{}
