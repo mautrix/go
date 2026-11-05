@@ -73,6 +73,7 @@ func processResolveIdentifiers(ctx context.Context, br *bridgev2.Bridge, resp []
 			if contact.UserInfo.Identifiers != nil {
 				apiContact.Identifiers = contact.UserInfo.Identifiers
 			}
+			apiContact.ExtraProfile = contact.UserInfo.ExtraProfile
 		}
 		if contact.Ghost != nil {
 			if syncInfo && contact.UserInfo != nil {
@@ -86,6 +87,7 @@ func processResolveIdentifiers(ctx context.Context, br *bridgev2.Bridge, resp []
 			}
 			apiContact.AvatarURL = contact.Ghost.AvatarMXC
 			apiContact.MXID = contact.Ghost.Intent.GetMXID()
+			apiContact.ExtraProfile = contact.Ghost.ExtraProfile
 		}
 		if contact.Chat != nil {
 			if contact.Chat.Portal == nil {
