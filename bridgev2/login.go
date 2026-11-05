@@ -210,6 +210,7 @@ type LoginClientHTTPResponse struct {
 	StatusCode  int         `json:"status_code,omitzero"`
 	FinalURL    string      `json:"final_url,omitempty"`
 	Headers     http.Header `json:"headers,omitempty"`
+	Trailers    http.Header `json:"trailers,omitempty"`
 	Body        []byte      `json:"body,omitempty"`
 	Error       string      `json:"error,omitempty"`
 	Fingerprint string      `json:"fingerprint,omitempty"`

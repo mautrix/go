@@ -1311,6 +1311,9 @@ components:
           description: The final URL after following redirects.
         headers:
           $ref: '#/components/schemas/HTTPHeaders'
+        trailers:
+          $ref: '#/components/schemas/HTTPHeaders'
+          description: HTTP trailers received after reading the response body.
         body:
           type: string
           format: byte

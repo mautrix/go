@@ -288,12 +288,13 @@ func (p *ProvLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 	if resp.Headers == nil {
 		resp.Headers = make(http.Header)
-	} else {
-		for key, values := range resp.Headers {
+	}
+	for _, headers := range []http.Header{resp.Headers, resp.Trailers} {
+		for key, values := range headers {
 			canon := http.CanonicalHeaderKey(key)
 			if canon != key {
-				resp.Headers[canon] = append(resp.Headers[canon], values...)
-				delete(resp.Headers, key)
+				headers[canon] = append(headers[canon], values...)
+				delete(headers, key)
 			}
 		}
 	}
@@ -307,6 +308,7 @@ func (p *ProvLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 		Proto:         ClientHTTPProto,
 		ProtoMajor:    1,
 		Header:        resp.Headers,
+		Trailer:       resp.Trailers,
 		Body:          responseBody,
 		ContentLength: contentLength,
 		Request: &http.Request{
