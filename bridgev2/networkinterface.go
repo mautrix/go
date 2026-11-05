@@ -381,6 +381,9 @@ type NetworkGeneralCapabilities struct {
 	// This should be enabled if the network requires each message to be marked as read independently,
 	// and doesn't automatically do it when sending a message.
 	ImplicitReadReceipts bool
+	// Does HandleMatrixReadReceipt respect [event.ReadReceipt.ThreadID]?
+	// Receipts scoped to a thread are dropped if this is false, as they would otherwise read the whole chat.
+	ThreadReadReceipts bool
 	// If the bridge uses the pending message mechanism ([MatrixMessage.AddPendingToSave])
 	// to handle asynchronous message responses, this field can be set to enable
 	// automatic timeout errors in case the asynchronous response never arrives.
