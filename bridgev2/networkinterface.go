@@ -1135,6 +1135,15 @@ type PushableNetworkAPI interface {
 	GetPushConfigs() *PushConfig
 }
 
+// PushUnregisteringNetworkAPI is an optional extension interface for PushableNetworkAPI
+// that network connectors can implement to clear any push state when the wrapper app stops using push.
+type PushUnregisteringNetworkAPI interface {
+	PushableNetworkAPI
+
+	// UnregisterPushNotifications is called when the wrapper app has stopped using push notifications for this login.
+	UnregisterPushNotifications(ctx context.Context) error
+}
+
 // PushParsingNetwork is an optional interface that network connectors can implement
 // to support parsing native push notifications from networks.
 type PushParsingNetwork interface {
