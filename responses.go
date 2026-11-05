@@ -818,6 +818,12 @@ type RespGetRelations struct {
 	RecursionDepth int            `json:"recursion_depth,omitzero"`
 }
 
+// RespGetThreads is the JSON response for https://spec.matrix.org/v1.16/client-server-api/#get_matrixclientv1roomsroomidthreads
+type RespGetThreads struct {
+	Chunk     []*event.Event `json:"chunk"`
+	NextBatch string         `json:"next_batch,omitempty"`
+}
+
 // RespSuspended is the response body for https://github.com/matrix-org/matrix-spec-proposals/pull/4323
 type RespSuspended struct {
 	Suspended bool `json:"suspended"`

@@ -2556,6 +2556,13 @@ func (cli *Client) GetRelations(ctx context.Context, roomID id.RoomID, eventID i
 	return
 }
 
+// GetThreads gets the thread roots in a room. See https://spec.matrix.org/v1.16/client-server-api/#get_matrixclientv1roomsroomidthreads
+func (cli *Client) GetThreads(ctx context.Context, roomID id.RoomID, req *ReqGetThreads) (resp *RespGetThreads, err error) {
+	urlPath := cli.BuildURLWithQuery(ClientURLPath{"v1", "rooms", roomID, "threads"}, req.Query())
+	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	return
+}
+
 func (cli *Client) MarkRead(ctx context.Context, roomID id.RoomID, eventID id.EventID) (err error) {
 	return cli.SendReceipt(ctx, roomID, eventID, event.ReceiptTypeRead, nil)
 }
