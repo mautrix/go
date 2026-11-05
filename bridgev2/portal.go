@@ -1044,12 +1044,14 @@ func (portal *Portal) callReadReceiptHandler(
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to handle read receipt")
 		return
 	}
-	userPortal.LastRead = evt.ReadUpTo
-	err = portal.Bridge.DB.UserPortal.Put(ctx, userPortal)
-	if err != nil {
-		zerolog.Ctx(ctx).Err(err).Msg("Failed to save user portal metadata")
+	if !evt.Receipt.IsThread() {
+		userPortal.LastRead = evt.ReadUpTo
+		err = portal.Bridge.DB.UserPortal.Put(ctx, userPortal)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to save user portal metadata")
+		}
+		portal.startDisappearingAfterRead(ctx, login, evt.ReadUpTo, evt.Receipt.Timestamp, true)
 	}
-	portal.startDisappearingAfterRead(ctx, login, evt.ReadUpTo, evt.Receipt.Timestamp, true)
 }
 
 func (portal *Portal) startDisappearingAfterRead(ctx context.Context, source *UserLogin, readUpTo, timestamp time.Time, fromMe bool) {
