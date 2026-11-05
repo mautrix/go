@@ -983,10 +983,6 @@ func (portal *Portal) handleMatrixReadReceipt(ctx context.Context, user *User, e
 		Stringer("receipt_ts", receipt.Timestamp).
 		Stringer("thread_id", receipt.ThreadID).
 		Logger()
-	if isThreadScopedReceipt(receipt) && !portal.Bridge.Network.GetCapabilities().ThreadReadReceipts {
-		log.Debug().Msg("Dropping thread read receipt as network connector doesn't support them")
-		return
-	}
 	login, userPortal, err := portal.FindPreferredLogin(ctx, user, false)
 	if err != nil {
 		if !errors.Is(err, ErrNotLoggedIn) {
@@ -1023,10 +1019,6 @@ func (portal *Portal) handleMatrixReadReceipt(ctx context.Context, user *User, e
 	portal.callReadReceiptHandler(ctx, login, rrClient, evt, userPortal)
 }
 
-func isThreadScopedReceipt(receipt event.ReadReceipt) bool {
-	return receipt.ThreadID != "" && receipt.ThreadID != event.ReadReceiptThreadMain
-}
-
 func (portal *Portal) callReadReceiptHandler(
 	ctx context.Context,
 	login *UserLogin,
@@ -1052,7 +1044,7 @@ func (portal *Portal) callReadReceiptHandler(
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to handle read receipt")
 		return
 	}
-	if isThreadScopedReceipt(evt.Receipt) {
+	if evt.Receipt.ThreadID != "" && evt.Receipt.ThreadID != event.ReadReceiptThreadMain {
 		return
 	}
 	userPortal.LastRead = evt.ReadUpTo

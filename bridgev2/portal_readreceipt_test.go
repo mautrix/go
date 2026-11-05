@@ -16,15 +16,6 @@ import (
 	"maunium.net/go/mautrix/event"
 )
 
-type readReceiptTestConnector struct {
-	NetworkConnector
-	threadReadReceipts bool
-}
-
-func (c *readReceiptTestConnector) GetCapabilities() *NetworkGeneralCapabilities {
-	return &NetworkGeneralCapabilities{ThreadReadReceipts: c.threadReadReceipts}
-}
-
 type readReceiptTestClient struct {
 	NetworkAPI
 	handled int
@@ -33,18 +24,6 @@ type readReceiptTestClient struct {
 func (c *readReceiptTestClient) HandleMatrixReadReceipt(context.Context, *MatrixReadReceipt) error {
 	c.handled++
 	return nil
-}
-
-func TestIsThreadScopedReceipt(t *testing.T) {
-	assert.False(t, isThreadScopedReceipt(event.ReadReceipt{}))
-	assert.False(t, isThreadScopedReceipt(event.ReadReceipt{ThreadID: event.ReadReceiptThreadMain}))
-	assert.True(t, isThreadScopedReceipt(event.ReadReceipt{ThreadID: "$root"}))
-}
-
-func TestHandleMatrixReadReceipt_DropsThreadReceiptWithoutCapability(t *testing.T) {
-	// A receipt that isn't dropped reaches FindPreferredLogin, which panics on the empty bridge.
-	portal := &Portal{Bridge: &Bridge{Network: &readReceiptTestConnector{}}}
-	portal.handleMatrixReadReceipt(context.Background(), &User{User: &database.User{}}, "$reply", event.ReadReceipt{ThreadID: "$root"})
 }
 
 func TestCallReadReceiptHandler_ThreadReceiptKeepsChatState(t *testing.T) {
