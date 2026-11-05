@@ -94,6 +94,8 @@ type MatrixConnectorWithServer interface {
 type IProvisioningAPI interface {
 	GetRouter() *http.ServeMux
 	GetUser(r *http.Request) *User
+	GetExplicitLoginForRequest(w http.ResponseWriter, r *http.Request) (login *UserLogin, failed bool)
+	GetLoginForRequest(w http.ResponseWriter, r *http.Request) *UserLogin
 }
 
 type MatrixConnectorWithProvisioning interface {
