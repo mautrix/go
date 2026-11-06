@@ -274,7 +274,7 @@ func (portal *Portal) cutoffMessages(ctx context.Context, messages []*BackfillMe
 		cutoff := -1
 		var cutoffIDs []networkid.MessageID
 		for i, msg := range messages {
-			if msg.ID == lastMessage.ID || !msg.Timestamp.After(lastMessage.Timestamp) {
+			if msg.Timestamp.Before(lastMessage.Timestamp) {
 				cutoff = i
 				cutoffIDs = append(cutoffIDs, msg.ID)
 			} else {
@@ -294,7 +294,7 @@ func (portal *Portal) cutoffMessages(ctx context.Context, messages []*BackfillMe
 		cutoff := -1
 		var cutoffIDs []networkid.MessageID
 		for i, message := range slices.Backward(messages) {
-			if message.ID == lastMessage.ID || !message.Timestamp.Before(lastMessage.Timestamp) {
+			if message.Timestamp.After(lastMessage.Timestamp) {
 				cutoff = i
 				cutoffIDs = append(cutoffIDs, message.ID)
 			} else {
@@ -311,9 +311,16 @@ func (portal *Portal) cutoffMessages(ctx context.Context, messages []*BackfillMe
 			messages = messages[:cutoff]
 		}
 	}
-	if aggressiveDedup {
+	if aggressiveDedup || lastMessage != nil {
 		filteredMessages := messages[:0]
 		for _, msg := range messages {
+			if lastMessage != nil && msg.ID == lastMessage.ID {
+				continue
+			}
+			if !aggressiveDedup && !msg.Timestamp.Equal(lastMessage.Timestamp) {
+				filteredMessages = append(filteredMessages, msg)
+				continue
+			}
 			existingMsg, err := portal.Bridge.DB.Message.GetFirstPartByID(ctx, portal.Receiver, msg.ID)
 			if err != nil {
 				zerolog.Ctx(ctx).Err(err).Str("message_id", string(msg.ID)).Msg("Failed to check for existing message")
