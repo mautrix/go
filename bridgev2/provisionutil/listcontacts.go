@@ -62,6 +62,9 @@ func SearchUsers(ctx context.Context, login *bridgev2.UserLogin, query string) (
 func processResolveIdentifiers(ctx context.Context, br *bridgev2.Bridge, resp []*bridgev2.ResolveIdentifierResponse, syncInfo bool) (apiResp []*RespResolveIdentifier) {
 	apiResp = make([]*RespResolveIdentifier, len(resp))
 	for i, contact := range resp {
+		if ctx.Err() != nil {
+			return apiResp[:i]
+		}
 		apiContact := &RespResolveIdentifier{
 			ID: contact.UserID,
 		}
