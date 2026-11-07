@@ -62,6 +62,8 @@ func getTypeName(expr ast.Expr) string {
 		return fmt.Sprintf("func(%s) %s", strings.Join(params, ", "), strings.Join(results, ", "))
 	case *ast.SelectorExpr:
 		return fmt.Sprintf("%s.%s", getTypeName(e.X), e.Sel.Name)
+	case *ast.IndexExpr:
+		return fmt.Sprintf("%s[%s]", getTypeName(e.X), getTypeName(e.Index))
 	default:
 		panic(fmt.Errorf("unknown type %T", e))
 	}
