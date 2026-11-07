@@ -5009,7 +5009,7 @@ func (portal *Portal) syncParticipants(
 				currentMember.Membership = event.MembershipLeave
 			}
 		}
-		if content.Membership == event.MembershipJoin && intent != nil && intent.GetMXID() == extraUserID {
+		if (content.Membership == event.MembershipJoin || content.Membership == event.MembershipKnock) && intent != nil && intent.GetMXID() == extraUserID {
 			_, err = intent.SendState(ctx, portal.MXID, event.StateMember, extraUserID.String(), wrappedContent, ts)
 		} else {
 			_, err = portal.sendStateWithIntentOrBot(ctx, thisEvtSender, event.StateMember, extraUserID.String(), wrappedContent, ts)
