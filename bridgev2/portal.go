@@ -75,6 +75,12 @@ type outgoingMessage struct {
 	disappearSetting database.DisappearingSetting
 }
 
+type sendingMessage struct {
+	handlerDone bool
+	savedMXID   id.EventID
+	redactions  []*portalMatrixEvent
+}
+
 type Portal struct {
 	*database.Portal
 	Bridge *Bridge
@@ -90,6 +96,7 @@ type Portal struct {
 	lastMatrixTyping      time.Time
 
 	outgoingMessages     map[networkid.TransactionID]*outgoingMessage
+	sendingMessages      map[id.EventID]*sendingMessage
 	outgoingMessagesLock sync.Mutex
 
 	roomCreateLock   sync.Mutex
@@ -140,6 +147,7 @@ func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, que
 		currentlyTypingLogins: make(map[id.UserID]*UserLogin),
 		currentlyTypingGhosts: exsync.NewSet[id.UserID](),
 		outgoingMessages:      make(map[networkid.TransactionID]*outgoingMessage),
+		sendingMessages:       make(map[id.EventID]*sendingMessage),
 
 		RoomCreated: exsync.NewEvent(),
 	}
@@ -1288,6 +1296,13 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		}
 		return portal.handleMatrixEdit(ctx, sender, origSender, evt, msgContent, caps)
 	}
+	portal.outgoingMessagesLock.Lock()
+	portal.sendingMessages[evt.ID] = &sendingMessage{}
+	portal.outgoingMessagesLock.Unlock()
+	var savedMXID id.EventID
+	defer func() {
+		portal.finishSendingMessage(ctx, evt.ID, savedMXID)
+	}()
 	var err error
 	if origSender != nil {
 		if msgContent == nil {
@@ -1400,6 +1415,7 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 				Stringer("message_mxid", part.MXID).
 				Stringer("input_event_id", evt.ID).
 				Msg("Message already sent, ignoring")
+			savedMXID = part.MXID
 			portal.sendSuccessStatus(ctx, evt, 0, part.MXID, nil)
 			return EventHandlingResultIgnored.WithEventID(part.MXID)
 		}
@@ -1434,6 +1450,7 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		return EventHandlingResultFailed.WithMSSError(err)
 	}
 	message := wrappedMsgEvt.fillDBMessage(resp.DB)
+	savedMXID = message.MXID
 	if resp.Pending {
 		for _, save := range wrappedMsgEvt.pendingSaves {
 			save.ackedAt = time.Now()
@@ -1444,6 +1461,7 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		} else {
 			if portal.Bridge.Config.OutgoingMessageReID {
 				message.MXID = portal.Bridge.Matrix.GenerateDeterministicEventID(portal.MXID, portal.PortalKey, message.ID, message.PartID)
+				savedMXID = message.MXID
 			}
 			// Hack to ensure the ghost row exists
 			// TODO move to better place (like login)
@@ -1477,6 +1495,60 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		return EventHandlingResultQueued
 	}
 	return EventHandlingResultSuccess.WithEventID(message.MXID).WithStreamOrder(resp.StreamOrder)
+}
+
+func (portal *Portal) finishSendingMessage(ctx context.Context, evtID, savedMXID id.EventID) {
+	portal.outgoingMessagesLock.Lock()
+	defer portal.outgoingMessagesLock.Unlock()
+	sending, ok := portal.sendingMessages[evtID]
+	if !ok {
+		return
+	}
+	sending.handlerDone = true
+	if !portal.unlockedHasPendingSave(evtID) {
+		sending.savedMXID = cmp.Or(sending.savedMXID, savedMXID)
+	}
+	portal.unlockedReleaseHeldRedactions(ctx, evtID)
+}
+
+func (portal *Portal) unlockedHasPendingSave(evtID id.EventID) bool {
+	for _, msg := range portal.outgoingMessages {
+		if msg.evt != nil && msg.evt.ID == evtID {
+			return true
+		}
+	}
+	return false
+}
+
+func (portal *Portal) unlockedReleaseHeldRedactions(ctx context.Context, evtID id.EventID) {
+	sending, ok := portal.sendingMessages[evtID]
+	if !ok || !sending.handlerDone || portal.unlockedHasPendingSave(evtID) {
+		return
+	}
+	delete(portal.sendingMessages, evtID)
+	for _, redaction := range sending.redactions {
+		if sending.savedMXID == "" {
+			portal.sendSuccessStatus(ctx, redaction.evt, 0, "", nil)
+		} else {
+			redaction.evt.Redacts = sending.savedMXID
+			go portal.queueEvent(ctx, redaction)
+		}
+	}
+}
+
+func (portal *Portal) holdRedactionForSendingMessage(evt *event.Event, target id.EventID, sender *UserLogin, origSender *OrigSender) bool {
+	portal.outgoingMessagesLock.Lock()
+	defer portal.outgoingMessagesLock.Unlock()
+	sending, ok := portal.sendingMessages[target]
+	if !ok {
+		return false
+	}
+	user := sender.User
+	if origSender != nil {
+		user = origSender.User
+	}
+	sending.redactions = append(sending.redactions, &portalMatrixEvent{evt: evt, sender: user})
+	return true
 }
 
 func (portal *Portal) scheduleOutgoingDisappearingMessage(ctx context.Context, message *database.Message, ds database.DisappearingSetting) {
@@ -1543,6 +1615,7 @@ func (evt *MatrixMessage) RemovePending(txnID networkid.TransactionID) {
 		})
 	}
 	delete(evt.Portal.outgoingMessages, txnID)
+	evt.Portal.unlockedReleaseHeldRedactions(evt.Portal.Log.WithContext(evt.Portal.backgroundCtx), evt.Event.ID)
 	evt.Portal.outgoingMessagesLock.Unlock()
 }
 
@@ -2666,6 +2739,10 @@ func (portal *Portal) handleMatrixRedaction(
 		log.Debug().Msg("Ignoring redaction without checking target as network connector doesn't implement RedactionHandlingNetworkAPI nor ReactionHandlingNetworkAPI")
 		return EventHandlingResultIgnored.WithMSSError(ErrRedactionsNotSupported)
 	}
+	if deleteOK && portal.holdRedactionForSendingMessage(evt, content.Redacts, sender, origSender) {
+		log.Debug().Msg("Redaction target message is still being sent, holding redaction until it's done")
+		return EventHandlingResultQueued
+	}
 	var redactionTargetReaction *database.Reaction
 	redactionTargetMsg, err := portal.Bridge.DB.Message.GetPartByMXID(ctx, content.Redacts)
 	if err != nil {
@@ -3180,6 +3257,10 @@ func (portal *Portal) checkPendingMessage(ctx context.Context, evt RemoteMessage
 		} else {
 			portal.scheduleOutgoingDisappearingMessage(ctx, pending.db, pending.disappearSetting)
 		}
+	}
+	if sending, ok := portal.sendingMessages[pending.evt.ID]; ok {
+		sending.savedMXID = pending.db.MXID
+		portal.unlockedReleaseHeldRedactions(ctx, pending.evt.ID)
 	}
 	if !errors.Is(statusErr, ErrNoStatus) {
 		if statusErr != nil {
