@@ -77,6 +77,7 @@ type outgoingMessage struct {
 
 type sendingMessage struct {
 	handlerDone bool
+	timeouted   bool
 	savedMXID   id.EventID
 	redactions  []*portalMatrixEvent
 }
@@ -1536,19 +1537,19 @@ func (portal *Portal) unlockedReleaseHeldRedactions(ctx context.Context, evtID i
 	}
 }
 
-func (portal *Portal) holdRedactionForSendingMessage(evt *event.Event, target id.EventID, sender *UserLogin, origSender *OrigSender) bool {
+func (portal *Portal) holdRedactionForSendingMessage(evt *event.Event, target id.EventID, sender *UserLogin, origSender *OrigSender) (held, timeouted bool) {
 	portal.outgoingMessagesLock.Lock()
 	defer portal.outgoingMessagesLock.Unlock()
 	sending, ok := portal.sendingMessages[target]
 	if !ok {
-		return false
+		return false, false
 	}
 	user := sender.User
 	if origSender != nil {
 		user = origSender.User
 	}
 	sending.redactions = append(sending.redactions, &portalMatrixEvent{evt: evt, sender: user})
-	return true
+	return true, sending.timeouted
 }
 
 func (portal *Portal) scheduleOutgoingDisappearingMessage(ctx context.Context, message *database.Message, ds database.DisappearingSetting) {
@@ -1680,6 +1681,12 @@ func (portal *Portal) checkPendingMessages(ctx context.Context, cfg *OutgoingTim
 			} else if cfg.NoAckTimeout > 0 && time.Since(msg.db.Timestamp) > cfg.NoAckTimeout {
 				msg.timeouted = true
 				portal.sendErrorStatus(ctx, msg.evt, ErrRemoteAckTimeout.WithMessage(cfg.NoAckMessage))
+			}
+			if sending, ok := portal.sendingMessages[msg.evt.ID]; ok && msg.timeouted && !sending.timeouted {
+				sending.timeouted = true
+				for _, redaction := range sending.redactions {
+					portal.sendSuccessStatus(ctx, redaction.evt, 0, "", nil)
+				}
 			}
 		}
 	}
@@ -2739,9 +2746,14 @@ func (portal *Portal) handleMatrixRedaction(
 		log.Debug().Msg("Ignoring redaction without checking target as network connector doesn't implement RedactionHandlingNetworkAPI nor ReactionHandlingNetworkAPI")
 		return EventHandlingResultIgnored.WithMSSError(ErrRedactionsNotSupported)
 	}
-	if deleteOK && portal.holdRedactionForSendingMessage(evt, content.Redacts, sender, origSender) {
-		log.Debug().Msg("Redaction target message is still being sent, holding redaction until it's done")
-		return EventHandlingResultQueued
+	if deleteOK {
+		if held, timeouted := portal.holdRedactionForSendingMessage(evt, content.Redacts, sender, origSender); held {
+			log.Debug().Bool("send_timed_out", timeouted).Msg("Redaction target message is still being sent, holding redaction until it's done")
+			if timeouted {
+				return EventHandlingResultSuccess.WithMSS()
+			}
+			return EventHandlingResultQueued
+		}
 	}
 	var redactionTargetReaction *database.Reaction
 	redactionTargetMsg, err := portal.Bridge.DB.Message.GetPartByMXID(ctx, content.Redacts)
