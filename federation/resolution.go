@@ -29,6 +29,7 @@ type ResolvedServerName struct {
 	HostHeader string    `json:"host_header"`
 	IPPort     []string  `json:"ip_port"`
 	Expires    time.Time `json:"expires"`
+	FetchedAt  time.Time `json:"fetched_at"`
 }
 
 type ResolveServerNameOpts struct {
@@ -57,6 +58,7 @@ func ResolveServerName(ctx context.Context, serverName string, opts ...*ResolveS
 		HostHeader: serverName,
 		IPPort:     []string{serverName},
 		Expires:    time.Now().Add(24 * time.Hour),
+		FetchedAt:  time.Now(),
 	}
 	hostname, port, ok := ParseServerName(serverName)
 	if !ok {

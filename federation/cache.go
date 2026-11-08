@@ -41,12 +41,11 @@ type KeyCache interface {
 type InMemoryCache struct {
 	MinKeyRefetchDelay time.Duration
 
-	resolutions     map[string]*ResolvedServerName
-	resolutionsLock sync.RWMutex
-	keys            map[string]*ServerKeyResponse
-	lastReQueryAt   map[string]time.Time
-	lastError       map[string]*resolutionErrorCache
-	keysLock        sync.RWMutex
+	resolutions   map[string]*ResolvedServerName
+	keys          map[string]*ServerKeyResponse
+	lastReQueryAt map[string]time.Time
+	lastError     map[string]*resolutionErrorCache
+	lock          sync.RWMutex
 }
 
 var (
@@ -65,25 +64,32 @@ func NewInMemoryCache() *InMemoryCache {
 }
 
 func (c *InMemoryCache) StoreResolution(_ context.Context, resolution *ResolvedServerName) error {
-	c.resolutionsLock.Lock()
-	defer c.resolutionsLock.Unlock()
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	c.resolutions[resolution.ServerName] = resolution
 	return nil
 }
 
 func (c *InMemoryCache) LoadResolution(_ context.Context, serverName string) (*ResolvedServerName, error) {
-	c.resolutionsLock.RLock()
-	defer c.resolutionsLock.RUnlock()
+	c.lock.RLock()
+	defer c.lock.RUnlock()
 	resolution, ok := c.resolutions[serverName]
 	if !ok || time.Until(resolution.Expires) < 0 {
 		return nil, nil
+	}
+	lastErr, ok := c.lastError[serverName]
+	if ok && lastErr.Count > 1 {
+		reresolveBackoff := time.Duration(lastErr.Count) * 2 * time.Minute
+		if time.Since(resolution.FetchedAt) > reresolveBackoff {
+			return nil, nil
+		}
 	}
 	return resolution, nil
 }
 
 func (c *InMemoryCache) StoreKeys(_ context.Context, keys *ServerKeyResponse) error {
-	c.keysLock.Lock()
-	defer c.keysLock.Unlock()
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	c.keys[keys.ServerName] = keys
 	delete(c.lastError, keys.ServerName)
 	return nil
@@ -106,8 +112,8 @@ func (rec *resolutionErrorCache) ShouldRetry(maxBackoff time.Duration) bool {
 var ErrRecentKeyQueryFailed = errors.New("last retry was too recent")
 
 func (c *InMemoryCache) LoadKeys(_ context.Context, serverName string, maxBackoff time.Duration) (*ServerKeyResponse, error) {
-	c.keysLock.RLock()
-	defer c.keysLock.RUnlock()
+	c.lock.RLock()
+	defer c.lock.RUnlock()
 	keys, ok := c.keys[serverName]
 	if !ok || time.Until(keys.ValidUntilTS.Time) < 0 {
 		err, ok := c.lastError[serverName]
@@ -126,8 +132,8 @@ func (c *InMemoryCache) LoadKeys(_ context.Context, serverName string, maxBackof
 }
 
 func (c *InMemoryCache) StoreFetchError(_ context.Context, serverName string, err error) error {
-	c.keysLock.Lock()
-	defer c.keysLock.Unlock()
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	errorCache, ok := c.lastError[serverName]
 	if ok {
 		errorCache.Time = time.Now()
@@ -140,8 +146,8 @@ func (c *InMemoryCache) StoreFetchError(_ context.Context, serverName string, er
 }
 
 func (c *InMemoryCache) ShouldReQuery(_ context.Context, serverName string) (bool, error) {
-	c.keysLock.Lock()
-	defer c.keysLock.Unlock()
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	lastQuery, ok := c.lastReQueryAt[serverName]
 	if ok && time.Since(lastQuery) < c.MinKeyRefetchDelay {
 		return false, nil

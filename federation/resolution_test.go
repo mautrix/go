@@ -109,6 +109,7 @@ func TestResolveServerName(t *testing.T) {
 			resp, err := federation.ResolveServerName(context.TODO(), tc.serverName)
 			require.NoError(t, err)
 			resp.Expires = time.Time{}
+			resp.FetchedAt = time.Time{}
 			assert.Equal(t, tc.expected, *resp)
 		})
 	}
