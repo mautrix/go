@@ -12,11 +12,11 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"sync"
 	"syscall"
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exhttp"
+	"go.mau.fi/util/exsync"
 )
 
 // ServerResolvingTransport is an http.RoundTripper that resolves Matrix server names before sending requests.
@@ -28,8 +28,7 @@ type ServerResolvingTransport struct {
 
 	cache ResolutionCache
 
-	resolveLocks     map[string]*sync.Mutex
-	resolveLocksLock sync.Mutex
+	resolveLocks exsync.KeyedMutex[string]
 }
 
 func NewServerResolvingTransport(cache ResolutionCache, dialer exhttp.DialerFunc, settings exhttp.ClientSettings) *ServerResolvingTransport {
@@ -37,9 +36,8 @@ func NewServerResolvingTransport(cache ResolutionCache, dialer exhttp.DialerFunc
 		cache = NewInMemoryCache()
 	}
 	srt := &ServerResolvingTransport{
-		resolveLocks: make(map[string]*sync.Mutex),
-		cache:        cache,
-		DialFunc:     dialer,
+		cache:    cache,
+		DialFunc: dialer,
 	}
 	srt.Transport = settings.WithDial(srt.DialContext).Configure(&http.Transport{})
 	return srt
@@ -71,17 +69,11 @@ func (srt *ServerResolvingTransport) RoundTrip(request *http.Request) (*http.Res
 }
 
 func (srt *ServerResolvingTransport) resolve(ctx context.Context, serverName string) (*ResolvedServerName, error) {
-	srt.resolveLocksLock.Lock()
-	lock, ok := srt.resolveLocks[serverName]
-	if !ok {
-		lock = &sync.Mutex{}
-		srt.resolveLocks[serverName] = lock
-	}
-	srt.resolveLocksLock.Unlock()
-
-	lock.Lock()
-	defer lock.Unlock()
-	res, err := srt.cache.LoadResolution(ctx, serverName)
+	unlock := srt.resolveLocks.WithLock(serverName)
+	defer unlock()
+	var res *ResolvedServerName
+	var err error
+	res, err = srt.cache.LoadResolution(ctx, serverName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read cache: %w", err)
 	} else if res != nil {
