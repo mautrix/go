@@ -15,6 +15,8 @@ import (
 
 	"github.com/rs/zerolog"
 
+	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
+	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -231,6 +233,27 @@ func (ul *UserLogin) QueueRemoteEvent(evt RemoteEvent) EventHandlingResult {
 	return ul.Bridge.QueueRemoteEvent(ul, evt)
 }
 
+func shouldCreatePortalForRemoteEvent(
+	filter *bridgeconfig.PortalCreateFilter,
+	source networkid.UserLoginID,
+	key networkid.PortalKey,
+	portalExists bool,
+) bool {
+	return portalExists || filter.ShouldAllow(source, key)
+}
+
+func (br *Bridge) getPortalForRemoteEvent(ctx context.Context, login *UserLogin, key networkid.PortalKey) (*Portal, bool, error) {
+	portal, err := br.GetExistingPortalByKey(ctx, key)
+	if err != nil || !shouldCreatePortalForRemoteEvent(&br.Config.PortalCreateFilter, login.ID, key, portal != nil) {
+		return portal, portal == nil && err == nil, err
+	}
+	if portal != nil {
+		return portal, false, nil
+	}
+	portal, err = br.GetPortalByKey(ctx, key)
+	return portal, false, err
+}
+
 func (br *Bridge) QueueRemoteEvent(login *UserLogin, evt RemoteEvent) EventHandlingResult {
 	log := login.Log
 	ctx := log.WithContext(br.BackgroundCtx)
@@ -238,6 +261,7 @@ func (br *Bridge) QueueRemoteEvent(login *UserLogin, evt RemoteEvent) EventHandl
 	isUncertain := ok && maybeUncertain.PortalReceiverIsUncertain()
 	key := evt.GetPortalKey()
 	var portal *Portal
+	var filtered bool
 	var err error
 	if isUncertain && !br.Config.SplitPortals {
 		portal, err = br.GetExistingPortalByKey(ctx, key)
@@ -247,12 +271,16 @@ func (br *Bridge) QueueRemoteEvent(login *UserLogin, evt RemoteEvent) EventHandl
 				newKey := fetcher.FetchCertainPortalKey(ctx)
 				if !newKey.IsEmpty() {
 					key = newKey
-					portal, err = br.GetPortalByKey(ctx, newKey)
+					portal, filtered, err = br.getPortalForRemoteEvent(ctx, login, newKey)
 				}
 			}
 		}
 	} else {
-		portal, err = br.GetPortalByKey(ctx, key)
+		portal, filtered, err = br.getPortalForRemoteEvent(ctx, login, key)
+	}
+	if filtered {
+		log.Debug().Object("portal_key", key).Msg("Dropping remote event because portal creation is disallowed")
+		return EventHandlingResultIgnored
 	}
 	if err != nil {
 		log.Err(err).Object("portal_key", key).Bool("uncertain_receiver", isUncertain).
