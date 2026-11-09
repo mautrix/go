@@ -215,6 +215,8 @@ func (as *ASIntent) MarkTyping(ctx context.Context, roomID id.RoomID, typingType
 	} else if as.Matrix().IsCustomPuppet {
 		// Don't send double puppeted typing notifications, there's no good way to prevent echoing them
 		return nil
+	} else if !as.Matrix().StateStore.IsInRoom(ctx, roomID, as.Matrix().UserID) {
+		return nil
 	}
 	_, err := as.Matrix().UserTyping(ctx, roomID, timeout > 0, timeout)
 	return err
