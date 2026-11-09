@@ -91,7 +91,7 @@ func ResolveIdentifier(
 	}
 	if resp.Ghost != nil {
 		if resp.UserInfo != nil {
-			resp.Ghost.UpdateInfo(ctx, resp.UserInfo)
+			resp.Ghost.UpdateInfo(zerolog.Ctx(ctx).WithContext(login.Bridge.BackgroundCtx), resp.UserInfo)
 		}
 		apiResp.Name = resp.Ghost.Name
 		apiResp.AvatarURL = resp.Ghost.AvatarMXC

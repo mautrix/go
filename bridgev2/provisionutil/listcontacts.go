@@ -76,7 +76,7 @@ func processResolveIdentifiers(ctx context.Context, br *bridgev2.Bridge, resp []
 		}
 		if contact.Ghost != nil {
 			if syncInfo && contact.UserInfo != nil {
-				contact.Ghost.UpdateInfo(ctx, contact.UserInfo)
+				contact.Ghost.UpdateInfo(zerolog.Ctx(ctx).WithContext(br.BackgroundCtx), contact.UserInfo)
 			}
 			if contact.Ghost.Name != "" {
 				apiContact.Name = contact.Ghost.Name
