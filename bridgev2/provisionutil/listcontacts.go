@@ -36,8 +36,12 @@ func GetContactList(ctx context.Context, login *bridgev2.UserLogin) (*RespGetCon
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to get contact list")
 		return nil, err
 	}
+	contacts, err := processResolveIdentifiers(ctx, login.Bridge, resp, false)
+	if err != nil {
+		return nil, err
+	}
 	return &RespGetContactList{
-		Contacts: processResolveIdentifiers(ctx, login.Bridge, resp, false),
+		Contacts: contacts,
 	}, nil
 }
 
@@ -54,14 +58,21 @@ func SearchUsers(ctx context.Context, login *bridgev2.UserLogin, query string) (
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to search for users")
 		return nil, err
 	}
+	results, err := processResolveIdentifiers(ctx, login.Bridge, resp, true)
+	if err != nil {
+		return nil, err
+	}
 	return &RespSearchUsers{
-		Results: processResolveIdentifiers(ctx, login.Bridge, resp, true),
+		Results: results,
 	}, nil
 }
 
-func processResolveIdentifiers(ctx context.Context, br *bridgev2.Bridge, resp []*bridgev2.ResolveIdentifierResponse, syncInfo bool) (apiResp []*RespResolveIdentifier) {
-	apiResp = make([]*RespResolveIdentifier, len(resp))
+func processResolveIdentifiers(ctx context.Context, br *bridgev2.Bridge, resp []*bridgev2.ResolveIdentifierResponse, syncInfo bool) ([]*RespResolveIdentifier, error) {
+	apiResp := make([]*RespResolveIdentifier, len(resp))
 	for i, contact := range resp {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		apiContact := &RespResolveIdentifier{
 			ID: contact.UserID,
 		}
@@ -100,5 +111,5 @@ func processResolveIdentifiers(ctx context.Context, br *bridgev2.Bridge, resp []
 			}
 		}
 	}
-	return
+	return apiResp, nil
 }
