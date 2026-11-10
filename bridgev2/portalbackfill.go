@@ -595,6 +595,7 @@ func (portal *Portal) sendBatch(ctx context.Context, source *UserLogin, messages
 			} else if existing != nil {
 				logEvt = logEvt.
 					Str("existing_portal_id", string(existing.Room.ID)).
+					Str("existing_portal_receiver", string(existing.Room.Receiver)).
 					Bool("existing_same_portal", existing.Room == msg.Room).
 					Time("existing_ts", existing.Timestamp).
 					Bool("existing_fake", strings.HasPrefix(existing.MXID.String(), "~fake:"))
