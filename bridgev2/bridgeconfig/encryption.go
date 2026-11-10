@@ -18,6 +18,9 @@ type EncryptionConfig struct {
 	MSC4190    bool `yaml:"msc4190"`
 	MSC4392    bool `yaml:"msc4392"`
 	SelfSign   bool `yaml:"self_sign"`
+	// GhostDevices gives every ghost its own encryption device, cross-signed by
+	// its own identity, so clients see the sender own the session.
+	GhostDevices bool `yaml:"ghost_devices"`
 
 	PlaintextMentions bool `yaml:"plaintext_mentions"`
 

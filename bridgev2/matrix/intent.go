@@ -104,7 +104,7 @@ func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType
 					as.Matrix().AddDoublePuppetValueWithTS(content, extra.Timestamp.UnixMilli())
 				}
 			}
-			err = as.Connector.Crypto.Encrypt(ctx, roomID, eventType, content)
+			err = as.Connector.Crypto.EncryptAs(ctx, as.UserID, roomID, eventType, content)
 			if err != nil {
 				return nil, err
 			}

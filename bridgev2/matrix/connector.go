@@ -46,6 +46,7 @@ type Crypto interface {
 	HandleMemberEvent(context.Context, *event.Event)
 	Decrypt(context.Context, *event.Event) (*event.Event, error)
 	Encrypt(context.Context, id.RoomID, event.Type, *event.Content) error
+	EncryptAs(ctx context.Context, sender id.UserID, roomID id.RoomID, evtType event.Type, content *event.Content) error
 	WaitForSession(context.Context, id.RoomID, id.SenderKey, id.SessionID, time.Duration) bool
 	RequestSession(context.Context, id.RoomID, id.SenderKey, id.SessionID, id.UserID, id.DeviceID)
 	ResetSession(context.Context, id.RoomID)
@@ -736,7 +737,7 @@ func (br *Connector) BatchSend(ctx context.Context, roomID id.RoomID, req *mautr
 				intent.AddDoublePuppetValueWithTS(&evt.Content, evt.Timestamp)
 			}
 			if evt.Type != event.EventEncrypted && evt.Type != event.EventReaction {
-				err = br.Crypto.Encrypt(ctx, roomID, evt.Type, &evt.Content)
+				err = br.Crypto.EncryptAs(ctx, evt.Sender, roomID, evt.Type, &evt.Content)
 				if err != nil {
 					return nil, err
 				}

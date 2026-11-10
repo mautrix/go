@@ -57,6 +57,9 @@ type CryptoHelper struct {
 	cancelSync func()
 
 	cancelPeriodicDeleteLoop func()
+
+	ghosts        *ghostMachines
+	listenerAdded sync.Once
 }
 
 func NewCryptoHelper(c *Connector) Crypto {
@@ -68,6 +71,7 @@ func NewCryptoHelper(c *Connector) Crypto {
 	return &CryptoHelper{
 		bridge: c,
 		log:    &log,
+		ghosts: newGhostMachines(),
 	}
 }
 
@@ -101,20 +105,9 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 		Str("device_id", helper.client.DeviceID.String()).
 		Msg("Logged in as bridge bot")
 	helper.mach = crypto.NewOlmMachine(helper.client, helper.log, helper.store, helper.bridge.StateStore)
-	helper.mach.DisableSharedGroupSessionTracking = true
-	helper.mach.AllowKeyShare = helper.allowKeyShare
+	helper.configureMachine(helper.mach)
 
 	encryptionConfig := helper.bridge.Config.Encryption
-	helper.mach.SendKeysMinTrust = encryptionConfig.VerificationLevels.Receive
-	helper.mach.PlaintextMentions = encryptionConfig.PlaintextMentions
-
-	helper.mach.DeleteOutboundKeysOnAck = encryptionConfig.DeleteKeys.DeleteOutboundOnAck
-	helper.mach.DontStoreOutboundKeys = encryptionConfig.DeleteKeys.DontStoreOutbound
-	helper.mach.RatchetKeysOnDecrypt = encryptionConfig.DeleteKeys.RatchetOnDecrypt
-	helper.mach.DeleteFullyUsedKeysOnDecrypt = encryptionConfig.DeleteKeys.DeleteFullyUsedOnDecrypt
-	helper.mach.DeletePreviousKeysOnReceive = encryptionConfig.DeleteKeys.DeletePrevOnNewSession
-	helper.mach.DeleteKeysOnDeviceDelete = encryptionConfig.DeleteKeys.DeleteOnDeviceDelete
-	helper.mach.DisableDeviceChangeKeyRotation = encryptionConfig.Rotation.DisableDeviceChangeKeyRotation
 	if encryptionConfig.DeleteKeys.PeriodicallyDeleteExpired {
 		ctx, cancel := context.WithCancel(context.Background())
 		helper.cancelPeriodicDeleteLoop = cancel
@@ -136,7 +129,7 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 		return err
 	}
 	helper.streams = streams
-	helper.client.Syncer = &cryptoSyncer{OlmMachine: helper.mach, handleSyncResponse: streams.HandleSyncResponse}
+	helper.client.Syncer = &cryptoSyncer{OlmMachine: helper.mach, handleSyncResponse: streams.HandleSyncResponse, onDevicesChanged: helper.rotateGhostSessions}
 	helper.client.Store = helper.store
 
 	err = helper.mach.Load(ctx)
@@ -168,7 +161,12 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 	if helper.bridge.Config.Encryption.Appservice {
 		helper.log.Debug().Msg("End-to-bridge encryption is in appservice mode, registering event listeners and not starting syncer")
 		helper.bridge.AS.Registration.EphemeralEvents = true
-		helper.mach.AddAppserviceListener(helper.bridge.EventProcessor)
+		if helper.ghostDevicesEnabled() {
+			// Registered once: the router reads helper.mach, so it survives Reset.
+			helper.listenerAdded.Do(func() { helper.addRoutedAppserviceListener(helper.bridge.EventProcessor) })
+		} else {
+			helper.mach.AddAppserviceListener(helper.bridge.EventProcessor)
+		}
 		helper.bridge.EventProcessor.On(event.StateHistoryVisibility, helper.mach.HandleHistoryVisibility)
 		if helper.streams != nil {
 			err = helper.streams.InitAppservice(helper.bridge.EventProcessor)
@@ -179,8 +177,27 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 	}
 
 	go helper.resyncEncryptionInfo(context.TODO())
+	if helper.ghostDevicesEnabled() {
+		go helper.loadGhostMachines(helper.log.WithContext(context.TODO()))
+	}
 
 	return nil
+}
+
+// configureMachine applies the encryption config to a machine, the bot's or a ghost's.
+func (helper *CryptoHelper) configureMachine(mach *crypto.OlmMachine) {
+	encryptionConfig := helper.bridge.Config.Encryption
+	mach.DisableSharedGroupSessionTracking = true
+	mach.AllowKeyShare = helper.allowKeyShare
+	mach.SendKeysMinTrust = encryptionConfig.VerificationLevels.Receive
+	mach.PlaintextMentions = encryptionConfig.PlaintextMentions
+	mach.DeleteOutboundKeysOnAck = encryptionConfig.DeleteKeys.DeleteOutboundOnAck
+	mach.DontStoreOutboundKeys = encryptionConfig.DeleteKeys.DontStoreOutbound
+	mach.RatchetKeysOnDecrypt = encryptionConfig.DeleteKeys.RatchetOnDecrypt
+	mach.DeleteFullyUsedKeysOnDecrypt = encryptionConfig.DeleteKeys.DeleteFullyUsedOnDecrypt
+	mach.DeletePreviousKeysOnReceive = encryptionConfig.DeleteKeys.DeletePrevOnNewSession
+	mach.DeleteKeysOnDeviceDelete = encryptionConfig.DeleteKeys.DeleteOnDeviceDelete
+	mach.DisableDeviceChangeKeyRotation = encryptionConfig.Rotation.DisableDeviceChangeKeyRotation
 }
 
 func (helper *CryptoHelper) doSelfSign(ctx context.Context) bool {
@@ -463,6 +480,8 @@ func (helper *CryptoHelper) Reset(ctx context.Context, startAfterReset bool) err
 	helper.client = nil
 	helper.store = nil
 	helper.mach = nil
+	// clearDatabase dropped the ghosts' accounts too; they get new devices on next send.
+	helper.ghosts = newGhostMachines()
 	err = helper.Init(ctx)
 	if err != nil {
 		helper.log.WithLevel(zerolog.FatalLevel).Err(err).Msg("Error reinitializing end-to-bridge encryption")
@@ -484,10 +503,17 @@ func (helper *CryptoHelper) Decrypt(ctx context.Context, evt *event.Event) (*eve
 }
 
 func (helper *CryptoHelper) Encrypt(ctx context.Context, roomID id.RoomID, evtType event.Type, content *event.Content) (err error) {
+	return helper.EncryptAs(ctx, "", roomID, evtType, content)
+}
+
+// EncryptAs encrypts an event that sender will send. With ghost devices on and
+// sender a ghost, the ghost's own session encrypts it; otherwise the bot's.
+func (helper *CryptoHelper) EncryptAs(ctx context.Context, sender id.UserID, roomID id.RoomID, evtType event.Type, content *event.Content) (err error) {
 	helper.lock.RLock()
 	defer helper.lock.RUnlock()
+	mach := helper.machineFor(ctx, sender)
 	var encrypted *event.EncryptedEventContent
-	encrypted, err = helper.mach.EncryptMegolmEvent(ctx, roomID, evtType, content)
+	encrypted, err = mach.EncryptMegolmEvent(ctx, roomID, evtType, content)
 	if err != nil {
 		if !errors.Is(err, crypto.ErrSessionExpired) && !errors.Is(err, crypto.ErrSessionNotShared) && !errors.Is(err, crypto.ErrNoGroupSession) {
 			return
@@ -499,9 +525,9 @@ func (helper *CryptoHelper) Encrypt(ctx context.Context, roomID id.RoomID, evtTy
 		users, err = helper.store.GetRoomJoinedOrInvitedMembers(ctx, roomID)
 		if err != nil {
 			err = fmt.Errorf("failed to get room member list: %w", err)
-		} else if err = helper.mach.ShareGroupSession(ctx, roomID, users); err != nil {
+		} else if err = mach.ShareGroupSession(ctx, roomID, users); err != nil {
 			err = fmt.Errorf("failed to share group session: %w", err)
-		} else if encrypted, err = helper.mach.EncryptMegolmEvent(ctx, roomID, evtType, content); err != nil {
+		} else if encrypted, err = mach.EncryptMegolmEvent(ctx, roomID, evtType, content); err != nil {
 			err = fmt.Errorf("failed to encrypt event after re-sharing group session: %w", err)
 		}
 	}
@@ -545,11 +571,13 @@ func (helper *CryptoHelper) RequestSession(ctx context.Context, roomID id.RoomID
 func (helper *CryptoHelper) ResetSession(ctx context.Context, roomID id.RoomID) {
 	helper.lock.RLock()
 	defer helper.lock.RUnlock()
-	err := helper.mach.CryptoStore.RemoveOutboundGroupSession(ctx, roomID)
-	if err != nil {
-		helper.log.Debug().Err(err).
-			Str("room_id", roomID.String()).
-			Msg("Error manually removing outbound group session in room")
+	for _, mach := range append(helper.ghosts.all(), helper.mach) {
+		err := mach.CryptoStore.RemoveOutboundGroupSession(ctx, roomID)
+		if err != nil {
+			helper.log.Debug().Err(err).
+				Str("room_id", roomID.String()).
+				Msg("Error manually removing outbound group session in room")
+		}
 	}
 }
 
@@ -557,6 +585,9 @@ func (helper *CryptoHelper) HandleMemberEvent(ctx context.Context, evt *event.Ev
 	helper.lock.RLock()
 	defer helper.lock.RUnlock()
 	helper.mach.HandleMemberEvent(ctx, evt)
+	for _, mach := range helper.ghosts.all() {
+		mach.HandleMemberEvent(ctx, evt)
+	}
 }
 
 // ShareKeys uploads the given number of one-time-keys to the server.
@@ -574,6 +605,7 @@ func (helper *CryptoHelper) BeeperStreamPublisher() bridgev2.BeeperStreamPublish
 type cryptoSyncer struct {
 	*crypto.OlmMachine
 	handleSyncResponse func(context.Context, *mautrix.RespSync) []*event.Event
+	onDevicesChanged   func(context.Context, []id.UserID)
 }
 
 func (syncer *cryptoSyncer) ProcessResponse(ctx context.Context, resp *mautrix.RespSync, since string) error {
@@ -590,6 +622,9 @@ func (syncer *cryptoSyncer) ProcessResponse(ctx context.Context, resp *mautrix.R
 		}()
 		syncer.Log.Trace().Str("since", since).Msg("Starting sync response handling")
 		syncer.ProcessSyncResponse(ctx, resp, since)
+		if syncer.onDevicesChanged != nil {
+			syncer.onDevicesChanged(ctx, resp.DeviceLists.Changed)
+		}
 		if syncer.handleSyncResponse != nil {
 			syncer.handleSyncResponse(ctx, resp)
 		}

@@ -453,6 +453,12 @@ encryption:
     # Note that without the latest version of MSC4190, this will fail if you reset the bridge database.
     # The generated recovery key will be saved in the kv_store table under `recovery_key`.
     self_sign: false
+    # Should each ghost encrypt its own messages on its own device, instead of the bridge bot's?
+    # Without this, clients that check the sender owns the session (matrix-rust-sdk, so Element)
+    # mark every bridged message "The sender of the event does not match the owner of the device".
+    # Each ghost gets a device on first send (MSC4190 if enabled above), cross-signed by its own
+    # identity; its recovery key is saved in the kv_store table under `ghost_recovery_key:<mxid>`.
+    ghost_devices: false
     # Enable key sharing? If enabled, key requests for rooms where users are in will be fulfilled.
     # You must use a client that supports requesting keys from other users to use this feature.
     allow_key_sharing: true
