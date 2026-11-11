@@ -157,6 +157,12 @@ type ReqCreateRoom struct {
 	BeeperBridgeAccountID string      `json:"com.beeper.bridge_account_id,omitempty"`
 }
 
+// ReqUpgradeRoom is the JSON request for https://spec.matrix.org/v1.16/client-server-api/#post_matrixclientv3roomsroomidupgrade
+type ReqUpgradeRoom struct {
+	NewVersion         id.RoomVersion `json:"new_version"`
+	AdditionalCreators []id.UserID    `json:"additional_creators,omitempty"`
+}
+
 // ReqRedact is the JSON request for https://spec.matrix.org/v1.2/client-server-api/#put_matrixclientv3roomsroomidredacteventidtxnid
 type ReqRedact struct {
 	Reason string
