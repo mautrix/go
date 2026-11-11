@@ -670,6 +670,37 @@ func (rgr *ReqGetRelations) Query() map[string]string {
 	return query
 }
 
+type ThreadInclude string
+
+const (
+	ThreadIncludeAll          ThreadInclude = "all"
+	ThreadIncludeParticipated ThreadInclude = "participated"
+)
+
+// ReqGetThreads is the request for https://spec.matrix.org/v1.16/client-server-api/#get_matrixclientv1roomsroomidthreads
+type ReqGetThreads struct {
+	Include ThreadInclude
+	From    string
+	Limit   int
+}
+
+func (req *ReqGetThreads) Query() map[string]string {
+	query := map[string]string{}
+	if req == nil {
+		return query
+	}
+	if req.Include != "" {
+		query["include"] = string(req.Include)
+	}
+	if req.From != "" {
+		query["from"] = req.From
+	}
+	if req.Limit > 0 {
+		query["limit"] = strconv.Itoa(req.Limit)
+	}
+	return query
+}
+
 // ReqSuspend is the request body for https://github.com/matrix-org/matrix-spec-proposals/pull/4323
 type ReqSuspend struct {
 	Suspended bool `json:"suspended"`
