@@ -634,14 +634,6 @@ func (prov *ProvisioningAPI) PostPaginate(w http.ResponseWriter, r *http.Request
 		return
 	}
 	log := zerolog.Ctx(r.Context())
-	login := prov.GetLoginForRequest(w, r)
-	if login == nil {
-		return
-	} else if login.Client == nil || !login.Client.IsLoggedIn() {
-		log.Debug().Str("login_id", string(login.ID)).Msg("Paginate requested with logged out login")
-		mautrix.MForbidden.WithMessage("Login is not logged in").Write(w)
-		return
-	}
 	targetRoomID := id.RoomID(r.PathValue("roomID"))
 	portal, err := prov.br.Bridge.GetPortalByMXID(r.Context(), targetRoomID)
 	if err != nil {
@@ -650,6 +642,9 @@ func (prov *ProvisioningAPI) PostPaginate(w http.ResponseWriter, r *http.Request
 	} else if portal == nil {
 		log.Debug().Stringer("target_room_id", targetRoomID).Msg("Paginate requested for unknown portal room")
 		mautrix.MNotFound.WithMessage("Portal not found").Write(w)
+	} else if login, _, err := portal.FindPreferredLogin(r.Context(), prov.GetUser(r), false); err != nil {
+		log.Err(err).Msg("Failed to get login for pagination")
+		RespondWithError(w, err, "Internal error getting login for portal")
 	} else if task, err := prov.br.Bridge.DB.BackfillTask.GetNextForPortal(r.Context(), portal.PortalKey, false); err != nil {
 		log.Err(err).Msg("Failed to get backfill task for portal")
 		RespondWithError(w, err, "Internal error getting backfill task")
