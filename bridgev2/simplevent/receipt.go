@@ -19,13 +19,15 @@ type Receipt struct {
 	LastTarget networkid.MessageID
 	Targets    []networkid.MessageID
 	ReadUpTo   time.Time
+	ThreadRoot networkid.MessageID
 
 	ReadUpToStreamOrder int64
 }
 
 var (
-	_ bridgev2.RemoteReadReceipt     = (*Receipt)(nil)
-	_ bridgev2.RemoteDeliveryReceipt = (*Receipt)(nil)
+	_ bridgev2.RemoteReadReceipt           = (*Receipt)(nil)
+	_ bridgev2.RemoteReadReceiptWithThread = (*Receipt)(nil)
+	_ bridgev2.RemoteDeliveryReceipt       = (*Receipt)(nil)
 )
 
 func (evt *Receipt) GetLastReceiptTarget() networkid.MessageID {
@@ -38,6 +40,10 @@ func (evt *Receipt) GetReceiptTargets() []networkid.MessageID {
 
 func (evt *Receipt) GetReadUpTo() time.Time {
 	return evt.ReadUpTo
+}
+
+func (evt *Receipt) GetReceiptThread() networkid.MessageID {
+	return evt.ThreadRoot
 }
 
 func (evt *Receipt) GetReadUpToStreamOrder() int64 {
