@@ -3611,21 +3611,7 @@ func (portal *Portal) handleRemoteReactionSync(ctx context.Context, source *User
 		)
 	}
 	doRemoveReaction := func(old *database.Reaction, intent MatrixAPI, deleteRow bool) bool {
-		if intent == nil && old.SenderMXID != "" {
-			intent, err = portal.getIntentForMXID(ctx, old.SenderMXID)
-			if err != nil {
-				log.Err(err).
-					Stringer("reaction_sender_mxid", old.SenderMXID).
-					Msg("Failed to get intent for removing reaction")
-			}
-		}
-		if intent == nil {
-			log.Warn().
-				Str("reaction_sender_id", string(old.SenderID)).
-				Stringer("reaction_sender_mxid", old.SenderMXID).
-				Msg("Didn't find intent for removing reaction, using bridge bot")
-			intent = portal.Bridge.Bot
-		}
+		intent = portal.getIntentForReactionRedaction(ctx, old, intent)
 		_, err = intent.SendMessage(ctx, portal.MXID, event.EventRedaction, &event.Content{
 			Parsed: &event.RedactionEventContent{
 				Redacts: old.MXID,
@@ -3737,7 +3723,8 @@ func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogi
 		dbMetadata = metaProvider.GetReactionDBMetadata()
 	}
 	if existingReaction != nil {
-		_, err = intent.SendMessage(ctx, portal.MXID, event.EventRedaction, &event.Content{
+		redactionIntent := portal.getIntentForReactionRedaction(ctx, existingReaction, intent)
+		_, err = redactionIntent.SendMessage(ctx, portal.MXID, event.EventRedaction, &event.Content{
 			Parsed: &event.RedactionEventContent{
 				Redacts: existingReaction.MXID,
 			},
@@ -3820,6 +3807,26 @@ func (portal *Portal) getIntentForMXID(ctx context.Context, userID id.UserID) (M
 	}
 }
 
+func (portal *Portal) getIntentForReactionRedaction(ctx context.Context, reaction *database.Reaction, intent MatrixAPI) MatrixAPI {
+	if intent != nil && (reaction.SenderMXID == "" || intent.GetMXID() == reaction.SenderMXID) {
+		return intent
+	}
+	intent, err := portal.getIntentForMXID(ctx, reaction.SenderMXID)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).
+			Stringer("reaction_sender_mxid", reaction.SenderMXID).
+			Msg("Failed to get intent for removing reaction")
+	}
+	if intent == nil {
+		zerolog.Ctx(ctx).Warn().
+			Str("reaction_sender_id", string(reaction.SenderID)).
+			Stringer("reaction_sender_mxid", reaction.SenderMXID).
+			Msg("Didn't find intent for removing reaction, using bridge bot")
+		intent = portal.Bridge.Bot
+	}
+	return intent
+}
+
 func (portal *Portal) handleRemoteReactionRemove(ctx context.Context, source *UserLogin, evt RemoteReactionRemove) EventHandlingResult {
 	log := zerolog.Ctx(ctx)
 	targetReaction, err := portal.getTargetReaction(ctx, source, evt)
@@ -3830,17 +3837,15 @@ func (portal *Portal) handleRemoteReactionRemove(ctx context.Context, source *Us
 		log.Warn().Msg("Target reaction not found")
 		return EventHandlingResultIgnored
 	}
-	intent, err := portal.getIntentForMXID(ctx, targetReaction.SenderMXID)
-	if err != nil {
-		log.Err(err).Stringer("sender_mxid", targetReaction.SenderMXID).Msg("Failed to get intent for removing reaction")
-	}
-	if intent == nil {
+	var intent MatrixAPI
+	if targetReaction.SenderMXID == "" {
 		var ok bool
 		intent, ok = portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventReactionRemove)
 		if !ok {
 			return EventHandlingResultFailed.WithError(ErrFailedToGetIntent)
 		}
 	}
+	intent = portal.getIntentForReactionRedaction(ctx, targetReaction, intent)
 	ts := getEventTS(evt)
 	_, err = intent.SendMessage(ctx, portal.MXID, event.EventRedaction, &event.Content{
 		Parsed: &event.RedactionEventContent{
