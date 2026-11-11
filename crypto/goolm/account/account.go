@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"maunium.net/go/mautrix/id"
 
@@ -125,16 +126,16 @@ func (a *Account) MarkKeysAsPublished() {
 // keys are discarded.
 func (a *Account) GenOneTimeKeys(num uint) error {
 	for range num {
-		key := crypto.OneTimeKey{
-			Published: false,
-			ID:        a.NextOneTimeKeyID,
-		}
 		newKP, err := crypto.Curve25519GenerateKey()
 		if err != nil {
 			return err
 		}
-		key.Key = newKP
 		a.NextOneTimeKeyID++
+		key := crypto.OneTimeKey{
+			Published: false,
+			ID:        a.NextOneTimeKeyID,
+			Key:       newKP,
+		}
 		a.OTKeys = append([]crypto.OneTimeKey{key}, a.OTKeys...)
 	}
 	if len(a.OTKeys) > MaxOneTimeKeys {
@@ -205,8 +206,7 @@ func (a *Account) RemoveOneTimeKeys(s olm.Session) error {
 	for curIndex := range a.OTKeys {
 		if a.OTKeys[curIndex].Key.PublicKey.Equal(toFind) {
 			//Remove and return
-			a.OTKeys[curIndex] = a.OTKeys[len(a.OTKeys)-1]
-			a.OTKeys = a.OTKeys[:len(a.OTKeys)-1]
+			a.OTKeys = slices.Delete(a.OTKeys, curIndex, curIndex+1)
 			return nil
 		}
 	}
@@ -218,16 +218,16 @@ func (a *Account) RemoveOneTimeKeys(s olm.Session) error {
 // in a.PrevFallbackKey overwriting any previous PrevFallbackKey.
 func (a *Account) GenFallbackKey() error {
 	a.PrevFallbackKey = a.CurrentFallbackKey
-	key := crypto.OneTimeKey{
-		Published: false,
-		ID:        a.NextOneTimeKeyID,
-	}
 	newKP, err := crypto.Curve25519GenerateKey()
 	if err != nil {
 		return err
 	}
-	key.Key = newKP
 	a.NextOneTimeKeyID++
+	key := crypto.OneTimeKey{
+		Published: false,
+		ID:        a.NextOneTimeKeyID,
+		Key:       newKP,
+	}
 	if a.NumFallbackKeys < 2 {
 		a.NumFallbackKeys++
 	}
@@ -326,6 +326,9 @@ func (a *Account) UnpickleLibOlm(buf []byte) error {
 		return err
 	}
 
+	if otkCount > uint32(MaxOneTimeKeys) {
+		return fmt.Errorf("unpickle account: too many one-time keys: %d", otkCount)
+	}
 	a.OTKeys = make([]crypto.OneTimeKey, otkCount)
 	for i := range otkCount {
 		if err := a.OTKeys[i].UnpickleLibOlm(decoder); err != nil {
