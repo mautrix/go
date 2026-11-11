@@ -1,4 +1,4 @@
-//go:build goolm
+//go:build !libolm
 
 package crypto
 
