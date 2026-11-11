@@ -31,13 +31,17 @@ func (txnIDC *TransactionIDCache) IsProcessed(txnID string) bool {
 
 func (txnIDC *TransactionIDCache) MarkProcessed(txnID string) {
 	txnIDC.lock.Lock()
-	txnIDC.hash[txnID] = struct{}{}
+	defer txnIDC.lock.Unlock()
+	if _, exists := txnIDC.hash[txnID]; exists || txnID == "" {
+		return
+	}
 	if txnIDC.array[txnIDC.arrayPtr] != "" {
-		for i := 0; i < len(txnIDC.array)/8; i++ {
+		for i := 0; i < min(max(len(txnIDC.array)/8, 1), len(txnIDC.array)-txnIDC.arrayPtr); i++ {
 			delete(txnIDC.hash, txnIDC.array[txnIDC.arrayPtr+i])
 			txnIDC.array[txnIDC.arrayPtr+i] = ""
 		}
 	}
+	txnIDC.hash[txnID] = struct{}{}
 	txnIDC.array[txnIDC.arrayPtr] = txnID
-	txnIDC.lock.Unlock()
+	txnIDC.arrayPtr = (txnIDC.arrayPtr + 1) % len(txnIDC.array)
 }
