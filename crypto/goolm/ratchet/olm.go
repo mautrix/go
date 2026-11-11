@@ -57,7 +57,7 @@ type Ratchet struct {
 	ReceiverChains []receiverChain `json:"receiver_chains"`
 
 	// Storing the keys of missed messages for future use.
-	// The order of the elements is not important.
+	// Newest keys are first, matching libolm's eviction and pickle order.
 	// TODO move this inside receiver chains to match vodozemac
 	// Due to being global, this is currently capped at a total of 40, instead of 5x40 like vodozemac
 	SkippedMessageKeys []skippedMessageKey `json:"skipped_message_keys"`
@@ -195,9 +195,9 @@ func (r *Ratchet) Decrypt(input []byte) ([]byte, error) {
 			return nil, err
 		}
 		receiverChainFromMessage.CKey = receiverChainCopy.CKey
-		r.SkippedMessageKeys = append(r.SkippedMessageKeys, skippedKeys...)
+		r.SkippedMessageKeys = slices.Insert(r.SkippedMessageKeys, 0, skippedKeys...)
 		if len(r.SkippedMessageKeys) > maxSkippedMessageKeys {
-			r.SkippedMessageKeys = r.SkippedMessageKeys[len(r.SkippedMessageKeys)-maxSkippedMessageKeys:]
+			r.SkippedMessageKeys = r.SkippedMessageKeys[:maxSkippedMessageKeys]
 		}
 		return decrypted, nil
 	}
@@ -263,6 +263,7 @@ func decryptForExistingChain(chain *receiverChain, message *message.Message, raw
 		return nil, nil, fmt.Errorf("decrypt from existing chain: %w", olm.ErrBadMAC)
 	}
 	res, err := cipher.Decrypt(message.Ciphertext)
+	slices.Reverse(skippedKeys)
 	return res, skippedKeys, err
 }
 
@@ -300,9 +301,9 @@ func (r *Ratchet) decryptForNewChain(message *message.Message, rawMessage []byte
 		r.ReceiverChains = r.ReceiverChains[:maxReceiverChains]
 	}
 	r.SenderChains = senderChain{}
-	r.SkippedMessageKeys = append(r.SkippedMessageKeys, skippedKeys...)
+	r.SkippedMessageKeys = slices.Insert(r.SkippedMessageKeys, 0, skippedKeys...)
 	if len(r.SkippedMessageKeys) > maxSkippedMessageKeys {
-		r.SkippedMessageKeys = r.SkippedMessageKeys[len(r.SkippedMessageKeys)-maxSkippedMessageKeys:]
+		r.SkippedMessageKeys = r.SkippedMessageKeys[:maxSkippedMessageKeys]
 	}
 	return decrypted, nil
 }
@@ -363,7 +364,7 @@ func (r *Ratchet) UnpickleLibOlm(decoder *libolmpickle.Decoder, includesChainInd
 		}
 	}
 	if len(r.SkippedMessageKeys) > maxSkippedMessageKeys {
-		r.SkippedMessageKeys = r.SkippedMessageKeys[len(r.SkippedMessageKeys)-maxSkippedMessageKeys:]
+		r.SkippedMessageKeys = r.SkippedMessageKeys[:maxSkippedMessageKeys]
 	}
 
 	// pickle version 0x80000001 includes a chain index; pickle version 1 does not.
