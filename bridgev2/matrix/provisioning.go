@@ -839,9 +839,9 @@ func (prov *ProvisioningAPI) PostFinishSessionTransfer(w http.ResponseWriter, r 
 
 	zerolog.Ctx(r.Context()).Info().
 		Str("remote_name", string(req.RemoteID)).
-		Msg("Logging out remote after finishing credential export")
+		Msg("Disconnecting login after finishing credential export")
 
-	loginToExport.Client.LogoutRemote(r.Context())
+	loginToExport.Client.Disconnect()
 	delete(prov.sessionTransfers, req.RemoteID)
 
 	exhttp.WriteEmptyJSONResponse(w, http.StatusOK)
