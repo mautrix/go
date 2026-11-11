@@ -23,6 +23,7 @@ import (
 const BackfillMinBackoffAfterRoomCreate = 1 * time.Minute
 const BackfillQueueErrorBackoff = 1 * time.Minute
 const BackfillQueueMaxEmptyBackoff = 10 * time.Minute
+const maxNextBackfillDoneCallbacks = 10
 
 func (br *Bridge) WakeupBackfillQueue(manualTask ...*ManualBackfill) {
 	if br.IsStopping() {
@@ -156,10 +157,11 @@ func (mt *ManualBackfill) Do(ctx context.Context) {
 	defer func() {
 		if !completed {
 			if mt.DoneCallback != nil {
-				if mt.Portal.nextBackfillDoneCallback != nil {
-					mt.Portal.nextBackfillDoneCallback(errors.New("done callback overridden"))
+				if len(mt.Portal.nextBackfillDoneCallbacks) >= maxNextBackfillDoneCallbacks {
+					mt.Portal.nextBackfillDoneCallbacks[0](errors.New("done callback overridden"))
+					mt.Portal.nextBackfillDoneCallbacks = mt.Portal.nextBackfillDoneCallbacks[1:]
 				}
-				mt.Portal.nextBackfillDoneCallback = mt.DoneCallback
+				mt.Portal.nextBackfillDoneCallbacks = append(mt.Portal.nextBackfillDoneCallbacks, mt.DoneCallback)
 				mt.DoneCallback = nil
 			}
 			return
@@ -167,10 +169,10 @@ func (mt *ManualBackfill) Do(ctx context.Context) {
 		if mt.DoneCallback != nil {
 			mt.DoneCallback(err)
 		}
-		if mt.Portal.nextBackfillDoneCallback != nil {
-			mt.Portal.nextBackfillDoneCallback(err)
-			mt.Portal.nextBackfillDoneCallback = nil
+		for _, callback := range mt.Portal.nextBackfillDoneCallbacks {
+			callback(err)
 		}
+		mt.Portal.nextBackfillDoneCallbacks = nil
 	}()
 	var task *database.BackfillTask
 	var dispatched bool

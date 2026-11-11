@@ -108,9 +108,9 @@ type Portal struct {
 	eventsLock sync.Mutex
 	eventIdx   int
 
-	backfillLock             sync.Mutex
-	forwardBackfillLock      sync.Mutex
-	nextBackfillDoneCallback func(error)
+	backfillLock              sync.Mutex
+	forwardBackfillLock       sync.Mutex
+	nextBackfillDoneCallbacks []func(error)
 }
 
 var PanicOnStuckEvent = false
