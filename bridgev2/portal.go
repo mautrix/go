@@ -614,7 +614,10 @@ func (portal *Portal) handleSingleEvent(ctx context.Context, rawEvt any, doneCal
 			if res.Error != nil {
 				portal.sendErrorStatus(ctx, evt.evt, res.Error)
 			} else {
-				portal.sendSuccessStatus(ctx, evt.evt, 0, "", nil)
+				portal.Bridge.Matrix.SendMessageStatus(ctx, &MessageStatus{
+					Status:       event.MessageStatusSuccess,
+					ButtonAnswer: res.ButtonAnswer,
+				}, StatusEventInfoFromEvent(evt.evt))
 			}
 		}
 		if !isStateRequest && res.Error != nil && evt.evt.StateKey != nil {
@@ -946,6 +949,8 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 		return portal.handleMatrixBlockUser(ctx, login, origSender, evt)
 	case event.BeeperAcceptMessageRequest:
 		return portal.handleMatrixAcceptMessageRequest(ctx, login, origSender, evt)
+	case event.BeeperPressButton:
+		return portal.handleMatrixButtonPress(ctx, login, origSender, evt)
 	default:
 		return EventHandlingResultIgnored
 	}
@@ -1993,6 +1998,46 @@ func (portal *Portal) getTargetUser(ctx context.Context, userID id.UserID) (Ghos
 		// Return raw nil as a separate case to ensure a typed nil isn't returned
 		return nil, nil
 	}
+}
+
+func (portal *Portal) handleMatrixButtonPress(
+	ctx context.Context,
+	sender *UserLogin,
+	origSender *OrigSender,
+	evt *event.Event,
+) EventHandlingResult {
+	if origSender != nil {
+		return EventHandlingResultFailed.WithMSSError(ErrIgnoringButtonPressRelayedUser)
+	}
+	content, ok := evt.Content.Parsed.(*event.BeeperPressButtonEventContent)
+	if !ok {
+		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
+	} else if content.RelatesTo.Type != event.RelReference || content.RelatesTo.EventID == "" || content.ButtonID == "" {
+		return EventHandlingResultFailed.WithMSSError(ErrInvalidButtonPress)
+	}
+	api, ok := sender.Client.(ButtonPressingNetworkAPI)
+	if !ok {
+		return EventHandlingResultFailed.WithMSSError(ErrButtonPressNotSupported)
+	}
+	target, err := portal.Bridge.DB.Message.GetPartByMXID(ctx, content.RelatesTo.EventID)
+	if err != nil {
+		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w: failed to get button target: %w", ErrDatabaseError, err))
+	} else if target == nil || target.Room != portal.PortalKey {
+		return EventHandlingResultFailed.WithMSSError(ErrButtonUnavailable)
+	}
+	answer, err := api.HandleMatrixButtonPress(ctx, &MatrixButtonPress{
+		MatrixEventBase: MatrixEventBase[*event.BeeperPressButtonEventContent]{
+			Event:              evt,
+			Content:            content,
+			Portal:             portal,
+			InputTransactionID: portal.parseInputTransactionID(origSender, evt),
+		},
+		TargetMessage: target,
+	})
+	if err != nil {
+		return EventHandlingResultFailed.WithMSSError(err)
+	}
+	return EventHandlingResultSuccess.WithMSS().WithButtonAnswer(answer)
 }
 
 func (portal *Portal) handleMatrixAcceptMessageRequest(

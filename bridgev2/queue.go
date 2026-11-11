@@ -181,7 +181,13 @@ type EventHandlingResult struct {
 	// EventID from the network
 	EventID id.EventID
 	// Stream order from the network
-	StreamOrder int64
+	StreamOrder  int64
+	ButtonAnswer *event.BeeperButtonAnswer
+}
+
+func (ehr EventHandlingResult) WithButtonAnswer(answer *event.BeeperButtonAnswer) EventHandlingResult {
+	ehr.ButtonAnswer = answer
+	return ehr
 }
 
 func (ehr EventHandlingResult) WithEventID(id id.EventID) EventHandlingResult {

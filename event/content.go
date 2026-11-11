@@ -72,6 +72,7 @@ var TypeMap = map[Type]reflect.Type{
 	BeeperDeleteChat:             reflect.TypeFor[BeeperChatDeleteEventContent](),
 	BeeperBlockUser:              reflect.TypeFor[BeeperBlockUserEventContent](),
 	BeeperAcceptMessageRequest:   reflect.TypeFor[BeeperAcceptMessageRequestEventContent](),
+	BeeperPressButton:            reflect.TypeFor[BeeperPressButtonEventContent](),
 	BeeperSendState:              reflect.TypeFor[BeeperSendStateEventContent](),
 
 	AccountDataRoomTags:           reflect.TypeFor[TagEventContent](),

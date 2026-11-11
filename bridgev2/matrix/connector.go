@@ -164,6 +164,7 @@ func (br *Connector) Init(bridge *bridgev2.Bridge) {
 		event.BeeperDeleteChat,
 		event.BeeperBlockUser,
 		event.BeeperAcceptMessageRequest,
+		event.BeeperPressButton,
 	} {
 		br.EventProcessor.On(evtType, br.handleRoomEvent)
 	}

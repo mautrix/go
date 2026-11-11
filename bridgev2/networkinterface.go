@@ -801,6 +801,11 @@ type MessageRequestAcceptingNetworkAPI interface {
 	HandleMatrixAcceptMessageRequest(ctx context.Context, msg *MatrixAcceptMessageRequest) error
 }
 
+type ButtonPressingNetworkAPI interface {
+	NetworkAPI
+	HandleMatrixButtonPress(ctx context.Context, msg *MatrixButtonPress) (*event.BeeperButtonAnswer, error)
+}
+
 // UserBlockingNetworkAPI is an optional interface that network connectors
 // can implement to block and unblock users on the remote network.
 type UserBlockingNetworkAPI interface {
@@ -1615,6 +1620,12 @@ type MatrixViewingChat struct {
 type MatrixDeleteChat = MatrixEventBase[*event.BeeperChatDeleteEventContent]
 type MatrixBlockUser = MatrixEventBase[*event.BeeperBlockUserEventContent]
 type MatrixAcceptMessageRequest = MatrixEventBase[*event.BeeperAcceptMessageRequestEventContent]
+
+type MatrixButtonPress struct {
+	MatrixEventBase[*event.BeeperPressButtonEventContent]
+	TargetMessage *database.Message
+}
+
 type MatrixMarkedUnread = MatrixRoomMeta[*event.MarkedUnreadEventContent]
 type MatrixMute = MatrixRoomMeta[*event.BeeperMuteEventContent]
 type MatrixRoomTag = MatrixRoomMeta[*event.TagEventContent]

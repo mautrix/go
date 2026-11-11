@@ -33,6 +33,7 @@ const (
 	MessageStatusNetworkError      MessageStatusReason = "m.foreign_network_error"
 	MessageStatusNoPermission      MessageStatusReason = "m.no_permission"
 	MessageStatusBridgeUnavailable MessageStatusReason = "m.bridge_unavailable"
+	MessageStatusButtonUnavailable MessageStatusReason = "com.beeper.button_unavailable"
 )
 
 type MessageStatus string
@@ -62,6 +63,7 @@ type BeeperMessageStatusEventContent struct {
 	MutateEventKey string `json:"mutate_event_key,omitempty"`
 
 	DisappearingTimer *BeeperDisappearingTimer `json:"disappearing_timer,omitempty"`
+	ButtonAnswer      *BeeperButtonAnswer      `json:"com.beeper.button_answer,omitempty"`
 
 	// Indicates the set of users to whom the event was delivered. If nil, then
 	// the client should not expect delivered status at any later point. If not

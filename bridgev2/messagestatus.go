@@ -66,6 +66,7 @@ type MessageStatus struct {
 	Message       string // Human-readable message shown to users
 
 	DisappearingTimer *event.BeeperDisappearingTimer
+	ButtonAnswer      *event.BeeperButtonAnswer
 
 	ErrorAsMessage bool
 	IsCertain      bool
@@ -215,6 +216,7 @@ func (ms *MessageStatus) ToMSSEvent(evt *MessageStatusEventInfo) *event.BeeperMe
 	}
 	if ms.Status == event.MessageStatusSuccess {
 		content.DisappearingTimer = ms.DisappearingTimer
+		content.ButtonAnswer = ms.ButtonAnswer
 	}
 	return content
 }
