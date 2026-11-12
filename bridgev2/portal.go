@@ -3035,6 +3035,32 @@ func (portal *Portal) applyRelationMeta(ctx context.Context, content *event.Mess
 	}
 }
 
+func (portal *Portal) sendRemoteEventToMatrix(
+	ctx context.Context,
+	source *UserLogin,
+	intent MatrixAPI,
+	eventType event.Type,
+	content *event.Content,
+	extra *MatrixSendExtra,
+) (*mautrix.RespSendEvent, error) {
+	retryContent := *content
+	resp, err := intent.SendMessage(ctx, portal.MXID, eventType, content, extra)
+	if err == nil || source == nil {
+		return resp, err
+	}
+	handler, ok := source.Client.(MatrixSendErrorHandlingNetworkAPI)
+	if !ok || !handler.HandleMatrixSendError(ctx, &MatrixSendError{
+		Portal:    portal,
+		Intent:    intent,
+		EventType: eventType,
+		Err:       err,
+	}) {
+		return resp, err
+	}
+	zerolog.Ctx(ctx).Debug().AnErr("original_error", err).Msg("Retrying Matrix send after network connector handled error")
+	return intent.SendMessage(ctx, portal.MXID, eventType, &retryContent, extra)
+}
+
 func (portal *Portal) sendConvertedMessage(
 	ctx context.Context,
 	source *UserLogin,
@@ -3084,7 +3110,7 @@ func (portal *Portal) sendConvertedMessage(
 				Str("part_id", string(part.ID)).
 				Msg("Not bridging message part with DontBridge flag to Matrix")
 		} else {
-			resp, err := intent.SendMessage(ctx, portal.MXID, part.Type, &event.Content{
+			resp, err := portal.sendRemoteEventToMatrix(ctx, source, intent, part.Type, &event.Content{
 				Parsed: part.Content,
 				Raw:    part.Extra,
 			}, &MatrixSendExtra{

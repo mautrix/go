@@ -370,6 +370,24 @@ type OutgoingTimeoutSuppressingNetworkAPI interface {
 	SuppressOutgoingTimeouts() bool
 }
 
+// MatrixSendError contains the details of a failed attempt to send a remote event to Matrix.
+type MatrixSendError struct {
+	Portal    *Portal
+	Intent    MatrixAPI
+	EventType event.Type
+	Err       error
+}
+
+// MatrixSendErrorHandlingNetworkAPI is an optional interface that network connectors can implement to
+// repair room state when sending a remote event to Matrix fails, e.g. fix power levels after M_FORBIDDEN.
+type MatrixSendErrorHandlingNetworkAPI interface {
+	NetworkAPI
+	// HandleMatrixSendError is called when sending a remote event to Matrix fails.
+	// If it returns true, the send is retried once with a new transaction ID, so it should only
+	// return true for errors where the homeserver definitely didn't accept the event.
+	HandleMatrixSendError(ctx context.Context, sendErr *MatrixSendError) (retry bool)
+}
+
 type NetworkGeneralCapabilities struct {
 	// Does the network connector support disappearing messages?
 	// This flag enables the message disappearing loop in the bridge.
