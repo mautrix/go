@@ -318,9 +318,6 @@ provisioning:
     allow_matrix_auth: true
     # Enable debug API at /debug with provisioning authentication.
     debug_endpoints: false
-    # Enable session transfers between bridges. Note that this only validates Matrix or shared secret
-    # auth before passing live network client credentials down in the response.
-    enable_session_transfers: false
     # Should the provisioning API fail immediately if a webauthn step is returned?
     # This is mostly useful for clients that don't yet support it and want a trackable error instead.
     fail_on_webauthn: false
