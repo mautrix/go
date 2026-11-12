@@ -130,7 +130,6 @@ func doUpgrade(helper up.Helper) {
 	}
 	helper.Copy(up.Bool, "provisioning", "allow_matrix_auth")
 	helper.Copy(up.Bool, "provisioning", "debug_endpoints")
-	helper.Copy(up.Bool, "provisioning", "enable_session_transfers")
 	helper.Copy(up.Bool, "provisioning", "fail_on_webauthn")
 	helper.Copy(up.Str, "provisioning", "request_id_header")
 	helper.Copy(up.Bool, "provisioning", "trust_incoming_request_id")
