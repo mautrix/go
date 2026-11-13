@@ -180,6 +180,7 @@ func (br *Bridge) RunOnce(ctx context.Context, loginID networkid.UserLoginID, pa
 func (br *Bridge) StartConnectors(ctx context.Context) error {
 	br.Log.Info().Msg("Starting bridge")
 	br.stopping.Store(false)
+	br.stopBackfillQueue.Clear()
 	if br.BackgroundCtx == nil || br.BackgroundCtx.Err() != nil {
 		br.BackgroundCtx, br.cancelBackgroundCtx = context.WithCancel(context.Background())
 		br.BackgroundCtx = br.Log.WithContext(br.BackgroundCtx)
@@ -421,6 +422,7 @@ func (br *Bridge) GetUsersToStart(ctx context.Context) ([]*User, error) {
 }
 
 func (br *Bridge) StartLoginsForUsers(ctx context.Context, users []*User) {
+	backgroundCtx := br.BackgroundCtx
 	startedAny := false
 	for _, user := range users {
 		for _, login := range user.GetUserLogins() {
@@ -433,8 +435,11 @@ func (br *Bridge) StartLoginsForUsers(ctx context.Context, users []*User) {
 		br.Log.Info().Msg("No user logins found")
 		br.SendGlobalBridgeState(ctx, status.BridgeState{StateEvent: status.StateUnconfigured})
 	}
+	if ctx.Err() != nil || backgroundCtx.Err() != nil {
+		return
+	}
 	if !br.Background {
-		go br.RunBackfillQueue()
+		go br.RunBackfillQueue(backgroundCtx)
 	}
 
 	br.Log.Info().Msg("Bridge started")
@@ -502,6 +507,7 @@ func (br *Bridge) stop(isRunOnce bool, timeout time.Duration) {
 	br.stopping.Store(true)
 	br.DisappearLoop.Stop()
 	br.stopBackfillQueue.Set()
+	br.flushManualBackfillQueue()
 	br.Matrix.PreStop()
 	if !isRunOnce {
 		br.cacheLock.Lock()
