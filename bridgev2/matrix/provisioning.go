@@ -138,6 +138,7 @@ func (prov *ProvisioningAPI) Init() {
 	prov.Router.HandleFunc("POST /v3/create_group/{type}", prov.PostCreateGroup)
 	prov.Router.HandleFunc("POST /v3/profile", prov.PostUpdateProfile)
 	prov.Router.HandleFunc("POST /v3/backfill/{roomID}", prov.PostPaginate)
+	prov.Router.HandleFunc("POST /v3/viewing_chat/{roomID}", prov.PostViewingChat)
 	prov.Router.HandleFunc("POST /v3/view_limited_media/{eventID}", prov.PostViewLimitedMedia)
 	prov.Router.HandleFunc("GET /v3/poll_results/{eventID}", prov.GetPollResults)
 	prov.Router.HandleFunc("GET /v3/image_pack/import", prov.ImportImagePack)
@@ -608,6 +609,58 @@ func (prov *ProvisioningAPI) PostUpdateProfile(w http.ResponseWriter, r *http.Re
 	}
 	if err := provisionutil.UpdateProfile(r.Context(), login, &req); err != nil {
 		RespondWithError(w, err, "Failed to update profile")
+		return
+	}
+	exhttp.WriteEmptyJSONResponse(w, http.StatusOK)
+}
+
+func (prov *ProvisioningAPI) PostViewingChat(w http.ResponseWriter, r *http.Request) {
+	login, failed := prov.GetExplicitLoginForRequest(w, r)
+	if failed {
+		return
+	}
+	roomID := id.RoomID(r.PathValue("roomID"))
+	if len(roomID) < 2 || roomID[0] != '!' {
+		mautrix.MInvalidParam.WithMessage("Invalid room ID").Write(w)
+		return
+	}
+	portal, err := prov.br.Bridge.GetPortalByMXID(r.Context(), roomID)
+	if err != nil {
+		RespondWithError(w, err, "Failed to get portal")
+		return
+	} else if portal == nil {
+		mautrix.MNotFound.WithMessage("Portal not found").Write(w)
+		return
+	}
+	if login == nil {
+		login, _, err = portal.FindPreferredLogin(r.Context(), prov.GetUser(r), false)
+		if err != nil {
+			RespondWithError(w, err, "Failed to get login for portal")
+			return
+		}
+	}
+	if login == nil || login.Client == nil || !login.Client.IsLoggedIn() {
+		RespondWithError(w, bridgev2.ErrNotLoggedIn, "Login is not logged in")
+		return
+	} else if portal.Receiver != "" && portal.Receiver != login.ID {
+		mautrix.MNotFound.WithMessage("Portal not found").Write(w)
+		return
+	}
+	userPortal, err := prov.br.Bridge.DB.UserPortal.Get(r.Context(), login.UserLogin, portal.PortalKey)
+	if err != nil {
+		RespondWithError(w, err, "Failed to get portal access")
+		return
+	} else if userPortal == nil {
+		mautrix.MNotFound.WithMessage("Portal not found").Write(w)
+		return
+	}
+	api, ok := login.Client.(bridgev2.ChatViewingNetworkAPI)
+	if !ok {
+		mautrix.MUnrecognized.WithMessage("This bridge does not support viewing chat notifications").Write(w)
+		return
+	}
+	if err := api.HandleMatrixViewingChat(r.Context(), &bridgev2.MatrixViewingChat{Portal: portal}); err != nil {
+		RespondWithError(w, err, "Failed to notify viewing chat")
 		return
 	}
 	exhttp.WriteEmptyJSONResponse(w, http.StatusOK)

@@ -710,7 +710,7 @@ type PollAnswerResult struct {
 type ChatViewingNetworkAPI interface {
 	NetworkAPI
 	// HandleMatrixViewingChat is called when the user opens a portal room.
-	// This will never be called by the standard appservice connector,
+	// The standard appservice connector only calls this via the provisioning API,
 	// as Matrix doesn't have any standard way of signaling chat open status.
 	// Clients are expected to call this every 5 seconds. There is no signal for closing a chat.
 	HandleMatrixViewingChat(ctx context.Context, msg *MatrixViewingChat) error
@@ -899,6 +899,7 @@ type ProvisioningCapabilities struct {
 	GroupCreation     map[string]GroupTypeCapabilities `json:"group_creation"`
 	ImagePackImport   bool                             `json:"image_pack_import,omitzero"`
 	ProfileUpdate     bool                             `json:"profile_update,omitzero"`
+	ViewingChat       bool                             `json:"viewing_chat,omitzero"`
 }
 
 type ResolveIdentifierCapabilities struct {
