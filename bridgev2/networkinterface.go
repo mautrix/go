@@ -899,7 +899,7 @@ type ProvisioningCapabilities struct {
 	GroupCreation     map[string]GroupTypeCapabilities `json:"group_creation"`
 	ImagePackImport   bool                             `json:"image_pack_import,omitzero"`
 	ProfileUpdate     bool                             `json:"profile_update,omitzero"`
-	ViewingChat       bool                             `json:"viewing_chat"`
+	ViewingChat       bool                             `json:"viewing_chat,omitzero"`
 }
 
 type ResolveIdentifierCapabilities struct {

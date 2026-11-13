@@ -391,18 +391,7 @@ func (prov *ProvisioningAPI) GetLoginFlows(w http.ResponseWriter, r *http.Reques
 }
 
 func (prov *ProvisioningAPI) GetCapabilities(w http.ResponseWriter, r *http.Request) {
-	caps := prov.net.GetCapabilities().Provisioning
-	login, failed := prov.GetExplicitLoginForRequest(w, r)
-	if failed {
-		return
-	} else if login == nil {
-		login = prov.GetUser(r).GetDefaultLogin()
-	}
-	caps.ViewingChat = false
-	if login != nil && login.Client != nil && login.Client.IsLoggedIn() {
-		_, caps.ViewingChat = login.Client.(bridgev2.ChatViewingNetworkAPI)
-	}
-	exhttp.WriteJSONResponse(w, http.StatusOK, &caps)
+	exhttp.WriteJSONResponse(w, http.StatusOK, &prov.net.GetCapabilities().Provisioning)
 }
 
 func (prov *ProvisioningAPI) PostLogout(w http.ResponseWriter, r *http.Request) {
