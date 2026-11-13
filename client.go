@@ -2027,7 +2027,8 @@ func (cli *Client) UploadLink(ctx context.Context, link string) (*RespMediaUploa
 }
 
 type DownloadExtra struct {
-	Query map[string]string
+	Query  map[string]string
+	Client *http.Client
 }
 
 func (cli *Client) DownloadWithParams(ctx context.Context, mxcURL id.ContentURI, params DownloadExtra) (*http.Response, error) {
@@ -2038,6 +2039,7 @@ func (cli *Client) DownloadWithParams(ctx context.Context, mxcURL id.ContentURI,
 		Method:           http.MethodGet,
 		URL:              cli.BuildURLWithQuery(ClientURLPath{"v1", "media", "download", mxcURL.Homeserver, mxcURL.FileID}, params.Query),
 		DontReadResponse: true,
+		Client:           params.Client,
 	})
 	return resp, err
 }
