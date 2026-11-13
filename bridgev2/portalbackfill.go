@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -598,7 +597,7 @@ func (portal *Portal) sendBatch(ctx context.Context, source *UserLogin, messages
 					Str("existing_portal_receiver", string(existing.Room.Receiver)).
 					Bool("existing_same_portal", existing.Room == msg.Room).
 					Time("existing_ts", existing.Timestamp).
-					Bool("existing_fake", strings.HasPrefix(existing.MXID.String(), "~fake:"))
+					Bool("existing_fake", existing.HasFakeMXID())
 			}
 			logEvt.Msg("Failed to insert backfilled message to database")
 		}
