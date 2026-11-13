@@ -615,11 +615,8 @@ func (prov *ProvisioningAPI) PostUpdateProfile(w http.ResponseWriter, r *http.Re
 }
 
 func (prov *ProvisioningAPI) PostViewingChat(w http.ResponseWriter, r *http.Request) {
-	login := prov.GetLoginForRequest(w, r)
-	if login == nil {
-		return
-	} else if login.Client == nil || !login.Client.IsLoggedIn() {
-		RespondWithError(w, bridgev2.ErrNotLoggedIn, "Login is not logged in")
+	login, failed := prov.GetExplicitLoginForRequest(w, r)
+	if failed {
 		return
 	}
 	roomID := id.RoomID(r.PathValue("roomID"))
@@ -631,7 +628,21 @@ func (prov *ProvisioningAPI) PostViewingChat(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		RespondWithError(w, err, "Failed to get portal")
 		return
-	} else if portal == nil || portal.Receiver != "" && portal.Receiver != login.ID {
+	} else if portal == nil {
+		mautrix.MNotFound.WithMessage("Portal not found").Write(w)
+		return
+	}
+	if login == nil {
+		login, _, err = portal.FindPreferredLogin(r.Context(), prov.GetUser(r), false)
+		if err != nil {
+			RespondWithError(w, err, "Failed to get login for portal")
+			return
+		}
+	}
+	if login == nil || login.Client == nil || !login.Client.IsLoggedIn() {
+		RespondWithError(w, bridgev2.ErrNotLoggedIn, "Login is not logged in")
+		return
+	} else if portal.Receiver != "" && portal.Receiver != login.ID {
 		mautrix.MNotFound.WithMessage("Portal not found").Write(w)
 		return
 	}
