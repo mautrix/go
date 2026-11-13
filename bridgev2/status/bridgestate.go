@@ -80,6 +80,8 @@ const (
 	UserActionRestart    BridgeStateUserAction = "RESTART"
 )
 
+const InfoKeyNotice = "notice"
+
 type RemoteProfile struct {
 	Phone    string              `json:"phone,omitempty"`
 	Email    string              `json:"email,omitempty"`
