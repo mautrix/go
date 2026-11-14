@@ -45,6 +45,9 @@ bridge:
 
     # Should leaving Matrix rooms be bridged as leaving groups on the remote network?
     bridge_matrix_leave: false
+    # Should Matrix users' own profile changes (join -> join member events) be dropped instead of passed to the network connector?
+    # Dropped events still update the member cache.
+    drop_matrix_profile_changes: false
     # Should `m.notice` messages be bridged?
     bridge_notices: false
     # Should room tags only be synced when creating the portal? Tags mean things like favorite/pin and archive/low priority.
