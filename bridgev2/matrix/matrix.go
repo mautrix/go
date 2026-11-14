@@ -27,7 +27,7 @@ func (br *Connector) handleRoomEvent(ctx context.Context, evt *event.Event) {
 	if evt.Type == event.StateMember && br.Crypto != nil && !br.Bridge.IsGhostMXID(id.UserID(evt.GetStateKey())) {
 		br.Crypto.HandleMemberEvent(ctx, evt)
 	}
-	if !br.Config.Bridge.BridgeMatrixProfileChanges && isOwnProfileChange(evt) {
+	if br.Config.Bridge.DropMatrixProfileChanges && isOwnProfileChange(evt) {
 		return
 	}
 	if br.shouldIgnoreEvent(evt) {
