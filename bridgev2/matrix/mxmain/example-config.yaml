@@ -228,8 +228,7 @@ homeserver:
     # When requests to the homeserver fail with a 502/503/504/429 status or a network error,
     # how many times should the bridge retry the request before giving up?
     retry_limit: 4
-    # Maximum number of parallel connections to the homeserver. Requests over the limit wait for a free
-    # connection. Zero means unlimited.
+    # Maximum number of parallel connections to the homeserver. Zero means unlimited.
     max_connections: 0
 
 # Application service host/registration related details.
