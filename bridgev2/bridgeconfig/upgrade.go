@@ -95,6 +95,7 @@ func doUpgrade(helper up.Helper) {
 	helper.Copy(up.Bool, "homeserver", "websocket")
 	helper.Copy(up.Int, "homeserver", "ping_interval_seconds")
 	helper.Copy(up.Int, "homeserver", "retry_limit")
+	helper.Copy(up.Int, "homeserver", "max_connections")
 
 	helper.Copy(up.Str|up.Null, "appservice", "address")
 	helper.Copy(up.Str|up.Null, "appservice", "public_address")

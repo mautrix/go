@@ -111,6 +111,9 @@ func (config *Config) MakeAppService() *appservice.AppService {
 	as.Host.Port = config.AppService.Port
 	as.Registration = config.AppService.GetRegistration()
 	as.DefaultHTTPRetries = config.Homeserver.RetryLimit
+	if config.Homeserver.MaxConnections > 0 {
+		as.SetMaxConnections(config.Homeserver.MaxConnections)
+	}
 	config.Encryption.applyUnstableFlags(as.Registration)
 	return as
 }
