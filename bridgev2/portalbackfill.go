@@ -588,13 +588,25 @@ func (portal *Portal) sendBatch(ctx context.Context, source *UserLogin, messages
 	for _, msg := range out.DBMessages {
 		err = portal.Bridge.DB.Message.Insert(ctx, msg)
 		if err != nil {
-			zerolog.Ctx(ctx).Err(err).
+			logEvt := zerolog.Ctx(ctx).Err(err).
 				Str("message_id", string(msg.ID)).
 				Str("part_id", string(msg.PartID)).
 				Str("sender_id", string(msg.SenderID)).
 				Str("portal_id", string(msg.Room.ID)).
 				Str("portal_receiver", string(msg.Room.Receiver)).
-				Msg("Failed to insert backfilled message to database")
+				Time("message_ts", msg.Timestamp)
+			existing, getErr := portal.Bridge.DB.Message.GetPartByID(ctx, msg.Room.Receiver, msg.ID, msg.PartID)
+			if getErr != nil {
+				logEvt = logEvt.AnErr("existing_lookup_error", getErr)
+			} else if existing != nil {
+				logEvt = logEvt.
+					Str("existing_portal_id", string(existing.Room.ID)).
+					Str("existing_portal_receiver", string(existing.Room.Receiver)).
+					Bool("existing_same_portal", existing.Room == msg.Room).
+					Time("existing_ts", existing.Timestamp).
+					Bool("existing_fake", existing.HasFakeMXID())
+			}
+			logEvt.Msg("Failed to insert backfilled message to database")
 		}
 	}
 	// TODO mass insert db reactions
