@@ -129,6 +129,7 @@ type ProvisioningConfig struct {
 type DirectMediaConfig struct {
 	Enabled                bool   `yaml:"enabled"`
 	Encrypted              bool   `yaml:"encrypted"`
+	ServeOnly              bool   `yaml:"serve_only"`
 	MediaIDPrefix          string `yaml:"media_id_prefix"`
 	mediaproxy.BasicConfig `yaml:",inline"`
 }

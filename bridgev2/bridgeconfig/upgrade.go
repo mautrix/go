@@ -138,6 +138,7 @@ func doUpgrade(helper up.Helper) {
 
 	helper.Copy(up.Bool, "direct_media", "enabled")
 	helper.Copy(up.Bool, "direct_media", "encrypted")
+	helper.Copy(up.Bool, "direct_media", "serve_only")
 	helper.Copy(up.Str|up.Null, "direct_media", "media_id_prefix")
 	helper.Copy(up.Str, "direct_media", "server_name")
 	helper.Copy(up.Str|up.Null, "direct_media", "well_known_response")
