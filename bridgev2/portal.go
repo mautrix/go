@@ -3065,8 +3065,6 @@ func (portal *Portal) sendRemoteEventToMatrix(
 	return intent.SendMessage(ctx, portal.MXID, eventType, &retryContent, extra)
 }
 
-const maxMessageContentSize = 40000
-
 func jsonSize(val any) int {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
@@ -3112,8 +3110,12 @@ func (portal *Portal) cutOffLongMessage(ctx context.Context, content *event.Cont
 	if !ok {
 		return
 	}
+	limit := 48000
+	if limiter, ok := portal.Bridge.Matrix.(MatrixConnectorWithEventSizeLimit); ok {
+		limit = limiter.GetEventSizeLimit(ctx, portal.MXID)
+	}
 	origSize := messageContentSize(content, msg)
-	if origSize <= maxMessageContentSize {
+	if origSize <= limit {
 		return
 	}
 	textContent := msg
@@ -3128,7 +3130,7 @@ func (portal *Portal) cutOffLongMessage(ctx context.Context, content *event.Cont
 	if textContent.FormattedBody != "" && len(textContent.Body) > 500 {
 		textContent.Body = truncateMessageText(textContent.Body, 500, false) + "[...]"
 	}
-	if excess := messageContentSize(content, msg) - maxMessageContentSize; excess > 0 {
+	if excess := messageContentSize(content, msg) - limit; excess > 0 {
 		if textContent.FormattedBody != "" {
 			textContent.FormattedBody = cutOffMessageText(textContent.FormattedBody, excess, "<br><em>[long message cut off]</em>", true)
 		} else {
