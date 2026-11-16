@@ -7,8 +7,10 @@
 package bridgev2
 
 import (
+	"bytes"
 	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"runtime/debug"
@@ -17,6 +19,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 	"unsafe"
 
 	"github.com/rs/zerolog"
@@ -3043,6 +3046,7 @@ func (portal *Portal) sendRemoteEventToMatrix(
 	content *event.Content,
 	extra *MatrixSendExtra,
 ) (*mautrix.RespSendEvent, error) {
+	cutOffLongMessage(ctx, content, portal.Bridge.IsGhostMXID)
 	retryContent := *content
 	resp, err := intent.SendMessage(ctx, portal.MXID, eventType, content, extra)
 	if err == nil || source == nil {
@@ -3059,6 +3063,82 @@ func (portal *Portal) sendRemoteEventToMatrix(
 	}
 	zerolog.Ctx(ctx).Debug().AnErr("original_error", err).Msg("Retrying Matrix send after network connector handled error")
 	return intent.SendMessage(ctx, portal.MXID, eventType, &retryContent, extra)
+}
+
+const maxMessageContentSize = 40000
+
+func jsonSize(val any) int {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if enc.Encode(val) != nil {
+		return 0
+	}
+	return buf.Len() - 1
+}
+
+func messageContentSize(content *event.Content, msg *event.MessageEventContent) int {
+	// Mentions are counted twice, because encryption.plaintext_mentions copies them outside the ciphertext
+	return jsonSize(content.Parsed) + jsonSize(content.Raw) + jsonSize(msg.Mentions)
+}
+
+func truncateMessageText(text string, maxLen int, isHTML bool) string {
+	if maxLen <= 0 {
+		return ""
+	} else if len(text) <= maxLen {
+		return text
+	}
+	for maxLen > 0 && !utf8.RuneStart(text[maxLen]) {
+		maxLen--
+	}
+	text = text[:maxLen]
+	if isHTML {
+		lastTagEnd := strings.LastIndexByte(text, '>')
+		if idx := strings.LastIndexByte(text, '<'); idx > lastTagEnd {
+			text = text[:idx]
+		} else if idx = strings.LastIndexByte(text, '&'); idx > lastTagEnd && idx > strings.LastIndexByte(text, ';') {
+			text = text[:idx]
+		}
+	}
+	return text
+}
+
+func cutOffMessageText(text string, excess int, suffix string, isHTML bool) string {
+	return truncateMessageText(text, len(text)-excess-jsonSize(suffix), isHTML) + suffix
+}
+
+func cutOffLongMessage(ctx context.Context, content *event.Content, isGhost func(id.UserID) bool) {
+	msg, ok := content.Parsed.(*event.MessageEventContent)
+	if !ok {
+		return
+	}
+	origSize := messageContentSize(content, msg)
+	if origSize <= maxMessageContentSize {
+		return
+	}
+	textContent := msg
+	if msg.NewContent != nil {
+		textContent = msg.NewContent
+	}
+	for _, mentions := range []*event.Mentions{msg.Mentions, textContent.Mentions} {
+		if mentions != nil {
+			mentions.UserIDs = slices.DeleteFunc(mentions.UserIDs, isGhost)
+		}
+	}
+	if textContent.FormattedBody != "" && len(textContent.Body) > 500 {
+		textContent.Body = truncateMessageText(textContent.Body, 500, false) + "[...]"
+	}
+	if excess := messageContentSize(content, msg) - maxMessageContentSize; excess > 0 {
+		if textContent.FormattedBody != "" {
+			textContent.FormattedBody = cutOffMessageText(textContent.FormattedBody, excess, "<br><em>[long message cut off]</em>", true)
+		} else {
+			textContent.Body = cutOffMessageText(textContent.Body, excess, "\n\n[long message cut off]", false)
+		}
+	}
+	zerolog.Ctx(ctx).Warn().
+		Int("original_size", origSize).
+		Int("new_size", messageContentSize(content, msg)).
+		Msg("Cut off message content that was too large for a Matrix event")
 }
 
 func (portal *Portal) sendConvertedMessage(
@@ -3434,6 +3514,7 @@ func (portal *Portal) sendConvertedEdit(
 			Raw:    part.TopLevelExtra,
 		}
 		if !part.DontBridge {
+			cutOffLongMessage(ctx, wrappedContent, portal.Bridge.IsGhostMXID)
 			resp, err := intent.SendMessage(ctx, portal.MXID, part.Type, wrappedContent, &MatrixSendExtra{
 				Timestamp:   ts,
 				MessageMeta: part.Part,
