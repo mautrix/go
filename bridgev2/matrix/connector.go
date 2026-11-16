@@ -112,6 +112,7 @@ var (
 	_ bridgev2.MatrixConnectorWithNameDisambiguation     = (*Connector)(nil)
 	_ bridgev2.MatrixConnectorWithURLPreviews            = (*Connector)(nil)
 	_ bridgev2.MatrixConnectorWithAnalytics              = (*Connector)(nil)
+	_ bridgev2.MatrixConnectorWithEventSizeLimit         = (*Connector)(nil)
 )
 
 func NewConnector(cfg *bridgeconfig.Config) *Connector {
@@ -726,7 +727,7 @@ func (br *Connector) isEncrypted(ctx context.Context, roomID id.RoomID) (bool, e
 	return br.StateStore.IsEncrypted(ctx, roomID)
 }
 
-func (br *Connector) EventSizeLimit(ctx context.Context, roomID id.RoomID) int {
+func (br *Connector) GetEventSizeLimit(ctx context.Context, roomID id.RoomID) int {
 	// The federation event size limit is 64 KiB. Allow around 1kb of overhead for federation stuff,
 	// plus 33% for base64 of encrypted messages.
 	if encrypted, err := br.isEncrypted(ctx, roomID); encrypted || err != nil {
