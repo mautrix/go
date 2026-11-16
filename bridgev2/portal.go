@@ -7,10 +7,8 @@
 package bridgev2
 
 import (
-	"bytes"
 	"cmp"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"runtime/debug"
@@ -37,6 +35,7 @@ import (
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/bridgev2/status"
+	"maunium.net/go/mautrix/crypto/canonicaljson"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -3066,18 +3065,16 @@ func (portal *Portal) sendRemoteEventToMatrix(
 }
 
 func jsonSize(val any) int {
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	if enc.Encode(val) != nil {
+	data, err := canonicaljson.Marshal(val)
+	if err != nil {
 		return 0
 	}
-	return buf.Len() - 1
+	return len(data)
 }
 
 func messageContentSize(content *event.Content, msg *event.MessageEventContent) int {
 	// Mentions are counted twice, because encryption.plaintext_mentions copies them outside the ciphertext
-	return jsonSize(content.Parsed) + jsonSize(content.Raw) + jsonSize(msg.Mentions)
+	return jsonSize(content) + jsonSize(msg.Mentions)
 }
 
 func truncateMessageText(text string, maxLen int, isHTML bool) string {
