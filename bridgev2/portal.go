@@ -3046,7 +3046,7 @@ func (portal *Portal) sendRemoteEventToMatrix(
 	content *event.Content,
 	extra *MatrixSendExtra,
 ) (*mautrix.RespSendEvent, error) {
-	cutOffLongMessage(ctx, content, portal.Bridge.IsGhostMXID)
+	portal.cutOffLongMessage(ctx, content)
 	retryContent := *content
 	resp, err := intent.SendMessage(ctx, portal.MXID, eventType, content, extra)
 	if err == nil || source == nil {
@@ -3107,7 +3107,7 @@ func cutOffMessageText(text string, excess int, suffix string, isHTML bool) stri
 	return truncateMessageText(text, len(text)-excess-jsonSize(suffix), isHTML) + suffix
 }
 
-func cutOffLongMessage(ctx context.Context, content *event.Content, isGhost func(id.UserID) bool) {
+func (portal *Portal) cutOffLongMessage(ctx context.Context, content *event.Content) {
 	msg, ok := content.Parsed.(*event.MessageEventContent)
 	if !ok {
 		return
@@ -3122,7 +3122,7 @@ func cutOffLongMessage(ctx context.Context, content *event.Content, isGhost func
 	}
 	for _, mentions := range []*event.Mentions{msg.Mentions, textContent.Mentions} {
 		if mentions != nil {
-			mentions.UserIDs = slices.DeleteFunc(mentions.UserIDs, isGhost)
+			mentions.UserIDs = slices.DeleteFunc(mentions.UserIDs, portal.Bridge.IsGhostMXID)
 		}
 	}
 	if textContent.FormattedBody != "" && len(textContent.Body) > 500 {
@@ -3514,7 +3514,7 @@ func (portal *Portal) sendConvertedEdit(
 			Raw:    part.TopLevelExtra,
 		}
 		if !part.DontBridge {
-			cutOffLongMessage(ctx, wrappedContent, portal.Bridge.IsGhostMXID)
+			portal.cutOffLongMessage(ctx, wrappedContent)
 			resp, err := intent.SendMessage(ctx, portal.MXID, part.Type, wrappedContent, &MatrixSendExtra{
 				Timestamp:   ts,
 				MessageMeta: part.Part,

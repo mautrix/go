@@ -450,7 +450,7 @@ func (portal *Portal) compileBatchMessage(ctx context.Context, source *UserLogin
 			Parsed: part.Content,
 			Raw:    part.Extra,
 		}
-		cutOffLongMessage(ctx, &content, portal.Bridge.IsGhostMXID)
+		portal.cutOffLongMessage(ctx, &content)
 		out.Events = append(out.Events, &event.Event{
 			Sender:    intent.GetMXID(),
 			Type:      part.Type,
