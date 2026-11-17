@@ -10,10 +10,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"slices"
 	"time"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exerrors"
 	"go.mau.fi/util/exslices"
 	"go.mau.fi/util/ptr"
 	"go.mau.fi/util/variationselector"
@@ -130,6 +132,13 @@ func (portal *Portal) doForwardBackfill(ctx context.Context, source *UserLogin, 
 }
 
 func (portal *Portal) sendSkippedForwardBackfill(ctx context.Context, source *UserLogin, messages []*BackfillMessage, markRead bool) {
+	defer func() {
+		if v := recover(); v != nil {
+			zerolog.Ctx(ctx).Err(exerrors.RecoverToError(v)).
+				Bytes(zerolog.ErrorStackFieldName, debug.Stack()).
+				Msg("Panic in skipped forward backfill")
+		}
+	}()
 	msgIDs := make([]networkid.MessageID, len(messages))
 	for i, msg := range messages {
 		msgIDs[i] = msg.ID
