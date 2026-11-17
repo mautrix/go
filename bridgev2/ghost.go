@@ -295,7 +295,9 @@ func (br *Bridge) allowAggressiveUpdateForType(evtType RemoteEventType) bool {
 }
 
 func (ghost *Ghost) UpdateInfoIfNecessary(ctx context.Context, source *UserLogin, evtType RemoteEventType) {
-	ghost.syncLock.Lock()
+	if !ghost.syncLock.TryLock() {
+		return
+	}
 	hasName, nameSet, hasAvatar, avatarSet := ghost.Name != "", ghost.NameSet, ghost.AvatarMXC != "", ghost.AvatarSet
 	ghost.syncLock.Unlock()
 	if hasName && nameSet && avatarSet && !ghost.Bridge.allowAggressiveUpdateForType(evtType) {
