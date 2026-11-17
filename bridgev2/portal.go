@@ -4522,6 +4522,7 @@ type PowerLevelOverrides struct {
 	Kick          *int
 	Ban           *int
 	Redact        *int
+	RoomMention   *int
 
 	Custom func(*event.PowerLevelsEventContent) bool
 }
@@ -4572,6 +4573,13 @@ func (plc *PowerLevelOverrides) Apply(actor id.UserID, content *event.PowerLevel
 	if allowChange(plc.Redact, content.Redact(), actorLevel) {
 		changed = true
 		content.RedactPtr = plc.Redact
+	}
+	if allowChange(plc.RoomMention, content.Notifications.Room(), actorLevel) {
+		changed = true
+		if content.Notifications == nil {
+			content.Notifications = &event.NotificationPowerLevels{}
+		}
+		content.Notifications.RoomPtr = plc.RoomMention
 	}
 	for evtType, level := range plc.Events {
 		changed = content.EnsureEventLevelAs(actor, evtType, level) || changed
