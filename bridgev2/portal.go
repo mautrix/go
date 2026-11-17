@@ -5295,9 +5295,14 @@ func (portal *Portal) updateParent(ctx context.Context, newParentID networkid.Po
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to get new parent portal")
 			return false
 		}
+	} else {
+		portal.Parent = nil
 	}
 	portal.ParentKey = newParent
 	portal.InSpace = false
+	if portal.MXID != "" && portal.Parent == nil {
+		portal.addToUserSpaces(ctx)
+	}
 	if portal.MXID != "" && portal.Parent != nil && (source != nil || portal.Parent.MXID != "") {
 		if portal.Parent.MXID == "" {
 			zerolog.Ctx(ctx).Info().Msg("Parent portal doesn't exist, creating")
