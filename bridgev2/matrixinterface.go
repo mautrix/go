@@ -139,6 +139,11 @@ type MatrixConnectorWithBeeperStreams interface {
 	GetBeeperStreamPublisher() BeeperStreamPublisher
 }
 
+type MatrixConnectorWithEventSizeLimit interface {
+	MatrixConnector
+	GetEventSizeLimit(ctx context.Context, roomID id.RoomID) int
+}
+
 type DirectNotificationData struct {
 	Portal    *Portal
 	Sender    *Ghost

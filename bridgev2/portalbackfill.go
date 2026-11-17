@@ -446,16 +446,18 @@ func (portal *Portal) compileBatchMessage(ctx context.Context, source *UserLogin
 			out.DBMessages = append(out.DBMessages, dbMessage)
 			continue
 		}
+		content := event.Content{
+			Parsed: part.Content,
+			Raw:    part.Extra,
+		}
+		portal.cutOffLongMessage(ctx, &content)
 		out.Events = append(out.Events, &event.Event{
 			Sender:    intent.GetMXID(),
 			Type:      part.Type,
 			Timestamp: msg.Timestamp.UnixMilli(),
 			ID:        evtID,
 			RoomID:    portal.MXID,
-			Content: event.Content{
-				Parsed: part.Content,
-				Raw:    part.Extra,
-			},
+			Content:   content,
 		})
 		if firstPart == nil {
 			firstPart = dbMessage
