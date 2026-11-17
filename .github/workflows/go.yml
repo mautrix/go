@@ -36,7 +36,7 @@ jobs:
       fail-fast: false
       matrix:
         go-version: ["1.26", "1.27"]
-    name: Build (${{ matrix.go-version == '1.27' && 'latest' || 'old' }}, libolm)
+    name: Build (${{ matrix.go-version == '1.27' && 'latest' || 'old' }}, goolm)
 
     steps:
       - uses: actions/checkout@v7
@@ -52,8 +52,8 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install libolm
-        run: sudo apt-get install libolm-dev libolm3
+      - name: Remove libolm
+        run: rm -rf crypto/libolm
 
       - name: Build
         run: go build -v ./...
@@ -71,13 +71,13 @@ jobs:
           GOEXPERIMENT: jsonv2
         run: go test -vet=off -json -v ./... 2>&1 | gotestfmt
 
-  build-goolm:
+  build-libolm:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         go-version: ["1.26", "1.27"]
-    name: Build (${{ matrix.go-version == '1.27' && 'latest' || 'old' }}, goolm)
+    name: Build (${{ matrix.go-version == '1.27' && 'latest' || 'old' }}, libolm)
 
     steps:
       - uses: actions/checkout@v7
@@ -93,10 +93,11 @@ jobs:
         with:
             token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install libolm
+        run: sudo apt-get install libolm-dev libolm3
+
       - name: Build
-        run: |
-          rm -rf crypto/libolm
-          go build -tags=goolm -v ./...
+        run: go build -tags=libolm -v ./...
 
       - name: Test
-        run: go test -vet=off -tags=goolm -json -v ./... 2>&1 | gotestfmt
+        run: go test -vet=off -tags=libolm -json -v ./... 2>&1 | gotestfmt
