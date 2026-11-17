@@ -92,6 +92,9 @@ type Portal struct {
 	outgoingMessages     map[networkid.TransactionID]*outgoingMessage
 	outgoingMessagesLock sync.Mutex
 
+	handlingRemoteMessages     map[networkid.MessageID]chan struct{}
+	handlingRemoteMessagesLock sync.Mutex
+
 	roomCreateLock   sync.Mutex
 	cancelRoomCreate atomic.Pointer[context.CancelFunc]
 	backgroundCtx    context.Context
@@ -137,9 +140,10 @@ func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, que
 		Portal: dbPortal,
 		Bridge: br,
 
-		currentlyTypingLogins: make(map[id.UserID]*UserLogin),
-		currentlyTypingGhosts: exsync.NewSet[id.UserID](),
-		outgoingMessages:      make(map[networkid.TransactionID]*outgoingMessage),
+		currentlyTypingLogins:  make(map[id.UserID]*UserLogin),
+		currentlyTypingGhosts:  exsync.NewSet[id.UserID](),
+		outgoingMessages:       make(map[networkid.TransactionID]*outgoingMessage),
+		handlingRemoteMessages: make(map[networkid.MessageID]chan struct{}),
 
 		RoomCreated: exsync.NewEvent(),
 	}
@@ -3269,6 +3273,11 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 		}
 		return
 	}
+	finishHandling, err := portal.startHandlingRemoteMessage(ctx, evt.GetID())
+	if err != nil {
+		return EventHandlingResultFailed.WithError(err)
+	}
+	defer finishHandling()
 	existing, err := portal.Bridge.DB.Message.GetAllPartsByID(ctx, portal.Receiver, evt.GetID())
 	if err != nil {
 		log.Err(err).Msg("Failed to check if message is a duplicate")
@@ -3310,6 +3319,31 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 		}
 	}
 	return
+}
+
+func (portal *Portal) startHandlingRemoteMessage(ctx context.Context, msgID networkid.MessageID) (func(), error) {
+	for {
+		portal.handlingRemoteMessagesLock.Lock()
+		prevDone, alreadyHandling := portal.handlingRemoteMessages[msgID]
+		if !alreadyHandling {
+			done := make(chan struct{})
+			portal.handlingRemoteMessages[msgID] = done
+			portal.handlingRemoteMessagesLock.Unlock()
+			return func() {
+				portal.handlingRemoteMessagesLock.Lock()
+				delete(portal.handlingRemoteMessages, msgID)
+				portal.handlingRemoteMessagesLock.Unlock()
+				close(done)
+			}, nil
+		}
+		portal.handlingRemoteMessagesLock.Unlock()
+		zerolog.Ctx(ctx).Debug().Msg("Waiting for previous copy of message to finish handling")
+		select {
+		case <-prevDone:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
 }
 
 func (portal *Portal) sendRemoteErrorNotice(ctx context.Context, intent MatrixAPI, err error, ts time.Time, evtTypeName string) {
