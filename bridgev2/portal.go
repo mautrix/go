@@ -92,6 +92,9 @@ type Portal struct {
 	outgoingMessages     map[networkid.TransactionID]*outgoingMessage
 	outgoingMessagesLock sync.Mutex
 
+	handlingRemoteMessages     map[networkid.MessageID]chan struct{}
+	handlingRemoteMessagesLock sync.Mutex
+
 	roomCreateLock   sync.Mutex
 	cancelRoomCreate atomic.Pointer[context.CancelFunc]
 	backgroundCtx    context.Context
@@ -137,9 +140,10 @@ func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, que
 		Portal: dbPortal,
 		Bridge: br,
 
-		currentlyTypingLogins: make(map[id.UserID]*UserLogin),
-		currentlyTypingGhosts: exsync.NewSet[id.UserID](),
-		outgoingMessages:      make(map[networkid.TransactionID]*outgoingMessage),
+		currentlyTypingLogins:  make(map[id.UserID]*UserLogin),
+		currentlyTypingGhosts:  exsync.NewSet[id.UserID](),
+		outgoingMessages:       make(map[networkid.TransactionID]*outgoingMessage),
+		handlingRemoteMessages: make(map[networkid.MessageID]chan struct{}),
 
 		RoomCreated: exsync.NewEvent(),
 	}
@@ -3269,6 +3273,7 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 		}
 		return
 	}
+	defer portal.startHandlingRemoteMessage(evt.GetID())()
 	existing, err := portal.Bridge.DB.Message.GetAllPartsByID(ctx, portal.Receiver, evt.GetID())
 	if err != nil {
 		log.Err(err).Msg("Failed to check if message is a duplicate")
@@ -3310,6 +3315,49 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 		}
 	}
 	return
+}
+
+func (portal *Portal) startHandlingRemoteMessage(msgID networkid.MessageID) func() {
+	portal.handlingRemoteMessagesLock.Lock()
+	defer portal.handlingRemoteMessagesLock.Unlock()
+	if _, alreadyHandling := portal.handlingRemoteMessages[msgID]; alreadyHandling {
+		return func() {}
+	}
+	done := make(chan struct{})
+	portal.handlingRemoteMessages[msgID] = done
+	return func() {
+		portal.handlingRemoteMessagesLock.Lock()
+		delete(portal.handlingRemoteMessages, msgID)
+		portal.handlingRemoteMessagesLock.Unlock()
+		close(done)
+	}
+}
+
+func (portal *Portal) waitForHandlingRemoteMessages(ctx context.Context, messages []*BackfillMessage) bool {
+	portal.handlingRemoteMessagesLock.Lock()
+	var waitFor []chan struct{}
+	var waitForIDs []networkid.MessageID
+	for _, msg := range messages {
+		if done, ok := portal.handlingRemoteMessages[msg.ID]; ok {
+			waitFor = append(waitFor, done)
+			waitForIDs = append(waitForIDs, msg.ID)
+		}
+	}
+	portal.handlingRemoteMessagesLock.Unlock()
+	if len(waitFor) == 0 {
+		return false
+	}
+	zerolog.Ctx(ctx).Debug().
+		Strs("message_ids", exslices.CastToString[string](waitForIDs)).
+		Msg("Waiting for messages that are still being bridged before sending forward backfill")
+	for _, done := range waitFor {
+		select {
+		case <-done:
+		case <-ctx.Done():
+			return true
+		}
+	}
+	return true
 }
 
 func (portal *Portal) sendRemoteErrorNotice(ctx context.Context, intent MatrixAPI, err error, ts time.Time, evtTypeName string) {
