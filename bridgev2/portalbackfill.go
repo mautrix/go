@@ -83,12 +83,23 @@ func (portal *Portal) doForwardBackfill(ctx context.Context, source *UserLogin, 
 	for i, msg := range resp.Messages {
 		msgIDs[i] = msg.ID
 	}
-	ctx, waited, finishHandling, err := portal.startHandlingRemoteMessages(ctx, msgIDs, &portal.backfillLock)
+	_, waited, skipped, finishHandling, err := portal.startHandlingRemoteMessages(ctx, msgIDs, &portal.backfillLock, true)
 	if err != nil {
 		log.Err(err).Msg("Failed to wait for messages that are still being bridged")
 		return
 	}
 	defer finishHandling()
+	if len(skipped) > 0 {
+		var skippedMessages []*BackfillMessage
+		resp.Messages = slices.DeleteFunc(resp.Messages, func(msg *BackfillMessage) bool {
+			if slices.Contains(skipped, msg.ID) {
+				skippedMessages = append(skippedMessages, msg)
+				return true
+			}
+			return false
+		})
+		go portal.sendSkippedForwardBackfill(log.WithContext(portal.backgroundCtx), source, skippedMessages, resp.MarkRead)
+	}
 	aggressiveDedup := resp.AggressiveDeduplication || waited
 	if !aggressiveDedup {
 		latestMessage, err := portal.Bridge.DB.Message.GetLastPartAtOrBeforeTime(ctx, portal.PortalKey, time.Now().Add(10*time.Second))
@@ -115,6 +126,29 @@ func (portal *Portal) doForwardBackfill(ctx context.Context, source *UserLogin, 
 	} else if !resp.MarkRead && !resp.ReadUpTo.IsZero() && !resp.ReadUpTo.Before(resp.Messages[0].Timestamp) &&
 		!portal.isPastUnreadThreshold(resp.Messages) {
 		portal.markBackfillReadUpTo(ctx, source, resp.ReadUpTo)
+	}
+}
+
+func (portal *Portal) sendSkippedForwardBackfill(ctx context.Context, source *UserLogin, messages []*BackfillMessage, markRead bool) {
+	msgIDs := make([]networkid.MessageID, len(messages))
+	for i, msg := range messages {
+		msgIDs[i] = msg.ID
+	}
+	_, _, _, finishHandling, err := portal.startHandlingRemoteMessages(ctx, msgIDs, nil, false)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to wait for skipped forward backfill messages")
+		return
+	}
+	defer finishHandling()
+	messages = portal.cutoffMessages(ctx, messages, true, true, nil)
+	if len(messages) == 0 {
+		return
+	}
+	portal.backfillLock.Lock()
+	defer portal.backfillLock.Unlock()
+	err = portal.sendBackfill(ctx, source, messages, true, markRead, false, nil)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to send skipped forward backfill messages")
 	}
 }
 
