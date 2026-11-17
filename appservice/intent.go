@@ -86,11 +86,14 @@ func (intent *IntentAPI) Register(ctx context.Context) error {
 }
 
 func (intent *IntentAPI) EnsureRegistered(ctx context.Context) error {
-	if intent.IsCustomPuppet || intent.Registered {
+	if intent.IsCustomPuppet {
 		return nil
 	}
 	intent.registerLock.Lock()
 	defer intent.registerLock.Unlock()
+	if intent.Registered {
+		return nil
+	}
 	isRegistered, err := intent.as.StateStore.IsRegistered(ctx, intent.UserID)
 	if err != nil {
 		return fmt.Errorf("failed to check if user is registered: %w", err)
