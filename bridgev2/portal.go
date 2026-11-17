@@ -445,6 +445,11 @@ func (portal *Portal) handleSingleEventWithDelayLogging(idx int, rawEvt any) (ou
 	var backgrounded atomic.Bool
 	start := time.Now()
 	var handleDuration time.Duration
+	_, isCreate := rawEvt.(*portalCreateEvent)
+	backgroundCh := make(chan struct{})
+	if !isCreate {
+		ctx = context.WithValue(ctx, contextKeyBackgroundEventHandling, sync.OnceFunc(func() { close(backgroundCh) }))
+	}
 	// Note: this will assume success if the handler times out
 	outerRes = EventHandlingResult{Queued: true, Success: true, Error: ErrHandlerBackgrounded}
 	go portal.handleSingleEvent(ctx, rawEvt, func(res EventHandlingResult) {
@@ -471,8 +476,8 @@ func (portal *Portal) handleSingleEventWithDelayLogging(idx int, rawEvt any) (ou
 		}
 	})
 	tick := time.NewTicker(30 * time.Second)
-	_, isCreate := rawEvt.(*portalCreateEvent)
 	defer tick.Stop()
+TickLoop:
 	for i := 0; i < EventHandlingTimeoutTicks || isCreate; i++ {
 		select {
 		case <-doneCh:
@@ -483,6 +488,8 @@ func (portal *Portal) handleSingleEventWithDelayLogging(idx int, rawEvt any) (ou
 					Msg("Event that took long finished handling")
 			}
 			return
+		case <-backgroundCh:
+			break TickLoop
 		case <-tick.C:
 			log.Warn().
 				Time("started_at", start).
@@ -505,6 +512,7 @@ const (
 	contextKeyRemoteEvent contextKey = iota
 	contextKeyMatrixEvent
 	contextKeyHandlingRemoteMessages
+	contextKeyBackgroundEventHandling
 )
 
 func GetMatrixEventFromContext(ctx context.Context) (evt *event.Event) {
@@ -3276,7 +3284,7 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 		}
 		return
 	}
-	ctx, _, finishHandling, err := portal.startHandlingRemoteMessages(ctx, []networkid.MessageID{evt.GetID()})
+	ctx, _, finishHandling, err := portal.startHandlingRemoteMessages(ctx, []networkid.MessageID{evt.GetID()}, nil)
 	if err != nil {
 		return EventHandlingResultFailed.WithError(err)
 	}
@@ -3324,11 +3332,11 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 	return
 }
 
-func (portal *Portal) startHandlingRemoteMessages(ctx context.Context, msgIDs []networkid.MessageID) (context.Context, bool, func(), error) {
+func (portal *Portal) startHandlingRemoteMessages(ctx context.Context, msgIDs []networkid.MessageID, unlockWhileWaiting sync.Locker) (context.Context, bool, func(), error) {
 	owned, _ := ctx.Value(contextKeyHandlingRemoteMessages).([]networkid.MessageID)
 	timeout := time.NewTimer(remoteMessageWaitTimeout)
 	defer timeout.Stop()
-	var waited, timedOut bool
+	var waited bool
 	for {
 		portal.handlingRemoteMessagesLock.Lock()
 		var waitFor chan struct{}
@@ -3337,12 +3345,11 @@ func (portal *Portal) startHandlingRemoteMessages(ctx context.Context, msgIDs []
 		for _, msgID := range msgIDs {
 			if slices.Contains(owned, msgID) || slices.Contains(claim, msgID) {
 				continue
-			} else if prevDone, ok := portal.handlingRemoteMessages[msgID]; !ok {
-				claim = append(claim, msgID)
-			} else if !timedOut {
+			} else if prevDone, ok := portal.handlingRemoteMessages[msgID]; ok {
 				waitFor, waitForID = prevDone, msgID
 				break
 			}
+			claim = append(claim, msgID)
 		}
 		if waitFor == nil {
 			done := make(chan struct{})
@@ -3363,13 +3370,25 @@ func (portal *Portal) startHandlingRemoteMessages(ctx context.Context, msgIDs []
 		portal.handlingRemoteMessagesLock.Unlock()
 		waited = true
 		zerolog.Ctx(ctx).Debug().Str("message_id", string(waitForID)).Msg("Waiting for previous copy of message to finish handling")
+		if unlockWhileWaiting != nil {
+			unlockWhileWaiting.Unlock()
+		}
+		var err error
 		select {
 		case <-waitFor:
 		case <-timeout.C:
-			timedOut = true
-			zerolog.Ctx(ctx).Warn().Str("message_id", string(waitForID)).Msg("Timed out waiting for previous copy of message to finish handling")
+			zerolog.Ctx(ctx).Warn().Str("message_id", string(waitForID)).Msg("Previous copy of message is taking long to handle, continuing to wait in background")
+			if background, ok := ctx.Value(contextKeyBackgroundEventHandling).(func()); ok {
+				background()
+			}
 		case <-ctx.Done():
-			return ctx, waited, nil, ctx.Err()
+			err = ctx.Err()
+		}
+		if unlockWhileWaiting != nil {
+			unlockWhileWaiting.Lock()
+		}
+		if err != nil {
+			return ctx, waited, nil, err
 		}
 	}
 }

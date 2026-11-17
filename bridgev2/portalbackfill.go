@@ -83,7 +83,7 @@ func (portal *Portal) doForwardBackfill(ctx context.Context, source *UserLogin, 
 	for i, msg := range resp.Messages {
 		msgIDs[i] = msg.ID
 	}
-	ctx, waited, finishHandling, err := portal.startHandlingRemoteMessages(ctx, msgIDs)
+	ctx, waited, finishHandling, err := portal.startHandlingRemoteMessages(ctx, msgIDs, &portal.backfillLock)
 	if err != nil {
 		log.Err(err).Msg("Failed to wait for messages that are still being bridged")
 		return
