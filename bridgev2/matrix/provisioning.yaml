@@ -1116,6 +1116,13 @@ components:
                     default_value:
                       type: string
                       description: A default value that the client can pre-fill the field with.
+                    placeholder:
+                      type: string
+                      description: Placeholder text that the client can show in the field when it's empty. If not set, clients may use a default placeholder based on the field type.
+                    autofill_domain:
+                      type: string
+                      description: For username, email, phone number and password fields, the web domain that the client should associate the field with for password manager autofill.
+                      examples: [ instagram.com ]
                     optional:
                       type: boolean
                       description: If true, the field is optional and can be omitted when submitting.
