@@ -220,9 +220,13 @@ func (portal *Portal) doBackwardsBackfill(ctx context.Context, source *UserLogin
 
 func (portal *Portal) fetchThreadBackfill(ctx context.Context, source *UserLogin, anchor *database.Message) *FetchMessagesResponse {
 	log := zerolog.Ctx(ctx)
+	threadRoot := anchor.ThreadRoot
+	if threadRoot == "" {
+		threadRoot = anchor.ID
+	}
 	resp, err := source.Client.(BackfillingNetworkAPI).FetchMessages(ctx, FetchMessagesParams{
 		Portal:        portal,
-		ThreadRoot:    anchor.ID,
+		ThreadRoot:    threadRoot,
 		Forward:       true,
 		AnchorMessage: anchor,
 		Count:         portal.Bridge.Config.Backfill.Threads.MaxInitialMessages,
@@ -395,8 +399,16 @@ func (portal *Portal) sendBackfill(
 	return nil
 }
 
+type compileBatchReactionKey struct {
+	MessagePart networkid.MessagePartID
+	Sender      networkid.UserID
+	EmojiID     networkid.EmojiID
+}
+
 type compileBatchOutput struct {
 	PrevThreadEvents map[networkid.MessageID]id.EventID
+	MessageParts     map[networkid.MessagePartID]*database.Message
+	Reactions        map[compileBatchReactionKey]struct{}
 
 	Events []*event.Event
 	Extras []*MatrixSendExtra
@@ -425,6 +437,11 @@ func (portal *Portal) compileBatchMessage(ctx context.Context, source *UserLogin
 	var firstPart *database.Message
 	for i, part := range msg.Parts {
 		partIDs = append(partIDs, part.ID)
+		partKey := networkid.MessagePartID{MessageID: msg.ID, PartID: part.ID}
+		if existing := out.MessageParts[partKey]; existing != nil {
+			partMap[part.ID] = existing
+			continue
+		}
 		portal.applyRelationMeta(ctx, part.Content, replyTo, threadRoot, prevThreadEvent)
 		part.Content.BeeperDisappearingTimer = msg.Disappear.ToEventContent()
 		evtID := portal.Bridge.Matrix.GenerateDeterministicEventID(portal.MXID, portal.PortalKey, msg.ID, part.ID)
@@ -441,6 +458,7 @@ func (portal *Portal) compileBatchMessage(ctx context.Context, source *UserLogin
 			Metadata:         part.DBMetadata,
 			IsDoublePuppeted: intent.IsDoublePuppet(),
 		}
+		out.MessageParts[partKey] = dbMessage
 		if part.DontBridge {
 			dbMessage.SetFakeMXID()
 			out.DBMessages = append(out.DBMessages, dbMessage)
@@ -499,6 +517,15 @@ func (portal *Portal) compileBatchMessage(ctx context.Context, source *UserLogin
 		if !ok {
 			// TODO warning log and/or skip reaction?
 		}
+		reactionKey := compileBatchReactionKey{
+			MessagePart: networkid.MessagePartID{MessageID: msg.ID, PartID: *reaction.TargetPart},
+			Sender:      reaction.Sender.Sender,
+			EmojiID:     reaction.EmojiID,
+		}
+		if _, exists := out.Reactions[reactionKey]; exists {
+			continue
+		}
+		out.Reactions[reactionKey] = struct{}{}
 		reactionMXID := portal.Bridge.Matrix.GenerateReactionEventID(portal.MXID, targetPart, reaction.Sender.Sender, reaction.EmojiID)
 		dbReaction := &database.Reaction{
 			Room:          portal.PortalKey,
@@ -553,6 +580,8 @@ func (portal *Portal) fetchThreadInsideBatch(ctx context.Context, source *UserLo
 func (portal *Portal) sendBatch(ctx context.Context, source *UserLogin, messages []*BackfillMessage, forceForward, markRead, inThread bool) error {
 	out := &compileBatchOutput{
 		PrevThreadEvents: make(map[networkid.MessageID]id.EventID),
+		MessageParts:     make(map[networkid.MessagePartID]*database.Message),
+		Reactions:        make(map[compileBatchReactionKey]struct{}),
 		Events:           make([]*event.Event, 0, len(messages)),
 		Extras:           make([]*MatrixSendExtra, 0, len(messages)),
 		DBMessages:       make([]*database.Message, 0, len(messages)),
