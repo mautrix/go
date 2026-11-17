@@ -353,6 +353,12 @@ type LoginInputDataField struct {
 	Description string `json:"description"`
 	// A default value that the client can pre-fill the field with.
 	DefaultValue string `json:"default_value,omitempty"`
+	// Placeholder text that the client can show in the field when it's empty.
+	// If not set, clients may use a default placeholder based on the field type.
+	Placeholder string `json:"placeholder,omitempty"`
+	// For username, email, phone number and password fields, the web domain (e.g. instagram.com)
+	// that the client should associate the field with for password manager autofill.
+	AutofillDomain string `json:"autofill_domain,omitempty"`
 	// If true, the field is optional and can be omitted when submitting.
 	Optional bool `json:"optional,omitzero"`
 	// A regex pattern that the client can use to validate input client-side.
