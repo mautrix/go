@@ -197,3 +197,5 @@ func (spec *PerMessageProfilesEventContent) Match(input string) (string, *Beeper
 	}
 	return input, nil
 }
+
+type ProfileAnnotationsEventContent map[id.UserID]ExtensibleTextContainer
