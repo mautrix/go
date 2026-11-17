@@ -79,9 +79,26 @@ func (portal *Portal) doForwardBackfill(ctx context.Context, source *UserLogin, 
 		Bool("aggressive_deduplication", resp.AggressiveDeduplication).
 		Str("queried_latest_message_id", latestMessageID).
 		Msg("Fetched messages for forward backfill, deduplicating before sending")
-	aggressiveDedup := resp.AggressiveDeduplication
-	if portal.waitForHandlingRemoteMessages(ctx, resp.Messages) {
-		aggressiveDedup = true
+	msgIDs := make([]networkid.MessageID, len(resp.Messages))
+	for i, msg := range resp.Messages {
+		msgIDs[i] = msg.ID
+	}
+	ctx, waited, finishHandling, err := portal.startHandlingRemoteMessages(ctx, msgIDs)
+	if err != nil {
+		log.Err(err).Msg("Failed to wait for messages that are still being bridged")
+		return
+	}
+	defer finishHandling()
+	aggressiveDedup := resp.AggressiveDeduplication || waited
+	if !aggressiveDedup {
+		latestMessage, err := portal.Bridge.DB.Message.GetLastPartAtOrBeforeTime(ctx, portal.PortalKey, time.Now().Add(10*time.Second))
+		if err != nil {
+			log.Err(err).Msg("Failed to get latest message after fetching forward backfill")
+			aggressiveDedup = true
+		} else if latestMessage != nil && (lastMessage == nil || latestMessage.RowID != lastMessage.RowID) {
+			log.Debug().Str("new_latest_message_id", string(latestMessage.ID)).Msg("New messages were bridged during forward backfill fetch")
+			aggressiveDedup = true
+		}
 	}
 	// TODO mark backfill queue task as done if last message is nil (-> room was empty) and HasMore is false?
 	resp.Messages = portal.cutoffMessages(ctx, resp.Messages, aggressiveDedup, true, lastMessage)
