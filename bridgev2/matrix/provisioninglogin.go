@@ -111,6 +111,11 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 	if r.URL.Query().Get("client_websocket") == "2" && !slices.Contains(clientCaps, bridgev2.ClientCapabilityWebSocket) {
 		clientCaps = append(clientCaps, bridgev2.ClientCapabilityWebSocket)
 	}
+	if prov.br.Websocket {
+		clientCaps = slices.DeleteFunc(clientCaps, func(capability bridgev2.ClientCapability) bool {
+			return capability == bridgev2.ClientCapabilityWebSocket
+		})
+	}
 	user := prov.GetUser(r)
 	if overrideLogin == nil && user.HasTooManyLogins() {
 		ErrTooManyLogins.AppendMessage(" (%d)", user.Permissions.MaxLogins).Write(w)
@@ -159,7 +164,7 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 	if clientCaps.Has(bridgev2.ClientCapabilityHTTP) {
 		rt = provLogin
 	}
-	if clientCaps.Has(bridgev2.ClientCapabilityWebSocket) && !prov.br.Websocket {
+	if clientCaps.Has(bridgev2.ClientCapabilityWebSocket) {
 		provLogin.websocketEnabled = true
 		wsrt = provLogin
 	}
