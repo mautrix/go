@@ -3148,7 +3148,8 @@ func (portal *Portal) addPowerLevelContext(ctx context.Context, evt *zerolog.Eve
 	if pl == nil {
 		return
 	}
-	evt.Int("sender_power_level", pl.GetUserLevel(sender)).
+	evt.Bool("power_levels_partial", err != nil).
+		Int("sender_power_level", pl.GetUserLevel(sender)).
 		Int("users_default", pl.UsersDefault).
 		Int("events_default", pl.EventsDefault).
 		Int("required_power_level", pl.GetEventLevel(evtType)).
