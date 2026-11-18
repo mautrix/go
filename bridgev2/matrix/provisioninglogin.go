@@ -387,7 +387,7 @@ func (prov *ProvisioningAPI) doLoginStep(
 			return sm.err
 		}
 		currentStep = sm.next
-		if sm.prev != nil && ((sm.started && sm.prev.StepID == expectedID) ||
+		if sm.prev != nil && ((expectedTxnID == "" && sm.started && sm.prev.StepID == expectedID) ||
 			(expectedTxnID != "" && sm.prev.TxnID == expectedTxnID)) {
 			log.Debug().
 				Str("prev_step_id", sm.prev.StepID).
@@ -591,27 +591,31 @@ func (prov *ProvisioningAPI) handleLoginTimeout(login *ProvLogin) {
 	<-login.Ctx.Done()
 	if errors.Is(login.Ctx.Err(), context.DeadlineExceeded) {
 		zerolog.Ctx(login.Ctx).Warn().Msg("Login process timed out, deleting")
-		login.Process.Cancel()
-	} else if deadline, ok := login.Ctx.Deadline(); ok {
-		time.Sleep(time.Until(deadline))
+		prov.cancelLogin(login, ErrLoginTimedOut)
 	}
-	prov.loginsLock.Lock()
-	delete(prov.logins, login.ID)
-	prov.loginsLock.Unlock()
+	deadline, _ := login.Ctx.Deadline()
+	time.AfterFunc(time.Until(deadline), func() {
+		prov.loginsLock.Lock()
+		delete(prov.logins, login.ID)
+		prov.loginsLock.Unlock()
+	})
 }
 
 func (prov *ProvisioningAPI) cancelLogin(login *ProvLogin, err error) {
-	if login.Ctx.Err() == nil {
-		login.Process.Cancel()
-		login.CancelCtx()
-	}
+	var finished bool
 	login.step.WithNonErroringLock(func(sm *stepManager) {
-		if sm.err == nil {
-			sm.err = err
+		if sm.err != nil || (sm.next != nil && sm.next.Type == bridgev2.LoginStepTypeComplete) {
+			finished = true
+			return
 		}
+		sm.err = err
 		if sm.wait != nil {
 			close(sm.wait)
 			sm.wait = nil
 		}
 	})
+	if !finished {
+		login.Process.Cancel()
+		login.CancelCtx()
+	}
 }
