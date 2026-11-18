@@ -134,8 +134,9 @@ func (as *ASIntent) fillMemberEvent(ctx context.Context, roomID id.RoomID, userI
 			Str("membership", string(targetContent.Membership)).
 			Msg("Failed to get ghost to fill new membership event")
 	} else if ghost != nil {
-		targetContent.Displayname = ghost.Name
-		targetContent.AvatarURL = ghost.AvatarMXC
+		meta := ghost.Meta.Load()
+		targetContent.Displayname = meta.Name
+		targetContent.AvatarURL = meta.AvatarMXC
 	} else if profile, err := as.Matrix().GetProfile(ctx, userID); err != nil {
 		zerolog.Ctx(ctx).Debug().Err(err).
 			Stringer("target_user_id", userID).
