@@ -56,7 +56,12 @@ func (cc ClientCapabilities) Negotiated() bool {
 }
 
 func (cc ClientCapabilities) Has(capability ClientCapability) bool {
-	return !cc.Negotiated() || slices.Contains(cc, capability)
+	switch capability {
+	case ClientCapabilityHTTP, ClientCapabilityWebSocket:
+		return slices.Contains(cc, capability)
+	default:
+		return !cc.Negotiated() || slices.Contains(cc, capability)
+	}
 }
 
 func (cc ClientCapabilities) HasAll(capabilities ...ClientCapability) bool {

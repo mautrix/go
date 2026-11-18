@@ -156,10 +156,10 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 
 	var rt bridgev2.FingerprintingRoundTripper
 	var wsrt bridgev2.FingerprintingRoundTripper
-	if slices.Contains(clientCaps, bridgev2.ClientCapabilityHTTP) {
+	if clientCaps.Has(bridgev2.ClientCapabilityHTTP) {
 		rt = provLogin
 	}
-	if slices.Contains(clientCaps, bridgev2.ClientCapabilityWebSocket) && !prov.br.Websocket {
+	if clientCaps.Has(bridgev2.ClientCapabilityWebSocket) && !prov.br.Websocket {
 		provLogin.websocketEnabled = true
 		wsrt = provLogin
 	}

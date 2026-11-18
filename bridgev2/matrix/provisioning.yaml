@@ -1394,7 +1394,8 @@ components:
       type: array
       description: |
         The capabilities the client supports. If the list doesn't contain `capability_negotiation`,
-        or isn't sent at all, the bridge assumes the client supports every capability.
+        or isn't sent at all, the bridge assumes the client supports every capability
+        except `client_http` and `client_websocket`, which always need to be declared.
       items:
         $ref: '#/components/schemas/ClientCapability'
       examples:
