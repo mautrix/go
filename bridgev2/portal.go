@@ -106,6 +106,7 @@ type Portal struct {
 
 	events         chan portalEvent
 	eventsSendLock sync.RWMutex
+	eventsBlocked  atomic.Int64
 
 	eventsLock sync.Mutex
 	eventIdx   int
@@ -382,13 +383,23 @@ func (portal *Portal) queueEvent(ctx context.Context, evt portalEvent) EventHand
 		}
 		select {
 		case portal.events <- evt:
+			if portal.eventsBlocked.Load() != 0 {
+				if blocked := portal.eventsBlocked.Swap(0); blocked != 0 {
+					zerolog.Ctx(ctx).Debug().
+						Str("portal_id", string(portal.ID)).
+						Int64("blocked_events", blocked).
+						Msg("Portal event channel is no longer full")
+				}
+			}
 			return EventHandlingResultQueued
 		case <-portal.deleted:
 			return EventHandlingResultIgnored
 		default:
-			zerolog.Ctx(ctx).Error().
-				Str("portal_id", string(portal.ID)).
-				Msg("Portal event channel is full, queue will block")
+			if portal.eventsBlocked.Add(1) == 1 {
+				zerolog.Ctx(ctx).Error().
+					Str("portal_id", string(portal.ID)).
+					Msg("Portal event channel is full, queue will block")
+			}
 			for {
 				select {
 				case portal.events <- evt:
