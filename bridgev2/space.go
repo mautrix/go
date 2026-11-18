@@ -80,19 +80,21 @@ func (ul *UserLogin) AddPortalToSpace(ctx context.Context, portal *Portal, userP
 	return nil
 }
 
-func (portal *Portal) createParentAndAddToSpace(ctx context.Context, source *UserLogin) {
-	err := portal.Parent.CreateMatrixRoom(ctx, source, nil)
+func (portal *Portal) createParentAndAddToSpace(ctx context.Context, source *UserLogin, parent *Portal) {
+	err := parent.CreateMatrixRoom(ctx, source, nil)
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to create parent portal")
+	} else if portal.Parent != parent {
+		zerolog.Ctx(ctx).Debug().Msg("Portal parent changed while creating parent portal, not adding to space")
 	} else {
-		portal.addToParentSpaceAndSave(ctx, true)
+		portal.addToParentSpaceAndSave(ctx, parent, true)
 	}
 }
 
-func (portal *Portal) addToParentSpaceAndSave(ctx context.Context, save bool) {
-	err := portal.toggleSpace(ctx, portal.Parent.MXID, true, false)
+func (portal *Portal) addToParentSpaceAndSave(ctx context.Context, parent *Portal, save bool) {
+	err := portal.toggleSpace(ctx, parent.MXID, true, false)
 	if err != nil {
-		zerolog.Ctx(ctx).Err(err).Stringer("space_mxid", portal.Parent.MXID).Msg("Failed to add portal to space")
+		zerolog.Ctx(ctx).Err(err).Stringer("space_mxid", parent.MXID).Msg("Failed to add portal to space")
 	} else {
 		portal.InSpace = true
 		if save {
