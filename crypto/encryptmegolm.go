@@ -395,8 +395,6 @@ func (mach *OlmMachine) addMegolmSessionRecipient(ctx context.Context, device *i
 }
 
 func (mach *OlmMachine) encryptAndSendGroupSession(ctx context.Context, session *OutboundGroupSession, olmSessions map[id.UserID]map[id.DeviceID]deviceSessionWrapper) error {
-	mach.olmLock.Lock()
-	defer mach.olmLock.Unlock()
 	log := zerolog.Ctx(ctx)
 	log.Trace().Msg("Encrypting group session for all found devices")
 	deviceCount := 0
