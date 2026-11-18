@@ -388,7 +388,7 @@ func (prov *ProvisioningAPI) doLoginStep(
 			return sm.err
 		}
 		currentStep = sm.next
-		if sm.prev != nil && ((sm.started && sm.prev.StepID == expectedID) ||
+		if sm.prev != nil && ((sm.started && sm.prev.StepID == expectedID && (expectedTxnID == "" || currentStep.TxnID != expectedTxnID)) ||
 			(expectedTxnID != "" && sm.prev.TxnID == expectedTxnID)) {
 			log.Debug().
 				Str("prev_step_id", sm.prev.StepID).
