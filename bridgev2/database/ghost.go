@@ -74,6 +74,9 @@ func (ep *ExtraProfile) MergeInto(old ExtraProfile) ExtraProfile {
 		return nil
 	}
 	newExtra := maps.Clone(old)
+	if newExtra == nil {
+		newExtra = make(ExtraProfile, len(*ep))
+	}
 	for key, val := range *ep {
 		if key != "displayname" && key != "avatar_url" {
 			newExtra[key] = val

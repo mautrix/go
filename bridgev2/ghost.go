@@ -23,7 +23,6 @@ import (
 	"github.com/tidwall/sjson"
 	"go.mau.fi/util/exerrors"
 	"go.mau.fi/util/exmime"
-	"go.mau.fi/util/ptr"
 
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -460,15 +459,15 @@ func (ghost *Ghost) reconcileProfile(ctx context.Context, current *event.MemberE
 		return
 	}
 	defer ghost.syncLock.Unlock()
-	meta := ghost.Meta.Load()
+	oldMeta := ghost.Meta.Load()
 	// Re-set the profile on the server if:
 	// * the bridge database thinks the profile field is set
 	// * the member event has a different value than the bridge database
 	// * the value isn't being updated right after this call
-	nameDrift := meta.NameSet && meta.Name != "" && current.Displayname != meta.Name &&
-		(updatedProfile == nil || updatedProfile.Name == nil || *updatedProfile.Name == meta.Name)
-	avatarDrift := meta.AvatarSet && meta.AvatarMXC != "" && current.AvatarURL != meta.AvatarMXC &&
-		(updatedProfile == nil || updatedProfile.Avatar == nil || updatedProfile.Avatar.ID == meta.AvatarID)
+	nameDrift := oldMeta.NameSet && oldMeta.Name != "" && current.Displayname != oldMeta.Name &&
+		(updatedProfile == nil || updatedProfile.Name == nil || *updatedProfile.Name == oldMeta.Name)
+	avatarDrift := oldMeta.AvatarSet && oldMeta.AvatarMXC != "" && current.AvatarURL != oldMeta.AvatarMXC &&
+		(updatedProfile == nil || updatedProfile.Avatar == nil || updatedProfile.Avatar.ID == oldMeta.AvatarID)
 	// Also don't allow re-setting too often, because there might be multiple in-flight room syncs
 	// that all call this method in a short period.
 	if (!nameDrift && !avatarDrift) || time.Since(ghost.lastSync) < 5*time.Minute {
@@ -478,19 +477,19 @@ func (ghost *Ghost) reconcileProfile(ctx context.Context, current *event.MemberE
 		Str("ghost_id", string(ghost.ID)).
 		Bool("name_drift", nameDrift).
 		Bool("avatar_drift", avatarDrift).
-		Str("expected_name", meta.Name).
+		Str("expected_name", oldMeta.Name).
 		Str("actual_name", current.Displayname).
 		Msg("Ghost profile drifted from the server copy, re-pushing")
-	meta = ptr.Clone(meta)
+	newMeta := *oldMeta
 	if nameDrift {
-		meta.NameSet = false
+		newMeta.NameSet = false
 	}
 	if avatarDrift {
-		meta.AvatarSet = false
+		newMeta.AvatarSet = false
 	}
-	ghost.pushProfileChanges(ctx, meta, nameDrift, avatarDrift, false)
-	ghost.compareAndSwapMeta(ctx, ghost.Meta.Load(), *meta)
-	if err := ghost.Bridge.DB.Ghost.Update(ctx, meta); err != nil {
+	ghost.pushProfileChanges(ctx, &newMeta, nameDrift, avatarDrift, false)
+	ghost.compareAndSwapMeta(ctx, oldMeta, newMeta)
+	if err := ghost.Bridge.DB.Ghost.Update(ctx, &newMeta); err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to save ghost after profile reconcile")
 	}
 }
