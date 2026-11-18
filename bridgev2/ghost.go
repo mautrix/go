@@ -169,7 +169,8 @@ func prepareName(ghost *database.Ghost, name string) bool {
 }
 
 func (ghost *Ghost) UpdateName(ctx context.Context, name string) bool {
-	meta := *ghost.Meta.Load()
+	oldPtr := ghost.Meta.Load()
+	meta := *oldPtr
 	if !prepareName(&meta, name) {
 		return false
 	}
@@ -178,7 +179,7 @@ func (ghost *Ghost) UpdateName(ctx context.Context, name string) bool {
 	} else {
 		meta.NameSet = true
 	}
-	ghost.Meta.Store(&meta)
+	ghost.compareAndSwapMeta(ctx, oldPtr, meta)
 	return true
 }
 
@@ -205,7 +206,8 @@ func prepareAvatar(ctx context.Context, ghost *database.Ghost, intent MatrixAPI,
 	return true, true
 }
 
-func (ghost *Ghost) compareAndSwapMeta(ctx context.Context, oldPtr *database.Ghost, newPtr *database.Ghost) {
+func (ghost *Ghost) compareAndSwapMeta(ctx context.Context, oldPtr *database.Ghost, newMeta database.Ghost) {
+	newPtr := &newMeta
 	if !ghost.Meta.CompareAndSwap(oldPtr, newPtr) {
 		inBetween := ghost.Meta.Swap(newPtr)
 		zerolog.Ctx(ctx).Warn().
@@ -231,7 +233,7 @@ func (ghost *Ghost) UpdateAvatar(ctx context.Context, avatar *Avatar) bool {
 			meta.AvatarSet = true
 		}
 	}
-	ghost.compareAndSwapMeta(ctx, oldPtr, &meta)
+	ghost.compareAndSwapMeta(ctx, oldPtr, meta)
 	return true
 }
 
@@ -254,8 +256,7 @@ func (ghost *Ghost) getExtraProfileMeta(meta *database.Ghost) any {
 	return mergedExtra
 }
 
-func (ghost *Ghost) getFullProfile() json.RawMessage {
-	meta := ghost.Meta.Load()
+func (ghost *Ghost) getFullProfile(meta *database.Ghost) json.RawMessage {
 	marshaled := exerrors.Must(json.Marshal(ghost.getExtraProfileMeta(meta)))
 	if meta.Name != "" {
 		marshaled = exerrors.Must(sjson.SetBytes(marshaled, "displayname", meta.Name))
@@ -280,7 +281,11 @@ func prepareContactInfo(br *Bridge, ghost *database.Ghost, identifiers []string,
 			})
 		}
 	}
-	changed := extraProfile.CopyTo(&ghost.ExtraProfile)
+	var changed bool
+	if newExtra := extraProfile.MergeInto(ghost.ExtraProfile); newExtra != nil {
+		changed = true
+		ghost.ExtraProfile = newExtra
+	}
 	if identifiers != nil {
 		changed = changed || !slices.Equal(identifiers, ghost.Identifiers)
 		ghost.Identifiers = identifiers
@@ -307,7 +312,7 @@ func (ghost *Ghost) UpdateContactInfo(ctx context.Context, identifiers []string,
 	} else {
 		meta.ContactInfoSet = true
 	}
-	ghost.compareAndSwapMeta(ctx, oldPtr, &meta)
+	ghost.compareAndSwapMeta(ctx, oldPtr, meta)
 	return true
 }
 
@@ -392,7 +397,7 @@ func (ghost *Ghost) UpdateInfo(ctx context.Context, info *UserInfo) {
 	update := nameChanged || avatarChanged || contactInfoChanged
 	if info.ExtraUpdates != nil {
 		// ExtraUpdates may call UpdateAvatar or otherwise mutate Meta, so store the current state and reload afterwards
-		ghost.compareAndSwapMeta(ctx, oldPtr, &meta)
+		ghost.compareAndSwapMeta(ctx, oldPtr, meta)
 
 		update = info.ExtraUpdates(ctx, ghost) || update
 
@@ -400,7 +405,7 @@ func (ghost *Ghost) UpdateInfo(ctx context.Context, info *UserInfo) {
 		meta = *oldPtr
 	}
 	ghost.pushProfileChanges(ctx, &meta, nameChanged, avatarMXCChanged, contactInfoChanged)
-	ghost.compareAndSwapMeta(ctx, oldPtr, &meta)
+	ghost.compareAndSwapMeta(ctx, oldPtr, meta)
 	if oldName != meta.Name || oldAvatar != meta.AvatarMXC {
 		ghost.updateDMPortals(ctx)
 	}
@@ -417,7 +422,7 @@ func (ghost *Ghost) pushProfileChanges(ctx context.Context, meta *database.Ghost
 		return
 	}
 	if ghost.Bridge.Matrix.GetCapabilities().ReplaceEntireProfile {
-		if err := ghost.Intent.SetProfile(ctx, ghost.getFullProfile()); err != nil {
+		if err := ghost.Intent.SetProfile(ctx, ghost.getFullProfile(meta)); err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to set profile")
 		} else {
 			meta.NameSet = true
@@ -484,6 +489,7 @@ func (ghost *Ghost) reconcileProfile(ctx context.Context, current *event.MemberE
 		meta.AvatarSet = false
 	}
 	ghost.pushProfileChanges(ctx, meta, nameDrift, avatarDrift, false)
+	ghost.compareAndSwapMeta(ctx, ghost.Meta.Load(), *meta)
 	if err := ghost.Bridge.DB.Ghost.Update(ctx, meta); err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to save ghost after profile reconcile")
 	}

@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"maps"
 
 	"go.mau.fi/util/dbutil"
 	"go.mau.fi/util/exerrors"
@@ -54,24 +55,31 @@ func canonicalize(data json.RawMessage) json.RawMessage {
 	return canonicalized
 }
 
-func (ep *ExtraProfile) CopyTo(dest *ExtraProfile) (changed bool) {
+func (ep *ExtraProfile) MergeInto(old ExtraProfile) ExtraProfile {
 	if len(*ep) == 0 {
-		return
+		return nil
 	}
-	if *dest == nil {
-		*dest = make(ExtraProfile)
-	}
+	var changed bool
 	for key, val := range *ep {
 		if key == "displayname" || key == "avatar_url" {
 			continue
 		}
-		existing, exists := (*dest)[key]
+		existing, exists := old[key]
 		if !exists || !bytes.Equal(canonicalize(existing), val) {
-			(*dest)[key] = val
 			changed = true
+			break
 		}
 	}
-	return
+	if !changed {
+		return nil
+	}
+	newExtra := maps.Clone(old)
+	for key, val := range *ep {
+		if key != "displayname" && key != "avatar_url" {
+			newExtra[key] = val
+		}
+	}
+	return newExtra
 }
 
 type Ghost struct {
