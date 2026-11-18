@@ -3144,11 +3144,11 @@ func (portal *Portal) addPowerLevelContext(ctx context.Context, evt *zerolog.Eve
 	pl, err := portal.Bridge.Matrix.GetPowerLevels(ctx, portal.MXID)
 	if err != nil {
 		evt.AnErr("power_levels_error", err)
+	}
+	if pl == nil {
 		return
 	}
-	_, senderListed := pl.Users[sender]
 	evt.Int("sender_power_level", pl.GetUserLevel(sender)).
-		Bool("sender_in_power_levels", senderListed).
 		Int("users_default", pl.UsersDefault).
 		Int("events_default", pl.EventsDefault).
 		Int("required_power_level", pl.GetEventLevel(evtType)).
