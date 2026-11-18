@@ -2734,6 +2734,12 @@ func (portal *Portal) handleRemoteEvent(ctx context.Context, source *UserLogin, 
 		mcp, ok := evt.(RemoteEventThatMayCreatePortal)
 		if !ok || !mcp.ShouldCreatePortal() || !portal.Bridge.Config.PortalCreateFilter.ShouldAllow(source.ID, portal.PortalKey) {
 			log.Debug().Msg("Dropping event as portal doesn't exist")
+			if infoChange, ok := evt.(RemoteChatInfoChange); ok && evtType == RemoteEventChatInfoChange {
+				portal.updateParentWithoutRoom(ctx, source, infoChange)
+			}
+			if postHandler, ok := evt.(RemotePostHandler); ok {
+				postHandler.PostHandle(ctx, portal)
+			}
 			return EventHandlingResultIgnored
 		}
 		infoProvider, ok := mcp.(RemoteChatResyncWithInfo)
@@ -5404,6 +5410,17 @@ func (portal *Portal) updateParent(ctx context.Context, newParentID networkid.Po
 		}
 	}
 	return true
+}
+
+func (portal *Portal) updateParentWithoutRoom(ctx context.Context, source *UserLogin, evt RemoteChatInfoChange) {
+	change, err := evt.GetChatInfoChange(ctx, portal)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to get chat info change for portal without room")
+	} else if change != nil && change.ChatInfo != nil && change.ChatInfo.ParentID != nil && portal.updateParent(ctx, *change.ChatInfo.ParentID, source) {
+		if err = portal.Save(ctx); err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to save portal after updating parent")
+		}
+	}
 }
 
 func (portal *Portal) lockedUpdateInfoFromGhost(ctx context.Context, ghost *Ghost) {
