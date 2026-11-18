@@ -400,18 +400,20 @@ func (helper *CryptoHelper) Start() {
 	if helper.bridge.Config.Encryption.Appservice {
 		return
 	}
-	helper.syncDone.Add(1)
-	defer helper.syncDone.Done()
 	helper.log.Debug().Msg("Starting syncer for receiving to-device messages")
 	var ctx context.Context
-	ctx, helper.cancelSync = context.WithCancel(context.Background())
-	err := helper.client.SyncWithContext(ctx)
-	if err != nil && !errors.Is(err, context.Canceled) {
-		helper.log.WithLevel(zerolog.FatalLevel).Err(err).Msg("Fatal error syncing")
-		os.Exit(51)
-	} else {
-		helper.log.Info().Msg("Bridge bot to-device syncer stopped without error")
-	}
+	ctx, helper.cancelSync = context.WithCancel(helper.bridge.Bridge.BackgroundCtx)
+	helper.syncDone.Add(1)
+	go func() {
+		defer helper.syncDone.Done()
+		err := helper.client.SyncWithContext(ctx)
+		if err != nil && !errors.Is(err, context.Canceled) {
+			helper.log.WithLevel(zerolog.FatalLevel).Err(err).Msg("Fatal error syncing")
+			os.Exit(51)
+		} else {
+			helper.log.Info().Msg("Bridge bot to-device syncer stopped without error")
+		}
+	}()
 }
 
 func (helper *CryptoHelper) Stop() {
@@ -470,7 +472,7 @@ func (helper *CryptoHelper) Reset(ctx context.Context, startAfterReset bool) err
 	}
 	helper.log.Info().Msg("End-to-bridge encryption successfully reset")
 	if startAfterReset {
-		go helper.Start()
+		helper.Start()
 	}
 	return nil
 }

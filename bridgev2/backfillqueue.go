@@ -73,7 +73,7 @@ func (br *Bridge) flushManualBackfillQueue() {
 }
 
 func (br *Bridge) RunBackfillQueue(ctx context.Context) {
-	if ctx.Err() != nil || !br.Config.Backfill.Queue.Enabled || !br.Config.Backfill.Enabled {
+	if !br.Config.Backfill.Queue.Enabled || !br.Config.Backfill.Enabled {
 		return
 	}
 	log := br.Log.With().Str("component", "backfill queue").Logger()
@@ -81,16 +81,7 @@ func (br *Bridge) RunBackfillQueue(ctx context.Context) {
 		log.Warn().Msg("Backfill queue is enabled in config, but Matrix server doesn't support batch sending")
 		return
 	}
-	ctx, cancel := context.WithCancel(log.WithContext(ctx))
-	defer cancel()
-	stopChan := br.stopBackfillQueue.GetChan()
-	go func() {
-		select {
-		case <-stopChan:
-			cancel()
-		case <-ctx.Done():
-		}
-	}()
+	ctx = log.WithContext(ctx)
 	batchDelay := time.Duration(br.Config.Backfill.Queue.BatchDelay) * time.Second
 	log.Info().Stringer("batch_delay", batchDelay).Msg("Backfill queue starting")
 	noTasksFoundCount := 0
@@ -105,11 +96,9 @@ func (br *Bridge) RunBackfillQueue(ctx context.Context) {
 			noTasksFoundCount = 0
 		case <-ctx.Done():
 			log.Info().Msg("Stopping backfill queue")
+			br.flushManualBackfillQueue()
 			return
 		case <-time.After(nextDelay):
-		}
-		if ctx.Err() != nil {
-			return
 		}
 		select {
 		case manualTask := <-br.manualBackfills:
@@ -118,10 +107,7 @@ func (br *Bridge) RunBackfillQueue(ctx context.Context) {
 			backfillTask, err := br.DB.BackfillTask.GetNext(ctx)
 			if err != nil {
 				log.Err(err).Msg("Failed to get next backfill queue entry")
-				select {
-				case <-ctx.Done():
-				case <-time.After(BackfillQueueErrorBackoff):
-				}
+				time.Sleep(BackfillQueueErrorBackoff)
 				continue
 			} else if backfillTask != nil {
 				backfillTask.FromQueue = true
