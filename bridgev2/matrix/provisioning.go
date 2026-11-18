@@ -378,6 +378,10 @@ type RespLoginFlows struct {
 	Flows []bridgev2.LoginFlow `json:"flows"`
 }
 
+type ReqLoginStart struct {
+	ClientCapabilities bridgev2.ClientCapabilities `json:"client_capabilities,omitempty"`
+}
+
 type RespSubmitLogin struct {
 	LoginID string `json:"login_id"`
 	*bridgev2.LoginStep

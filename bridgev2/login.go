@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/rs/zerolog"
@@ -27,6 +28,57 @@ var ErrLoginStepCancelled = RespError{
 	ErrCode:    "FI.MAU.LOGIN_STEP_CANCELLED",
 	Err:        "Login step was cancelled",
 	StatusCode: http.StatusConflict,
+}
+
+var ErrMissingClientCapability = RespError{
+	ErrCode:    "FI.MAU.BRIDGE.MISSING_CLIENT_CAPABILITY",
+	Err:        "This login requires a capability that the client doesn't support",
+	StatusCode: http.StatusBadRequest,
+}
+
+func MissingClientCapabilityError(capability ClientCapability) RespError {
+	return ErrMissingClientCapability.WithMessage("This login requires the %s capability, which the client doesn't support", capability)
+}
+
+type ClientCapability string
+
+const (
+	ClientCapabilityNegotiation ClientCapability = "capability_negotiation"
+	ClientCapabilityWebAuthn    ClientCapability = "webauthn"
+	ClientCapabilityHTTP        ClientCapability = "client_http"
+	ClientCapabilityWebSocket   ClientCapability = "client_websocket"
+)
+
+type ClientCapabilities []ClientCapability
+
+func (cc ClientCapabilities) Negotiated() bool {
+	return slices.Contains(cc, ClientCapabilityNegotiation)
+}
+
+func (cc ClientCapabilities) Has(capability ClientCapability) bool {
+	return !cc.Negotiated() || slices.Contains(cc, capability)
+}
+
+func (cc ClientCapabilities) HasAll(capabilities ...ClientCapability) bool {
+	for _, capability := range capabilities {
+		if !cc.Has(capability) {
+			return false
+		}
+	}
+	return true
+}
+
+func WithClientCapabilities(ctx context.Context, capabilities ClientCapabilities) context.Context {
+	return context.WithValue(ctx, contextKeyClientCapabilities, capabilities)
+}
+
+func GetClientCapabilities(ctx context.Context) ClientCapabilities {
+	capabilities, _ := ctx.Value(contextKeyClientCapabilities).(ClientCapabilities)
+	return capabilities
+}
+
+func HasClientCapability(ctx context.Context, capability ClientCapability) bool {
+	return GetClientCapabilities(ctx).Has(capability)
 }
 
 // LoginProcess represents a single occurrence of a user logging into the remote network.
@@ -109,6 +161,8 @@ type LoginFlow struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	ID          string `json:"id"`
+
+	RequiredClientCapabilities []ClientCapability `json:"required_client_capabilities,omitempty"`
 }
 
 type LoginStepType string
