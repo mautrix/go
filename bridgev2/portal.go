@@ -5269,6 +5269,9 @@ func (portal *Portal) updateUserLocalInfo(ctx context.Context, info *UserLocalPo
 			}
 			if err != nil {
 				zerolog.Ctx(ctx).Err(err).Msg("Failed to mute room")
+				if didJustCreate {
+					update.MutedUntil = Unmuted
+				}
 			} else {
 				update.MutedUntil = mutedUntil
 			}
@@ -5284,6 +5287,9 @@ func (portal *Portal) updateUserLocalInfo(ctx context.Context, info *UserLocalPo
 		}
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to tag room")
+			if didJustCreate {
+				update.Tag = ptr.Ptr[event.RoomTag]("")
+			}
 		} else {
 			update.Tag = ptr.Ptr(*info.Tag)
 		}
