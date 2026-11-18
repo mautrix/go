@@ -5391,16 +5391,16 @@ func (portal *Portal) updateParent(ctx context.Context, newParentID networkid.Po
 	if portal.MXID != "" && portal.Parent == nil {
 		portal.addToUserSpaces(ctx)
 	}
-	if portal.MXID != "" && portal.Parent != nil && (source != nil || portal.Parent.MXID != "") {
-		if portal.Parent.MXID == "" {
+	if parent := portal.Parent; portal.MXID != "" && parent != nil && (source != nil || parent.MXID != "") {
+		if parent.MXID == "" {
 			zerolog.Ctx(ctx).Info().Msg("Parent portal doesn't exist, creating")
-			err = portal.Parent.CreateMatrixRoom(ctx, source, nil)
+			err = parent.CreateMatrixRoom(ctx, source, nil)
 			if err != nil {
 				zerolog.Ctx(ctx).Err(err).Msg("Failed to create parent portal")
 			}
 		}
-		if portal.Parent.MXID != "" {
-			portal.addToParentSpaceAndSave(ctx, portal.Parent, false)
+		if parent.MXID != "" {
+			portal.addToParentSpaceAndSave(ctx, parent, false)
 		}
 	}
 	return true
@@ -5791,12 +5791,12 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 		portal.Bridge.WakeupBackfillQueue()
 	}
 	withoutCancelCtx := zerolog.Ctx(ctx).WithContext(portal.backgroundCtx)
-	if portal.Parent != nil {
-		if portal.Parent.MXID != "" {
-			portal.addToParentSpaceAndSave(ctx, portal.Parent, true)
+	if parent := portal.Parent; parent != nil {
+		if parent.MXID != "" {
+			portal.addToParentSpaceAndSave(ctx, parent, true)
 		} else {
 			log.Info().Msg("Parent portal doesn't exist, creating in background")
-			go portal.createParentAndAddToSpace(withoutCancelCtx, source, portal.Parent)
+			go portal.createParentAndAddToSpace(withoutCancelCtx, source, parent)
 		}
 	}
 	portal.updateUserLocalInfo(ctx, info.UserLocal, source, true)
