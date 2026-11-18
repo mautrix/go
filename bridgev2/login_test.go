@@ -7,7 +7,6 @@
 package bridgev2_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -35,14 +34,6 @@ func TestClientCapabilities_HasAll(t *testing.T) {
 	assert.True(t, caps.HasAll())
 	assert.True(t, caps.HasAll(bridgev2.ClientCapabilityWebAuthn))
 	assert.False(t, caps.HasAll(bridgev2.ClientCapabilityWebAuthn, bridgev2.ClientCapabilityHTTP))
-}
-
-func TestHasClientCapability(t *testing.T) {
-	assert.True(t, bridgev2.HasClientCapability(context.Background(), bridgev2.ClientCapabilityWebAuthn))
-
-	ctx := bridgev2.WithClientCapabilities(context.Background(), bridgev2.ClientCapabilities{bridgev2.ClientCapabilityNegotiation})
-	assert.Equal(t, bridgev2.ClientCapabilities{bridgev2.ClientCapabilityNegotiation}, bridgev2.GetClientCapabilities(ctx))
-	assert.False(t, bridgev2.HasClientCapability(ctx, bridgev2.ClientCapabilityWebAuthn))
 }
 
 func TestMissingClientCapabilityError(t *testing.T) {

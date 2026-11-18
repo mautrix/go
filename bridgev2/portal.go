@@ -500,7 +500,6 @@ type contextKey int
 const (
 	contextKeyRemoteEvent contextKey = iota
 	contextKeyMatrixEvent
-	contextKeyClientCapabilities
 )
 
 func GetMatrixEventFromContext(ctx context.Context) (evt *event.Event) {

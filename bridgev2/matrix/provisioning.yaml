@@ -1383,13 +1383,12 @@ components:
     ClientCapability:
       type: string
       description: |
-        A feature that the client supports during login. Known values:
-        * `capability_negotiation`: the client negotiates capabilities.
-        * `webauthn`: the client can complete `webauthn` steps.
-        * `client_http`: the client can execute `client_http` steps.
-        * `client_websocket`: the client can open full duplex tunnels for `client_http` steps.
-      examples:
-      - webauthn
+        A feature that the client supports during login.
+        `capability_negotiation` marks that the client negotiates capabilities,
+        `webauthn` means it can complete `webauthn` steps,
+        `client_http` means it can execute `client_http` steps, and
+        `client_websocket` means it can open full duplex tunnels for `client_http` steps.
+      enum: [ capability_negotiation, webauthn, client_http, client_websocket ]
     ClientCapabilities:
       type: array
       description: |

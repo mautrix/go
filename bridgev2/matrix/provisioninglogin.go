@@ -74,8 +74,6 @@ type ProvLogin struct {
 	step     *stepManager
 	Override *bridgev2.UserLogin
 
-	ClientCapabilities bridgev2.ClientCapabilities
-
 	HTTPLock            sync.Mutex
 	fingerprint         string
 	streamsLock         sync.Mutex
@@ -121,7 +119,7 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 		ErrTooManyLogins.AppendMessage(" (%d)", user.Permissions.MaxLogins).Write(w)
 		return
 	}
-	login, err := prov.net.CreateLogin(bridgev2.WithClientCapabilities(r.Context(), clientCaps), user, r.PathValue("flowID"))
+	login, err := prov.net.CreateLogin(r.Context(), user, r.PathValue("flowID"))
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to create login process")
 		RespondWithError(w, err, "Internal error creating login process")
@@ -132,16 +130,14 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 	ctx = user.Log.With().
 		Str("login_id", loginID).
 		Logger().WithContext(ctx)
-	ctx = bridgev2.WithClientCapabilities(ctx, clientCaps)
 	ch := make(chan struct{})
 	provLogin := &ProvLogin{
-		ID:                 loginID,
-		UserMXID:           user.MXID,
-		Process:            login,
-		Override:           overrideLogin,
-		ClientCapabilities: clientCaps,
-		Ctx:                ctx,
-		CancelCtx:          cancel,
+		ID:        loginID,
+		UserMXID:  user.MXID,
+		Process:   login,
+		Override:  overrideLogin,
+		Ctx:       ctx,
+		CancelCtx: cancel,
 
 		// The HTTP over websocket proxy only allows JSON bodies, so the custom gzip format can't be used.
 		acceptsGzipResponse: !prov.br.Websocket,
@@ -169,9 +165,10 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 		wsrt = provLogin
 	}
 	go prov.executeStep(provLogin, provLogin.Ctx, "start", nil, nil, &bridgev2.LoginStartParams{
-		Override:      overrideLogin,
-		HTTP:          rt,
-		WebSocketHTTP: wsrt,
+		Override:           overrideLogin,
+		HTTP:               rt,
+		WebSocketHTTP:      wsrt,
+		ClientCapabilities: clientCaps,
 	}, nil)
 	select {
 	case <-ch:

@@ -73,19 +73,6 @@ func (cc ClientCapabilities) HasAll(capabilities ...ClientCapability) bool {
 	return true
 }
 
-func WithClientCapabilities(ctx context.Context, capabilities ClientCapabilities) context.Context {
-	return context.WithValue(ctx, contextKeyClientCapabilities, capabilities)
-}
-
-func GetClientCapabilities(ctx context.Context) ClientCapabilities {
-	capabilities, _ := ctx.Value(contextKeyClientCapabilities).(ClientCapabilities)
-	return capabilities
-}
-
-func HasClientCapability(ctx context.Context, capability ClientCapability) bool {
-	return GetClientCapabilities(ctx).Has(capability)
-}
-
 // LoginProcess represents a single occurrence of a user logging into the remote network.
 type LoginProcess interface {
 	// Start starts the process and returns the first step.
@@ -122,6 +109,9 @@ type LoginStartParams struct {
 	Override      *UserLogin
 	HTTP          FingerprintingRoundTripper
 	WebSocketHTTP FingerprintingRoundTripper
+	// ClientCapabilities lists the login features the client supports.
+	// Use [ClientCapabilities.Has] to check it, and store it in the login process if later steps need it.
+	ClientCapabilities ClientCapabilities
 }
 
 type LoginProcessWithParams interface {
