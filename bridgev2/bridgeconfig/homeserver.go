@@ -36,5 +36,6 @@ type HomeserverConfig struct {
 	WSProxy        string `yaml:"websocket_proxy"`
 	WSPingInterval int    `yaml:"ping_interval_seconds"`
 
-	RetryLimit int `yaml:"retry_limit"`
+	RetryLimit     int `yaml:"retry_limit"`
+	MaxConnections int `yaml:"max_connections"`
 }

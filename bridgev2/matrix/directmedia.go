@@ -57,6 +57,10 @@ func (br *Connector) initDirectMedia() error {
 	}
 	br.MediaProxy.RegisterRoutes(br.AS.Router, br.Log.With().Str("component", "media proxy").Logger())
 	br.dmaSigKey = sha256.Sum256(br.MediaProxy.GetServerKey().Priv.Seed())
+	if br.Config.DirectMedia.ServeOnly {
+		br.Log.Debug().Str("server_name", br.MediaProxy.GetServerName()).Msg("Enabled direct media access for existing URIs only")
+		return nil
+	}
 	dmn.SetUseDirectMedia()
 	br.Log.Debug().Str("server_name", br.MediaProxy.GetServerName()).Msg("Enabled direct media access")
 	return nil
@@ -73,7 +77,7 @@ func (br *Connector) GenerateContentURI(ctx context.Context, mediaID networkid.M
 }
 
 func (br *Connector) generateContentURIInternal(mediaID networkid.MediaID, encrypted bool) (id.ContentURIString, error) {
-	if br.MediaProxy == nil {
+	if br.MediaProxy == nil || br.Config.DirectMedia.ServeOnly {
 		return "", bridgev2.ErrDirectMediaNotEnabled
 	}
 	prefixLen := len(MediaIDPrefix)

@@ -79,6 +79,7 @@ type BridgeConfig struct {
 	UnknownErrorAutoReconnect     time.Duration      `yaml:"unknown_error_auto_reconnect"`
 	UnknownErrorMaxAutoReconnects int                `yaml:"unknown_error_max_auto_reconnects"`
 	BridgeMatrixLeave             bool               `yaml:"bridge_matrix_leave"`
+	DropMatrixProfileChanges      bool               `yaml:"drop_matrix_profile_changes"`
 	BridgeNotices                 bool               `yaml:"bridge_notices"`
 	TagOnlyOnCreate               bool               `yaml:"tag_only_on_create"`
 	OnlyBridgeTags                []event.RoomTag    `yaml:"only_bridge_tags"`
@@ -120,7 +121,6 @@ type ProvisioningConfig struct {
 	SharedSecret           string `yaml:"shared_secret"`
 	AllowMatrixAuth        bool   `yaml:"allow_matrix_auth"`
 	DebugEndpoints         bool   `yaml:"debug_endpoints"`
-	EnableSessionTransfers bool   `yaml:"enable_session_transfers"`
 	FailOnWebAuthn         bool   `yaml:"fail_on_webauthn"`
 	RequestIDHeader        string `yaml:"request_id_header"`
 	TrustIncomingRequestID bool   `yaml:"trust_incoming_request_id"`
@@ -129,6 +129,7 @@ type ProvisioningConfig struct {
 type DirectMediaConfig struct {
 	Enabled                bool   `yaml:"enabled"`
 	Encrypted              bool   `yaml:"encrypted"`
+	ServeOnly              bool   `yaml:"serve_only"`
 	MediaIDPrefix          string `yaml:"media_id_prefix"`
 	mediaproxy.BasicConfig `yaml:",inline"`
 }

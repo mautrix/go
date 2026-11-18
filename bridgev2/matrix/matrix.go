@@ -27,6 +27,9 @@ func (br *Connector) handleRoomEvent(ctx context.Context, evt *event.Event) {
 	if evt.Type == event.StateMember && br.Crypto != nil && !br.Bridge.IsGhostMXID(id.UserID(evt.GetStateKey())) {
 		br.Crypto.HandleMemberEvent(ctx, evt)
 	}
+	if br.Config.Bridge.DropMatrixProfileChanges && isOwnProfileChange(evt) {
+		return
+	}
 	if br.shouldIgnoreEvent(evt) {
 		return
 	}
@@ -50,6 +53,19 @@ func (br *Connector) handleRoomEvent(ctx context.Context, evt *event.Event) {
 		return
 	}
 	br.Bridge.QueueMatrixEvent(ctx, evt)
+}
+
+func isOwnProfileChange(evt *event.Event) bool {
+	if evt.Type != event.StateMember || evt.StateKey == nil || evt.Sender.String() != *evt.StateKey || evt.Unsigned.PrevContent == nil {
+		return false
+	}
+	content, ok := evt.Content.Parsed.(*event.MemberEventContent)
+	if !ok || content.Membership != event.MembershipJoin {
+		return false
+	}
+	_ = evt.Unsigned.PrevContent.ParseRaw(evt.Type)
+	prevContent, ok := evt.Unsigned.PrevContent.Parsed.(*event.MemberEventContent)
+	return ok && prevContent.Membership == event.MembershipJoin
 }
 
 func (br *Connector) handleEphemeralEvent(ctx context.Context, evt *event.Event) {

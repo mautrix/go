@@ -446,16 +446,18 @@ func (portal *Portal) compileBatchMessage(ctx context.Context, source *UserLogin
 			out.DBMessages = append(out.DBMessages, dbMessage)
 			continue
 		}
+		content := event.Content{
+			Parsed: part.Content,
+			Raw:    part.Extra,
+		}
+		portal.cutOffLongMessage(ctx, &content)
 		out.Events = append(out.Events, &event.Event{
 			Sender:    intent.GetMXID(),
 			Type:      part.Type,
 			Timestamp: msg.Timestamp.UnixMilli(),
 			ID:        evtID,
 			RoomID:    portal.MXID,
-			Content: event.Content{
-				Parsed: part.Content,
-				Raw:    part.Extra,
-			},
+			Content:   content,
 		})
 		if firstPart == nil {
 			firstPart = dbMessage
@@ -588,13 +590,25 @@ func (portal *Portal) sendBatch(ctx context.Context, source *UserLogin, messages
 	for _, msg := range out.DBMessages {
 		err = portal.Bridge.DB.Message.Insert(ctx, msg)
 		if err != nil {
-			zerolog.Ctx(ctx).Err(err).
+			logEvt := zerolog.Ctx(ctx).Err(err).
 				Str("message_id", string(msg.ID)).
 				Str("part_id", string(msg.PartID)).
 				Str("sender_id", string(msg.SenderID)).
 				Str("portal_id", string(msg.Room.ID)).
 				Str("portal_receiver", string(msg.Room.Receiver)).
-				Msg("Failed to insert backfilled message to database")
+				Time("message_ts", msg.Timestamp)
+			existing, getErr := portal.Bridge.DB.Message.GetPartByID(ctx, msg.Room.Receiver, msg.ID, msg.PartID)
+			if getErr != nil {
+				logEvt = logEvt.AnErr("existing_lookup_error", getErr)
+			} else if existing != nil {
+				logEvt = logEvt.
+					Str("existing_portal_id", string(existing.Room.ID)).
+					Str("existing_portal_receiver", string(existing.Room.Receiver)).
+					Bool("existing_same_portal", existing.Room == msg.Room).
+					Time("existing_ts", existing.Timestamp).
+					Bool("existing_fake", existing.HasFakeMXID())
+			}
+			logEvt.Msg("Failed to insert backfilled message to database")
 		}
 	}
 	// TODO mass insert db reactions

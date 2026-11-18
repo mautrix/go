@@ -368,6 +368,17 @@ func (as *AppService) SetHomeserverURL(homeserverURL string) error {
 	return nil
 }
 
+// SetMaxConnections must be called after [AppService.SetHomeserverURL], which replaces the HTTP client.
+func (as *AppService) SetMaxConnections(n int) {
+	transport, ok := as.HTTPClient.Transport.(*http.Transport)
+	if !ok {
+		transport = http.DefaultTransport.(*http.Transport).Clone()
+		as.HTTPClient.Transport = transport
+	}
+	transport.MaxConnsPerHost = n
+	transport.MaxIdleConnsPerHost = n
+}
+
 // NewMautrixClient creates a new [mautrix.Client] instance for the given user ID.
 //
 // This does not do any validation, and it does not cache the client.

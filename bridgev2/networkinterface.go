@@ -370,6 +370,24 @@ type OutgoingTimeoutSuppressingNetworkAPI interface {
 	SuppressOutgoingTimeouts() bool
 }
 
+// MatrixSendError contains the details of a failed attempt to send a remote event to Matrix.
+type MatrixSendError struct {
+	Portal    *Portal
+	Intent    MatrixAPI
+	EventType event.Type
+	Err       error
+}
+
+// MatrixSendErrorHandlingNetworkAPI is an optional interface that network connectors can implement to
+// repair room state when sending a remote event to Matrix fails, e.g. fix power levels after M_FORBIDDEN.
+type MatrixSendErrorHandlingNetworkAPI interface {
+	NetworkAPI
+	// HandleMatrixSendError is called when sending a remote event to Matrix fails.
+	// If it returns true, the send is retried once with a new transaction ID, so it should only
+	// return true for errors where the homeserver definitely didn't accept the event.
+	HandleMatrixSendError(ctx context.Context, sendErr *MatrixSendError) (retry bool)
+}
+
 type NetworkGeneralCapabilities struct {
 	// Does the network connector support disappearing messages?
 	// This flag enables the message disappearing loop in the bridge.
@@ -461,13 +479,6 @@ type BackgroundSyncingNetworkAPI interface {
 	// The client should connect to the remote network, handle pending messages, and then disconnect.
 	// This call should block until the entire sync is complete and the client is disconnected.
 	ConnectBackground(ctx context.Context, params *ConnectBackgroundParams) error
-}
-
-// CredentialExportingNetworkAPI is an optional interface that networks connectors can implement to support export of
-// the credentials associated with that login. Credential type is bridge specific.
-type CredentialExportingNetworkAPI interface {
-	NetworkAPI
-	ExportCredentials(ctx context.Context) any
 }
 
 // FetchMessagesParams contains the parameters for a message history pagination request.

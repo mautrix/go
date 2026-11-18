@@ -38,6 +38,7 @@ func doUpgrade(helper up.Helper) {
 	helper.Copy(up.Str|up.Int|up.Null, "bridge", "unknown_error_auto_reconnect")
 	helper.Copy(up.Int, "bridge", "unknown_error_max_auto_reconnects")
 	helper.Copy(up.Bool, "bridge", "bridge_matrix_leave")
+	helper.Copy(up.Bool, "bridge", "drop_matrix_profile_changes")
 	helper.Copy(up.Bool, "bridge", "bridge_notices")
 	helper.Copy(up.Bool, "bridge", "tag_only_on_create")
 	helper.Copy(up.List, "bridge", "only_bridge_tags")
@@ -94,6 +95,7 @@ func doUpgrade(helper up.Helper) {
 	helper.Copy(up.Bool, "homeserver", "websocket")
 	helper.Copy(up.Int, "homeserver", "ping_interval_seconds")
 	helper.Copy(up.Int, "homeserver", "retry_limit")
+	helper.Copy(up.Int, "homeserver", "max_connections")
 
 	helper.Copy(up.Str|up.Null, "appservice", "address")
 	helper.Copy(up.Str|up.Null, "appservice", "public_address")
@@ -130,13 +132,13 @@ func doUpgrade(helper up.Helper) {
 	}
 	helper.Copy(up.Bool, "provisioning", "allow_matrix_auth")
 	helper.Copy(up.Bool, "provisioning", "debug_endpoints")
-	helper.Copy(up.Bool, "provisioning", "enable_session_transfers")
 	helper.Copy(up.Bool, "provisioning", "fail_on_webauthn")
 	helper.Copy(up.Str, "provisioning", "request_id_header")
 	helper.Copy(up.Bool, "provisioning", "trust_incoming_request_id")
 
 	helper.Copy(up.Bool, "direct_media", "enabled")
 	helper.Copy(up.Bool, "direct_media", "encrypted")
+	helper.Copy(up.Bool, "direct_media", "serve_only")
 	helper.Copy(up.Str|up.Null, "direct_media", "media_id_prefix")
 	helper.Copy(up.Str, "direct_media", "server_name")
 	helper.Copy(up.Str|up.Null, "direct_media", "well_known_response")

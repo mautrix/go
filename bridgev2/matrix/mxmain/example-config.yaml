@@ -45,6 +45,9 @@ bridge:
 
     # Should leaving Matrix rooms be bridged as leaving groups on the remote network?
     bridge_matrix_leave: false
+    # Should Matrix users' own profile changes (join -> join member events) be dropped instead of passed to the network connector?
+    # Dropped events still update the member cache.
+    drop_matrix_profile_changes: false
     # Should `m.notice` messages be bridged?
     bridge_notices: false
     # Should room tags only be synced when creating the portal? Tags mean things like favorite/pin and archive/low priority.
@@ -228,6 +231,8 @@ homeserver:
     # When requests to the homeserver fail with a 502/503/504/429 status or a network error,
     # how many times should the bridge retry the request before giving up?
     retry_limit: 4
+    # Maximum number of parallel connections to the homeserver. Zero means unlimited.
+    max_connections: 0
 
 # Application service host/registration related details.
 # Changing these values requires regeneration of the registration (except when noted otherwise)
@@ -318,9 +323,6 @@ provisioning:
     allow_matrix_auth: true
     # Enable debug API at /debug with provisioning authentication.
     debug_endpoints: false
-    # Enable session transfers between bridges. Note that this only validates Matrix or shared secret
-    # auth before passing live network client credentials down in the response.
-    enable_session_transfers: false
     # Should the provisioning API fail immediately if a webauthn step is returned?
     # This is mostly useful for clients that don't yet support it and want a trackable error instead.
     fail_on_webauthn: false
@@ -360,6 +362,8 @@ direct_media:
     # Should direct media be encrypted when sending to encrypted rooms?
     # This uses non-standard encryption (FLOE) instead of the standard AES-CTR, so it won't work in most clients.
     encrypted: false
+    # Should existing direct media URIs keep working while new media is reuploaded as if direct media was disabled?
+    serve_only: false
     # The server name to use for the custom mxc:// URIs.
     # This server name will effectively be a real Matrix server, it just won't implement anything other than media.
     # You must either set up .well-known delegation from this domain to the bridge, or proxy the domain directly to the bridge.

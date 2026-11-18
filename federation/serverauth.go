@@ -52,6 +52,7 @@ var (
 	errMalformedAuthHeader     = MUnauthorized.WithMessage("X-Matrix value is missing required components")
 	errInvalidDestination      = MUnauthorized.WithMessage("Invalid destination in X-Matrix header")
 	errFailedToQueryKeys       = MUnauthorized.WithMessage("Failed to query server keys")
+	errMismatchingServerName   = MUnauthorized.WithMessage("Server name in X-Matrix header does not match server name in key query response")
 	errInvalidSelfSignatures   = MUnauthorized.WithMessage("Server keys don't have valid self-signatures")
 	errRequestBodyTooLarge     = mautrix.MTooLarge.WithMessage("Request body too large")
 	errInvalidJSONBody         = mautrix.MBadJSON.WithMessage("Request body is not valid JSON")
@@ -204,6 +205,9 @@ func (sa *ServerAuth) Authenticate(r *http.Request) (*http.Request, *mautrix.Res
 			log.Trace().Err(err).
 				Str("server_name", parsed.Origin).
 				Msg("Failed to query keys to authenticate request (cached error)")
+		}
+		if errors.Is(err, ErrMismatchingServerName) {
+			return nil, &errMismatchingServerName
 		}
 		return nil, &errFailedToQueryKeys
 	} else if err = resp.VerifySelfSignature(); err != nil {
