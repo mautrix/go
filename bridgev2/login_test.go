@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"maunium.net/go/mautrix/bridgev2"
 )
@@ -41,4 +42,17 @@ func TestMissingClientCapabilityError(t *testing.T) {
 	assert.Equal(t, bridgev2.ErrMissingClientCapability.ErrCode, err.ErrCode)
 	assert.Equal(t, bridgev2.ErrMissingClientCapability.StatusCode, err.StatusCode)
 	assert.Contains(t, err.Error(), "webauthn")
+}
+
+func TestClientCapabilities_CheckLoginStep(t *testing.T) {
+	webAuthnStep := &bridgev2.LoginStep{Type: bridgev2.LoginStepTypeWebAuthn}
+	userInputStep := &bridgev2.LoginStep{Type: bridgev2.LoginStepTypeUserInput}
+	negotiated := bridgev2.ClientCapabilities{bridgev2.ClientCapabilityNegotiation}
+
+	var respErr bridgev2.RespError
+	require.ErrorAs(t, negotiated.CheckLoginStep(webAuthnStep), &respErr)
+	assert.Equal(t, bridgev2.ErrMissingClientCapability.ErrCode, respErr.ErrCode)
+	assert.NoError(t, negotiated.CheckLoginStep(userInputStep))
+	assert.NoError(t, append(negotiated, bridgev2.ClientCapabilityWebAuthn).CheckLoginStep(webAuthnStep))
+	assert.NoError(t, bridgev2.ClientCapabilities(nil).CheckLoginStep(webAuthnStep))
 }

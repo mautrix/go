@@ -64,6 +64,14 @@ func (cc ClientCapabilities) Has(capability ClientCapability) bool {
 	}
 }
 
+// CheckLoginStep returns a missing capability error if the step can't be completed by a client with these capabilities.
+func (cc ClientCapabilities) CheckLoginStep(step *LoginStep) error {
+	if step != nil && step.Type == LoginStepTypeWebAuthn && !cc.Has(ClientCapabilityWebAuthn) {
+		return MissingClientCapabilityError(ClientCapabilityWebAuthn)
+	}
+	return nil
+}
+
 func (cc ClientCapabilities) HasAll(capabilities ...ClientCapability) bool {
 	for _, capability := range capabilities {
 		if !cc.Has(capability) {

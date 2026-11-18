@@ -74,6 +74,8 @@ type ProvLogin struct {
 	step     *stepManager
 	Override *bridgev2.UserLogin
 
+	ClientCapabilities bridgev2.ClientCapabilities
+
 	HTTPLock            sync.Mutex
 	fingerprint         string
 	streamsLock         sync.Mutex
@@ -132,12 +134,13 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 		Logger().WithContext(ctx)
 	ch := make(chan struct{})
 	provLogin := &ProvLogin{
-		ID:        loginID,
-		UserMXID:  user.MXID,
-		Process:   login,
-		Override:  overrideLogin,
-		Ctx:       ctx,
-		CancelCtx: cancel,
+		ID:                 loginID,
+		UserMXID:           user.MXID,
+		Process:            login,
+		Override:           overrideLogin,
+		ClientCapabilities: clientCaps,
+		Ctx:                ctx,
+		CancelCtx:          cancel,
 
 		// The HTTP over websocket proxy only allows JSON bodies, so the custom gzip format can't be used.
 		acceptsGzipResponse: !prov.br.Websocket,
@@ -545,13 +548,8 @@ func (prov *ProvisioningAPI) executeStep(
 		case bridgev2.LoginStepTypeUserInput, bridgev2.LoginStepTypeCookies, bridgev2.LoginStepTypeDisplayAndWait, bridgev2.LoginStepTypeComplete:
 			// ok
 		case bridgev2.LoginStepTypeWebAuthn:
-			if prov.br.Config.Provisioning.FailOnWebAuthn {
-				zerolog.Ctx(login.Ctx).Warn().Msg("Got WebAuthn step, failing login")
-				err = bridgev2.RespError{
-					ErrCode:    "COM.BEEPER.WEBAUTHN_UNSUPPORTED",
-					Err:        "Logging in with a passkey is not yet supported",
-					StatusCode: http.StatusBadRequest,
-				}
+			if err = login.ClientCapabilities.CheckLoginStep(nextStep); err != nil {
+				zerolog.Ctx(login.Ctx).Warn().Msg("Got WebAuthn step, but client doesn't support it")
 			}
 		default:
 			err = fmt.Errorf("invalid response step type %q from login process", nextStep.Type)
