@@ -652,6 +652,7 @@ func (prov *ProvisioningAPI) PostPaginate(w http.ResponseWriter, r *http.Request
 		prov.br.Bridge.WakeupBackfillQueue(&bridgev2.ManualBackfill{
 			Source:     login,
 			Portal:     portal,
+			RequestCtx: r.Context(),
 			LogContext: copyRequestIDToLogContext(r),
 			DoneCallback: func(err error) {
 				if done.Swap(true) {
