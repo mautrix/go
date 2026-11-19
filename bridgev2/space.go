@@ -80,10 +80,12 @@ func (ul *UserLogin) AddPortalToSpace(ctx context.Context, portal *Portal, userP
 	return nil
 }
 
-func (portal *Portal) createParentAndAddToSpace(ctx context.Context, source *UserLogin) {
-	err := portal.Parent.CreateMatrixRoom(ctx, source, nil)
+func (portal *Portal) createParentAndAddToSpace(ctx context.Context, source *UserLogin, parent *Portal) {
+	err := parent.CreateMatrixRoom(ctx, source, nil)
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to create parent portal")
+	} else if portal.Parent != parent {
+		zerolog.Ctx(ctx).Debug().Msg("Portal parent changed while creating parent portal, not adding to space")
 	} else {
 		portal.addToParentSpaceAndSave(ctx, true)
 	}

@@ -425,8 +425,8 @@ func (portal *PortalInternals) UnlockedReID(ctx context.Context, target networki
 	return (*Portal)(portal).unlockedReID(ctx, target)
 }
 
-func (portal *PortalInternals) CreateParentAndAddToSpace(ctx context.Context, source *UserLogin) {
-	(*Portal)(portal).createParentAndAddToSpace(ctx, source)
+func (portal *PortalInternals) CreateParentAndAddToSpace(ctx context.Context, source *UserLogin, parent *Portal) {
+	(*Portal)(portal).createParentAndAddToSpace(ctx, source, parent)
 }
 
 func (portal *PortalInternals) AddToParentSpaceAndSave(ctx context.Context, save bool) {

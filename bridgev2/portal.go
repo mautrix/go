@@ -5796,7 +5796,7 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 			portal.addToParentSpaceAndSave(ctx, true)
 		} else {
 			log.Info().Msg("Parent portal doesn't exist, creating in background")
-			go portal.createParentAndAddToSpace(withoutCancelCtx, source)
+			go portal.createParentAndAddToSpace(withoutCancelCtx, source, portal.Parent)
 		}
 	}
 	portal.updateUserLocalInfo(ctx, info.UserLocal, source, true)
