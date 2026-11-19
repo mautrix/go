@@ -99,7 +99,7 @@ func serveVersioned(t *testing.T, version string, handler http.HandlerFunc) []by
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/"+version+"/test", nil))
 	require.Equal(t, http.StatusOK, rec.Code)
 	var indented bytes.Buffer
-	require.NoError(t, json.Indent(&indented, rec.Body.Bytes(), "", "\t"))
+	require.NoError(t, json.Indent(&indented, bytes.TrimSpace(rec.Body.Bytes()), "", "\t"))
 	indented.WriteByte('\n')
 	return indented.Bytes()
 }
