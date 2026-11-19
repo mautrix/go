@@ -45,6 +45,12 @@ type matrixAuthCacheEntry struct {
 	UserID  id.UserID
 }
 
+type completedLoginData struct {
+	userLoginID  networkid.UserLoginID
+	userID       id.UserID
+	instructions string
+}
+
 type ProvisioningAPI struct {
 	Router *http.ServeMux
 
@@ -54,8 +60,9 @@ type ProvisioningAPI struct {
 
 	fedClient *federation.Client
 
-	logins     map[string]*ProvLogin
-	loginsLock sync.RWMutex
+	logins          map[string]*ProvLogin
+	completedLogins map[string]*completedLoginData
+	loginsLock      sync.RWMutex
 
 	matrixAuthCache     map[string]matrixAuthCacheEntry
 	matrixAuthCacheLock sync.Mutex
