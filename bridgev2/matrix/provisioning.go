@@ -123,6 +123,7 @@ func inputRequestIDMiddleware(header string) exhttp.Middleware {
 func (prov *ProvisioningAPI) Init() {
 	prov.matrixAuthCache = make(map[string]matrixAuthCacheEntry)
 	prov.logins = make(map[string]*ProvLogin)
+	prov.completedLogins = make(map[string]*completedLoginData)
 	prov.net = prov.br.Bridge.Network
 	prov.log = prov.br.Log.With().Str("component", "provisioning").Logger()
 	prov.fedClient = federation.NewClient("", nil, nil, exhttp.SensibleClientSettings.WithGlobalTimeout(20*time.Second))
