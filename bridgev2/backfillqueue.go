@@ -53,6 +53,8 @@ type ManualBackfill struct {
 	Portal *Portal
 	Data   *FetchMessagesResponse
 
+	RequestCtx context.Context
+
 	LogContext   func(zerolog.Context) zerolog.Context
 	DoneCallback func(error)
 }
@@ -153,6 +155,13 @@ func (mt *ManualBackfill) Do(ctx context.Context) {
 		mt.Portal.backfillLock.Lock()
 	}
 	defer mt.Portal.backfillLock.Unlock()
+	if mt.RequestCtx != nil && mt.RequestCtx.Err() != nil {
+		log.Debug().Err(mt.RequestCtx.Err()).Msg("Skipping manual backfill as the request is no longer waiting for it")
+		if mt.DoneCallback != nil {
+			mt.DoneCallback(mt.RequestCtx.Err())
+		}
+		return
+	}
 	defer func() {
 		if !completed {
 			if mt.DoneCallback != nil {
