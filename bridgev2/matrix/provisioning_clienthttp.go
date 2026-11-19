@@ -97,12 +97,13 @@ func (prov *ProvisioningAPI) PostLoginClientHTTP(w http.ResponseWriter, r *http.
 			return mautrix.MBadState.WithMessage("Request ID does not match")
 		}
 		if sm.pendingHTTP != nil {
+			headerCount := len(resp.Headers)
 			select {
 			case sm.pendingHTTP <- &resp:
 				log.Debug().
 					Str("req_id", reqID).
 					Int("status_code", resp.StatusCode).
-					Int("header_count", len(resp.Headers)).
+					Int("header_count", headerCount).
 					Int("body_length", len(resp.Body)).
 					Str("error_msg", resp.Error).
 					Str("used_fingerprint", resp.Fingerprint).
@@ -194,7 +195,13 @@ func (p *ProvLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 	}()
 	ch := make(chan *bridgev2.LoginClientHTTPResponse, 1)
+	var publishedStep *bridgev2.LoginStep
 	err := p.step.WithLock(func(sm *stepManager) error {
+		if err := req.Context().Err(); err != nil {
+			return err
+		} else if err = p.Ctx.Err(); err != nil {
+			return err
+		}
 		if sm.err != nil {
 			return fmt.Errorf("login is errored: %w", sm.err)
 		}
@@ -225,6 +232,7 @@ func (p *ProvLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 			},
 		}
 		sm.pendingHTTP = ch
+		publishedStep = sm.next
 		if sm.wait != nil {
 			close(sm.wait)
 			sm.wait = nil
@@ -246,6 +254,15 @@ func (p *ProvLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer p.step.WithNonErroringLock(func(sm *stepManager) {
+		if sm.pendingHTTP == ch {
+			sm.pendingHTTP = nil
+		}
+		if errors.Is(context.Cause(req.Context()), bridgev2.ErrLoginStepCancelled) && sm.next == publishedStep && sm.stepResult != nil {
+			sm.prev = sm.next
+			sm.next = sm.stepResult.step
+		}
+	})
 	var resp *bridgev2.LoginClientHTTPResponse
 	var streamDone <-chan struct{}
 	if stream != nil {
@@ -261,8 +278,13 @@ func (p *ProvLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, fmt.Errorf("login context cancelled during client HTTP request: %w", p.Ctx.Err())
 	case <-req.Context().Done():
 		log.Warn().Err(req.Context().Err()).Msg("Client HTTP request canceled")
-		p.CancelCtx()
+		if !errors.Is(context.Cause(req.Context()), bridgev2.ErrLoginStepCancelled) {
+			p.CancelCtx()
+		}
 		return nil, req.Context().Err()
+	}
+	if err = req.Context().Err(); err != nil {
+		return nil, err
 	}
 	if resp.Error != "" {
 		return nil, errors.New(ErrorFromClientPrefix + resp.Error)
