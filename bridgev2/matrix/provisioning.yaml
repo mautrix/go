@@ -7,21 +7,17 @@ info:
 
     ## Versions
 
-    Every endpoint is served under both `/v3` and `/v4`, with the same request
-    formats. This document describes `/v4`. The only difference is how
-    user-facing strings in responses are encoded:
+    Endpoints that return login copy (`whoami`, `login/flows`, `login/start`,
+    `login/step` and `login/client_http`) have a v4 version, documented here.
+    v4 encodes login flow names and descriptions, step instructions, and field
+    names, descriptions and placeholders as
+    [LocalizableMessage](#/components/schemas/LocalizableMessage) objects, and
+    select options as [LoginInputOption](#/components/schemas/LoginInputOption)
+    objects. Their v3 versions are still served and return the message `text`
+    as a plain string and select options as a list of values.
 
-    * In v4, login flow names and descriptions, login step instructions, and
-      input field names, descriptions and placeholders are
-      [LocalizableMessage](#/components/schemas/LocalizableMessage) objects, and
-      select field options are [LoginInputOption](#/components/schemas/LoginInputOption)
-      objects.
-    * In v3, each of those strings is a plain string containing the `text` of
-      the message, and select options are a list of the option `value`s.
-
-    Bridges that predate v4 return `M_UNRECOGNIZED` for `/v4` endpoints, so
-    clients can fall back to `/v3`. A login process started with one version
-    can be continued with the other.
+    Bridges without v4 return `M_UNRECOGNIZED`, so clients can fall back to
+    v3. A login started with one version can be continued with the other.
   license:
     name: Mozilla Public License Version 2.0
     url: https://github.com/mautrix/go/blob/main/LICENSE
@@ -84,7 +80,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       security:
       - matrix_auth: [ ]
-  /v4/logins:
+  /v3/logins:
     get:
       tags: [ auth ]
       summary: Get the login IDs of the current user.
@@ -277,7 +273,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       security:
       - matrix_auth: [ ]
-  /v4/login/client_websocket/{loginProcessID}/{streamID}:
+  /v3/login/client_websocket/{loginProcessID}/{streamID}:
     get:
       tags: [ auth ]
       summary: Open a tunnel connection for transmitting data through a client-opened websocket.
@@ -390,7 +386,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       security:
       - matrix_auth: [ ]
-  /v4/login/cancel/{loginProcessID}:
+  /v3/login/cancel/{loginProcessID}:
     post:
       tags: [ auth ]
       summary: Cancel an ongoing login process.
@@ -411,7 +407,7 @@ paths:
           $ref: '#/components/responses/LoginProcessNotFound'
       security:
       - matrix_auth: [ ]
-  /v4/logout/{loginID}:
+  /v3/logout/{loginID}:
     post:
       tags: [ auth ]
       summary: Log out of an existing login.
@@ -441,7 +437,7 @@ paths:
           $ref: '#/components/responses/LoginNotFound'
         500:
           $ref: '#/components/responses/InternalError'
-  /v4/contacts:
+  /v3/contacts:
     get:
       tags: [ snc ]
       summary: Get a list of contacts.
@@ -468,7 +464,7 @@ paths:
           $ref: '#/components/responses/InternalError'
         501:
           $ref: '#/components/responses/NotSupported'
-  /v4/search_users:
+  /v3/search_users:
     post:
       tags: [ snc ]
       summary: Search for users on the remote network
@@ -504,7 +500,7 @@ paths:
           $ref: '#/components/responses/InternalError'
         501:
           $ref: '#/components/responses/NotSupported'
-  /v4/resolve_identifier/{identifier}:
+  /v3/resolve_identifier/{identifier}:
     get:
       tags: [ snc ]
       summary: Resolve an identifier to a user on the remote network.
@@ -528,7 +524,7 @@ paths:
           $ref: '#/components/responses/InternalError'
         501:
           $ref: '#/components/responses/NotSupported'
-  /v4/create_dm/{identifier}:
+  /v3/create_dm/{identifier}:
     post:
       tags: [ snc ]
       summary: Create a direct chat with a user on the remote network.
@@ -554,7 +550,7 @@ paths:
           $ref: '#/components/responses/InternalError'
         501:
           $ref: '#/components/responses/NotSupported'
-  /v4/create_group/{type}:
+  /v3/create_group/{type}:
     post:
       tags: [ snc ]
       summary: Create a group chat on the remote network.
@@ -585,7 +581,7 @@ paths:
           $ref: '#/components/responses/LoginNotFound'
         501:
           $ref: '#/components/responses/NotSupported'
-  /v4/profile:
+  /v3/profile:
     post:
       tags: [ auth ]
       summary: Update the profile of a selected remote account.
@@ -627,7 +623,7 @@ paths:
           $ref: '#/components/responses/InternalError'
         501:
           $ref: '#/components/responses/NotSupported'
-  /v4/view_limited_media/{eventID}:
+  /v3/view_limited_media/{eventID}:
     post:
       tags: [ misc ]
       summary: Consume one view of view-limited media.
@@ -661,7 +657,7 @@ paths:
           description: Message or login not found for this user.
         500:
           $ref: '#/components/responses/InternalError'
-  /v4/poll_results/{eventID}:
+  /v3/poll_results/{eventID}:
     get:
       tags: [ misc ]
       summary: Get the current results of a poll from the remote network.
@@ -709,7 +705,7 @@ paths:
           description: Message or login not found for this user.
         500:
           $ref: '#/components/responses/InternalError'
-  /v4/resolve_media/{eventID}:
+  /v3/resolve_media/{eventID}:
     post:
       tags: [ misc ]
       summary: Request a manual fetch of a media message that wasn't fetched during bridging.
@@ -742,7 +738,7 @@ paths:
           description: Message or login not found for this user.
         500:
           $ref: '#/components/responses/InternalError'
-  /v4/direct_media_keys/{mediaID}:
+  /v3/direct_media_keys/{mediaID}:
     post:
       tags: [ misc ]
       summary: Delete the encryption keys for a given encrypted direct media MXC
