@@ -42,6 +42,8 @@ type stepManager struct {
 	stepCancel  context.CancelCauseFunc
 	stepResult  *stepExecutionResult
 	cancelling  bool
+
+	processCancelled bool
 }
 
 type stepExecutionResult struct {
@@ -591,7 +593,6 @@ func (prov *ProvisioningAPI) handleLoginTimeout(login *ProvLogin) {
 	<-login.Ctx.Done()
 	if errors.Is(login.Ctx.Err(), context.DeadlineExceeded) {
 		zerolog.Ctx(login.Ctx).Warn().Msg("Login process timed out, deleting")
-		login.Process.Cancel()
 		prov.cancelLogin(login, ErrLoginTimedOut)
 	}
 	deadline, _ := login.Ctx.Deadline()
@@ -603,10 +604,9 @@ func (prov *ProvisioningAPI) handleLoginTimeout(login *ProvLogin) {
 }
 
 func (prov *ProvisioningAPI) cancelLogin(login *ProvLogin, err error) {
-	var finished bool
+	var shouldCancel bool
 	login.step.WithNonErroringLock(func(sm *stepManager) {
-		finished = sm.next != nil && sm.next.Type == bridgev2.LoginStepTypeComplete
-		if finished {
+		if sm.next != nil && sm.next.Type == bridgev2.LoginStepTypeComplete {
 			return
 		}
 		if sm.err == nil {
@@ -616,8 +616,10 @@ func (prov *ProvisioningAPI) cancelLogin(login *ProvLogin, err error) {
 			close(sm.wait)
 			sm.wait = nil
 		}
+		shouldCancel = !sm.processCancelled
+		sm.processCancelled = true
 	})
-	if !finished && login.Ctx.Err() == nil {
+	if shouldCancel {
 		login.Process.Cancel()
 		login.CancelCtx()
 	}
