@@ -277,11 +277,11 @@ func (mach *OlmMachine) tryDecryptOlmCiphertext(ctx context.Context, sender id.U
 	}
 
 	endTimeTrace = mach.timeTrace(ctx, "saving new session in database", time.Second)
-	err = mach.CryptoStore.PutOlmHash(ctx, ciphertextHash, time.Now())
+	err = mach.CryptoStore.PutOlmHash(context.WithoutCancel(ctx), ciphertextHash, time.Now())
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to store olm message hash after decrypting")
 	}
-	err = mach.CryptoStore.AddSession(ctx, senderKey, session)
+	err = mach.CryptoStore.AddSession(context.WithoutCancel(ctx), senderKey, session)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to save new olm session in crypto store after decrypting")
 	} else if err = mach.account.Internal.RemoveOneTimeKeys(session.Internal); err != nil {
@@ -376,11 +376,11 @@ func (mach *OlmMachine) tryDecryptOlmCiphertextWithExistingSession(
 			}
 		} else {
 			endTimeTrace = mach.timeTrace(ctx, "updating session in database", time.Second)
-			err = mach.CryptoStore.PutOlmHash(ctx, ciphertextHash, time.Now())
+			err = mach.CryptoStore.PutOlmHash(context.WithoutCancel(ctx), ciphertextHash, time.Now())
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to store olm message hash after decrypting")
 			}
-			err = mach.CryptoStore.UpdateSession(ctx, senderKey, session)
+			err = mach.CryptoStore.UpdateSession(context.WithoutCancel(ctx), senderKey, session)
 			endTimeTrace()
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to update olm session in crypto store after decrypting")

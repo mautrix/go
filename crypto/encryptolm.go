@@ -110,7 +110,7 @@ func (mach *OlmMachine) encryptOlmEvent(ctx context.Context, session *OlmSession
 		Str("olm_session_description", session.Describe()).
 		Hex("ciphertext_hash", ciphertextHash[:]).
 		Msg("Encrypted olm message")
-	err = mach.CryptoStore.UpdateSession(ctx, recipient.IdentityKey, session)
+	err = mach.CryptoStore.UpdateSession(context.WithoutCancel(ctx), recipient.IdentityKey, session)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to update olm session in crypto store after encrypting")
 	}
