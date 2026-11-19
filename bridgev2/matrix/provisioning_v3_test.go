@@ -133,6 +133,18 @@ func TestProvisioningLoginGolden(t *testing.T) {
 	}
 }
 
+func TestProvisioningWhoamiV3(t *testing.T) {
+	resp := &RespWhoami{Network: bridgev2.BridgeName{DisplayName: "Test"}, LoginFlows: testLoginFlows(), Logins: []RespWhoamiLogin{}}
+	data, err := json.Marshal(&v3RespWhoami{RespWhoami: resp, LoginFlows: toV3LoginFlows(resp.LoginFlows).Flows})
+	require.NoError(t, err)
+	var raw map[string]any
+	require.NoError(t, json.Unmarshal(data, &raw))
+	flows := raw["login_flows"].([]any)
+	require.Len(t, flows, 2)
+	assert.Equal(t, "Password", flows[0].(map[string]any)["name"])
+	assert.Contains(t, raw, "network")
+}
+
 // Clients that support v4 read v3 responses from older bridges with the same
 // types. Localizable strings become unlocalized and option labels equal values.
 func TestProvisioningV3ParsesIntoV4Types(t *testing.T) {

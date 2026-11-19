@@ -375,7 +375,11 @@ func (prov *ProvisioningAPI) GetWhoami(w http.ResponseWriter, r *http.Request) {
 			SpaceRoom: login.SpaceRoom,
 		}
 	}
-	exhttp.WriteJSONResponse(w, http.StatusOK, resp)
+	if isV3Request(r) {
+		exhttp.WriteJSONResponse(w, http.StatusOK, &v3RespWhoami{RespWhoami: resp, LoginFlows: toV3LoginFlows(resp.LoginFlows).Flows})
+	} else {
+		exhttp.WriteJSONResponse(w, http.StatusOK, resp)
+	}
 }
 
 type RespLoginFlows struct {

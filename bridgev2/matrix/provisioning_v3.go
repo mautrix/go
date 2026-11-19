@@ -34,6 +34,11 @@ type v3RespLoginFlows struct {
 	Flows []v3LoginFlow `json:"flows"`
 }
 
+type v3RespWhoami struct {
+	*RespWhoami
+	LoginFlows []v3LoginFlow `json:"login_flows"`
+}
+
 type v3LoginStep struct {
 	*bridgev2.LoginStep
 	Instructions    string                  `json:"instructions"`
