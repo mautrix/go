@@ -42,6 +42,8 @@ type stepManager struct {
 	stepCancel  context.CancelCauseFunc
 	stepResult  *stepExecutionResult
 	cancelling  bool
+
+	processCancelled bool
 }
 
 type stepExecutionResult struct {
@@ -152,7 +154,7 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 	select {
 	case <-ch:
 	case <-r.Context().Done():
-		prov.deleteLogin(provLogin, true, ErrLoginCancelled)
+		prov.cancelLogin(provLogin, ErrLoginCancelled)
 		return
 	}
 	firstStep, err := provLogin.step.GetNext()
@@ -230,7 +232,7 @@ func (prov *ProvisioningAPI) PostLoginCancel(w http.ResponseWriter, r *http.Requ
 		mautrix.MNotFound.WithMessage("Login not found").Write(w)
 		return
 	}
-	prov.deleteLogin(login, true, ErrLoginCancelled)
+	prov.cancelLogin(login, ErrLoginCancelled)
 	exhttp.WriteEmptyJSONResponse(w, http.StatusOK)
 }
 
@@ -369,7 +371,6 @@ func (prov *ProvisioningAPI) doLoginStep(
 ) (*bridgev2.LoginStep, error) {
 	log := zerolog.Ctx(ctx).With().Str("login_id", login.ID).Logger()
 	if login.Ctx.Err() != nil {
-		prov.deleteLogin(login, true, nil)
 		if nextStep, err := login.step.GetNext(); nextStep != nil && nextStep.Type == bridgev2.LoginStepTypeComplete {
 			return nextStep, nil
 		} else if err != nil {
@@ -388,7 +389,7 @@ func (prov *ProvisioningAPI) doLoginStep(
 			return sm.err
 		}
 		currentStep = sm.next
-		if sm.prev != nil && ((sm.started && sm.prev.StepID == expectedID) ||
+		if sm.prev != nil && ((expectedTxnID == "" && sm.started && sm.prev.StepID == expectedID) ||
 			(expectedTxnID != "" && sm.prev.TxnID == expectedTxnID)) {
 			log.Debug().
 				Str("prev_step_id", sm.prev.StepID).
@@ -537,10 +538,10 @@ func (prov *ProvisioningAPI) executeStep(
 		}
 	}
 	if err != nil {
-		prov.deleteLogin(login, true, err)
+		prov.cancelLogin(login, err)
 		return
 	} else if nextStep == nil {
-		prov.deleteLogin(login, true, ErrNilStep)
+		prov.cancelLogin(login, ErrNilStep)
 		return
 	}
 	nextStep.TxnID = LoginStepTxnIDPrefix + xid.New().String()
@@ -575,7 +576,6 @@ func (prov *ProvisioningAPI) handleCompleteStep(login *ProvLogin, step *bridgev2
 		Str("user_login_id", string(step.CompleteParams.UserLoginID)).
 		Msg("Login completed successfully")
 	defer login.CancelCtx()
-	prov.deleteLogin(login, false, nil)
 	if login.Override == nil || login.Override.ID == step.CompleteParams.UserLoginID {
 		return
 	}
@@ -593,28 +593,34 @@ func (prov *ProvisioningAPI) handleLoginTimeout(login *ProvLogin) {
 	<-login.Ctx.Done()
 	if errors.Is(login.Ctx.Err(), context.DeadlineExceeded) {
 		zerolog.Ctx(login.Ctx).Warn().Msg("Login process timed out, deleting")
-		login.Process.Cancel()
+		prov.cancelLogin(login, ErrLoginTimedOut)
+	}
+	deadline, _ := login.Ctx.Deadline()
+	time.AfterFunc(time.Until(deadline), func() {
 		prov.loginsLock.Lock()
 		delete(prov.logins, login.ID)
 		prov.loginsLock.Unlock()
-	}
+	})
 }
 
-func (prov *ProvisioningAPI) deleteLogin(login *ProvLogin, cancel bool, err error) {
-	if cancel {
+func (prov *ProvisioningAPI) cancelLogin(login *ProvLogin, err error) {
+	var shouldCancel bool
+	login.step.WithNonErroringLock(func(sm *stepManager) {
+		if sm.next != nil && sm.next.Type == bridgev2.LoginStepTypeComplete {
+			return
+		}
+		if sm.err == nil {
+			sm.err = err
+		}
+		if sm.wait != nil {
+			close(sm.wait)
+			sm.wait = nil
+		}
+		shouldCancel = !sm.processCancelled
+		sm.processCancelled = true
+	})
+	if shouldCancel {
 		login.Process.Cancel()
 		login.CancelCtx()
-		login.step.WithNonErroringLock(func(sm *stepManager) {
-			if sm.err == nil {
-				sm.err = err
-			}
-			if sm.wait != nil {
-				close(sm.wait)
-				sm.wait = nil
-			}
-		})
 	}
-	prov.loginsLock.Lock()
-	delete(prov.logins, login.ID)
-	prov.loginsLock.Unlock()
 }
