@@ -5400,7 +5400,7 @@ func (portal *Portal) updateParent(ctx context.Context, newParentID networkid.Po
 			}
 		}
 		if portal.Parent.MXID != "" {
-			portal.addToParentSpaceAndSave(ctx, false)
+			portal.addToParentSpaceAndSave(ctx, portal.Parent, false)
 		}
 	}
 	return true
@@ -5793,7 +5793,7 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 	withoutCancelCtx := zerolog.Ctx(ctx).WithContext(portal.backgroundCtx)
 	if portal.Parent != nil {
 		if portal.Parent.MXID != "" {
-			portal.addToParentSpaceAndSave(ctx, true)
+			portal.addToParentSpaceAndSave(ctx, portal.Parent, true)
 		} else {
 			log.Info().Msg("Parent portal doesn't exist, creating in background")
 			go portal.createParentAndAddToSpace(withoutCancelCtx, source, portal.Parent)

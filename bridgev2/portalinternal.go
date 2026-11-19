@@ -429,8 +429,8 @@ func (portal *PortalInternals) CreateParentAndAddToSpace(ctx context.Context, so
 	(*Portal)(portal).createParentAndAddToSpace(ctx, source, parent)
 }
 
-func (portal *PortalInternals) AddToParentSpaceAndSave(ctx context.Context, save bool) {
-	(*Portal)(portal).addToParentSpaceAndSave(ctx, save)
+func (portal *PortalInternals) AddToParentSpaceAndSave(ctx context.Context, parent *Portal, save bool) {
+	(*Portal)(portal).addToParentSpaceAndSave(ctx, parent, save)
 }
 
 func (portal *PortalInternals) ToggleSpace(ctx context.Context, spaceID id.RoomID, canonical, remove bool) error {
