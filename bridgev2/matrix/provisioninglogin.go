@@ -591,6 +591,7 @@ func (prov *ProvisioningAPI) handleLoginTimeout(login *ProvLogin) {
 	<-login.Ctx.Done()
 	if errors.Is(login.Ctx.Err(), context.DeadlineExceeded) {
 		zerolog.Ctx(login.Ctx).Warn().Msg("Login process timed out, deleting")
+		login.Process.Cancel()
 		prov.cancelLogin(login, ErrLoginTimedOut)
 	}
 	deadline, _ := login.Ctx.Deadline()
@@ -604,17 +605,19 @@ func (prov *ProvisioningAPI) handleLoginTimeout(login *ProvLogin) {
 func (prov *ProvisioningAPI) cancelLogin(login *ProvLogin, err error) {
 	var finished bool
 	login.step.WithNonErroringLock(func(sm *stepManager) {
-		if sm.err != nil || (sm.next != nil && sm.next.Type == bridgev2.LoginStepTypeComplete) {
-			finished = true
+		finished = sm.next != nil && sm.next.Type == bridgev2.LoginStepTypeComplete
+		if finished {
 			return
 		}
-		sm.err = err
+		if sm.err == nil {
+			sm.err = err
+		}
 		if sm.wait != nil {
 			close(sm.wait)
 			sm.wait = nil
 		}
 	})
-	if !finished {
+	if !finished && login.Ctx.Err() == nil {
 		login.Process.Cancel()
 		login.CancelCtx()
 	}
