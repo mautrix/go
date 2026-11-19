@@ -20,7 +20,6 @@ import (
 	"go.mau.fi/util/exerrors"
 
 	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/crypto/goolm/account"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -238,7 +237,6 @@ func (mach *OlmMachine) tryDecryptOlmCiphertext(ctx context.Context, sender id.U
 		return nil, ErrDecryptionFailedForNormalMessage
 	}
 
-	accountBackup, _ := mach.account.Internal.Pickle([]byte("tmp"))
 	log.Trace().Msg("Trying to create inbound session")
 	endTimeTrace = mach.timeTrace(ctx, "creating inbound olm session", time.Second)
 	session, err := mach.account.NewInboundSessionFrom(senderKey, ciphertext)
@@ -259,19 +257,6 @@ func (mach *OlmMachine) tryDecryptOlmCiphertext(ctx context.Context, sender id.U
 	plaintext, err = session.Decrypt(ciphertext, olmType)
 	endTimeTrace()
 	if err != nil {
-		log.Debug().
-			Hex("ciphertext_hash", ciphertextHash[:]).
-			Hex("ciphertext_hash_repeat", new(exerrors.Must(olmMessageHash(ciphertext)))[:]).
-			Str("ciphertext", ciphertext).
-			Str("olm_session_description", session.Describe()).
-			Msg("DEBUG: Failed to decrypt prekey olm message with newly created session")
-		err2 := mach.goolmRetryHack(ctx, senderKey, ciphertext, accountBackup)
-		if err2 != nil {
-			log.Debug().Err(err2).Msg("Goolm confirmed decryption failure")
-		} else {
-			log.Warn().Msg("Goolm decryption was successful after libolm failure?")
-		}
-
 		unwedge = true
 		return nil, fmt.Errorf("failed to decrypt olm event with session created from prekey message: %w", err)
 	}
@@ -291,23 +276,6 @@ func (mach *OlmMachine) tryDecryptOlmCiphertext(ctx context.Context, sender id.U
 	}
 	endTimeTrace()
 	return plaintext, nil
-}
-
-func (mach *OlmMachine) goolmRetryHack(ctx context.Context, senderKey id.SenderKey, ciphertext string, accountBackup []byte) error {
-	acc, err := account.AccountFromPickled(accountBackup, []byte("tmp"))
-	if err != nil {
-		return fmt.Errorf("failed to unpickle olm account: %w", err)
-	}
-	sess, err := acc.NewInboundSessionFrom(&senderKey, ciphertext)
-	if err != nil {
-		return fmt.Errorf("failed to create inbound session: %w", err)
-	}
-	_, err = sess.Decrypt(ciphertext, id.OlmMsgTypePreKey)
-	if err != nil {
-		// This is the expected result if libolm failed
-		return fmt.Errorf("failed to decrypt with new session: %w", err)
-	}
-	return nil
 }
 
 const MaxOlmSessionsPerDevice = 5
