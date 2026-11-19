@@ -120,8 +120,7 @@ func (prov *ProvisioningAPI) Init() {
 	prov.log = prov.br.Log.With().Str("component", "provisioning").Logger()
 	prov.fedClient = federation.NewClient("", nil, nil, exhttp.SensibleClientSettings.WithGlobalTimeout(20*time.Second))
 	prov.Router = http.NewServeMux()
-	// v3 and v4 share handlers. They only differ in how localizable strings are
-	// serialized, see provisioning_v3.go.
+	// v3 only differs in how login copy is encoded, see provisioning_v3.go
 	for _, v := range []string{"/v3", "/v4"} {
 		prov.Router.HandleFunc("GET "+v+"/whoami", prov.GetWhoami)
 		prov.Router.HandleFunc("GET "+v+"/capabilities", prov.GetCapabilities)

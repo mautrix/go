@@ -15,10 +15,8 @@ import (
 	"maunium.net/go/mautrix/bridgev2"
 )
 
-// The v3 provisioning API serializes localizable strings as plain strings and
-// select options as a list of values. These types shadow the localizable
-// fields of the bridgev2 structs with their v3 representation; every other
-// field is inherited from the embedded struct, so v3 stays in sync with v4.
+// v3 sends localizable fields as plain strings and select options as values.
+// These types shadow only those fields so other fields stay in sync with v4.
 
 func isV3Request(r *http.Request) bool {
 	return strings.Contains(r.Pattern, " /v3/")

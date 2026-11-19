@@ -374,15 +374,13 @@ type LoginInputDataField struct {
 	Validate func(string) (string, error) `json:"-"`
 }
 
-// LoginInputOption is one choice of a select field. Value is what gets
-// submitted to the connector, Label is what the user sees.
+// LoginInputOption is a select field option. Value is submitted, Label is shown.
 type LoginInputOption struct {
 	Value string       `json:"value"`
 	Label l10n.Message `json:"label"`
 }
 
-// UnmarshalJSON also accepts a bare string, which is how options are
-// represented in the v3 provisioning API.
+// UnmarshalJSON also accepts the bare string used by provisioning v3.
 func (opt *LoginInputOption) UnmarshalJSON(data []byte) error {
 	if len(data) > 0 && data[0] == '"' {
 		var val string
@@ -396,8 +394,7 @@ func (opt *LoginInputOption) UnmarshalJSON(data []byte) error {
 	return json.Unmarshal(data, (*plain)(opt))
 }
 
-// UnlocalizedOptions makes select options whose labels are the values
-// themselves, e.g. for options that come from the remote network.
+// UnlocalizedOptions makes options whose labels are their values.
 func UnlocalizedOptions(values ...string) []LoginInputOption {
 	opts := make([]LoginInputOption, len(values))
 	for i, val := range values {

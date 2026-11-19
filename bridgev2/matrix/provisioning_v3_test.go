@@ -104,9 +104,7 @@ func serveVersioned(t *testing.T, version string, handler http.HandlerFunc) []by
 	return indented.Bytes()
 }
 
-// checkGolden compares output to testdata/provisioning/<name>.json. The v3
-// files pin the legacy wire format, which must not change. Run with
-// UPDATE_GOLDEN=1 to rewrite them.
+// The v3 golden files pin the legacy format. UPDATE_GOLDEN=1 rewrites them.
 func checkGolden(t *testing.T, name string, output []byte) {
 	t.Helper()
 	path := filepath.Join("testdata", "provisioning", name+".json")
@@ -145,8 +143,6 @@ func TestProvisioningWhoamiV3(t *testing.T) {
 	assert.Contains(t, raw, "network")
 }
 
-// Clients that support v4 read v3 responses from older bridges with the same
-// types. Localizable strings become unlocalized and option labels equal values.
 func TestProvisioningV3ParsesIntoV4Types(t *testing.T) {
 	step := testLoginSteps()["user_input"]
 	body := serveVersioned(t, "v3", func(w http.ResponseWriter, r *http.Request) {
