@@ -15,8 +15,8 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/l10n"
 
-	"maunium.net/go/mautrix/bridgev2/l10n"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 )
