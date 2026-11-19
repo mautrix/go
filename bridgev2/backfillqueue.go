@@ -96,7 +96,6 @@ func (br *Bridge) RunBackfillQueue(ctx context.Context) {
 			noTasksFoundCount = 0
 		case <-ctx.Done():
 			log.Info().Msg("Stopping backfill queue")
-			br.flushManualBackfillQueue()
 			return
 		case <-time.After(nextDelay):
 		}

@@ -506,6 +506,7 @@ func (br *Bridge) stop(isRunOnce bool, timeout time.Duration) {
 	if stopQueue := br.stopBackfillQueue.Load(); stopQueue != nil {
 		(*stopQueue)()
 	}
+	br.flushManualBackfillQueue()
 	br.Matrix.PreStop()
 	if !isRunOnce {
 		br.cacheLock.Lock()
