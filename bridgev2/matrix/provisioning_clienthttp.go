@@ -21,7 +21,6 @@ import (
 	"github.com/rs/xid"
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exerrors"
-	"go.mau.fi/util/exhttp"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
@@ -120,7 +119,7 @@ func (prov *ProvisioningAPI) PostLoginClientHTTP(w http.ResponseWriter, r *http.
 		return nil
 	})
 	if errors.Is(err, errReturnCurrentStep) {
-		exhttp.WriteJSONResponse(w, http.StatusOK, &RespSubmitLogin{LoginID: login.ID, LoginStep: currentStep})
+		writeLoginStep(w, r, login.ID, currentStep)
 		return
 	} else if err != nil {
 		log.Err(err).Msg("Client HTTP step rejected in pre-validation")
@@ -150,7 +149,7 @@ func (prov *ProvisioningAPI) PostLoginClientHTTP(w http.ResponseWriter, r *http.
 		log.Debug().
 			Object("next_step", nextStep).
 			Msg("Returning next login step from client HTTP response")
-		exhttp.WriteJSONResponse(w, http.StatusOK, &RespSubmitLogin{LoginID: login.ID, LoginStep: nextStep})
+		writeLoginStep(w, r, login.ID, nextStep)
 	}
 }
 

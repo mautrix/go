@@ -1,0 +1,25 @@
+{
+	"flows": [
+		{
+			"name": {
+				"key": "provisioning-test:flow.password.name",
+				"text": "Password"
+			},
+			"description": {
+				"key": "provisioning-test:flow.password.description",
+				"text": "Log in with your username and password"
+			},
+			"id": "password"
+		},
+		{
+			"name": {
+				"text": "Legacy"
+			},
+			"description": {
+				"text": "A flow that hasn't been converted yet"
+			},
+			"id": "legacy"
+		}
+	]
+}
+

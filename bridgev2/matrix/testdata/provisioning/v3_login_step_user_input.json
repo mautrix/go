@@ -1,0 +1,31 @@
+{
+	"login_id": "login-id",
+	"type": "user_input",
+	"step_id": "fi.mau.test.password",
+	"txn_id": "",
+	"instructions": "Enter the credentials for Example",
+	"user_input": {
+		"attachments": null,
+		"can_cancel": true,
+		"fields": [
+			{
+				"type": "username",
+				"id": "username",
+				"name": "Username",
+				"description": "",
+				"placeholder": "alice"
+			},
+			{
+				"type": "select",
+				"id": "method",
+				"name": "Verification method",
+				"description": "",
+				"options": [
+					"sms",
+					"Authenticator app"
+				]
+			}
+		]
+	}
+}
+
