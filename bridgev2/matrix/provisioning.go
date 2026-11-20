@@ -60,9 +60,12 @@ type ProvisioningAPI struct {
 
 	fedClient *federation.Client
 
-	logins          map[string]*ProvLogin
-	completedLogins map[string]*completedLoginData
-	loginsLock      sync.RWMutex
+	logins map[string]*ProvLogin
+	// Two generations, so each finished login is kept until two rotations have passed.
+	completedLogins          map[string]*completedLoginData
+	prevCompletedLogins      map[string]*completedLoginData
+	completedLoginsRotatedAt time.Time
+	loginsLock               sync.RWMutex
 
 	matrixAuthCache     map[string]matrixAuthCacheEntry
 	matrixAuthCacheLock sync.Mutex
@@ -124,6 +127,7 @@ func (prov *ProvisioningAPI) Init() {
 	prov.matrixAuthCache = make(map[string]matrixAuthCacheEntry)
 	prov.logins = make(map[string]*ProvLogin)
 	prov.completedLogins = make(map[string]*completedLoginData)
+	prov.completedLoginsRotatedAt = time.Now()
 	prov.net = prov.br.Bridge.Network
 	prov.log = prov.br.Log.With().Str("component", "provisioning").Logger()
 	prov.fedClient = federation.NewClient("", nil, nil, exhttp.SensibleClientSettings.WithGlobalTimeout(20*time.Second))
