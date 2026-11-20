@@ -45,6 +45,12 @@ type matrixAuthCacheEntry struct {
 	UserID  id.UserID
 }
 
+type completedLoginData struct {
+	userLoginID  networkid.UserLoginID
+	userID       id.UserID
+	instructions string
+}
+
 type ProvisioningAPI struct {
 	Router *http.ServeMux
 
@@ -54,8 +60,9 @@ type ProvisioningAPI struct {
 
 	fedClient *federation.Client
 
-	logins     map[string]*ProvLogin
-	loginsLock sync.RWMutex
+	logins          map[string]*ProvLogin
+	completedLogins map[string]*completedLoginData
+	loginsLock      sync.RWMutex
 
 	matrixAuthCache     map[string]matrixAuthCacheEntry
 	matrixAuthCacheLock sync.Mutex
@@ -116,6 +123,7 @@ func inputRequestIDMiddleware(header string) exhttp.Middleware {
 func (prov *ProvisioningAPI) Init() {
 	prov.matrixAuthCache = make(map[string]matrixAuthCacheEntry)
 	prov.logins = make(map[string]*ProvLogin)
+	prov.completedLogins = make(map[string]*completedLoginData)
 	prov.net = prov.br.Bridge.Network
 	prov.log = prov.br.Log.With().Str("component", "provisioning").Logger()
 	prov.fedClient = federation.NewClient("", nil, nil, exhttp.SensibleClientSettings.WithGlobalTimeout(20*time.Second))
