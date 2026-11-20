@@ -212,12 +212,16 @@ homeserver:
     # The URL to push real-time bridge status to.
     # If set, the bridge will make POST requests to this URL whenever a user's remote network connection state changes.
     # The bridge will use the appservice as_token to authorize requests.
+    # Requests are sent using the same HTTP client as requests to the homeserver, so if the homeserver
+    # address is a unix socket, requests to this URL will also go through that socket.
     status_endpoint:
     # Endpoint for reporting per-message status.
     # If set, the bridge will make POST requests to this URL when processing a message from Matrix.
     # It will make one request when receiving the message (step BRIDGE), one after decrypting if applicable
     # (step DECRYPTED) and one after sending to the remote network (step REMOTE). Errors will also be reported.
     # The bridge will use the appservice as_token to authorize requests.
+    # Requests are sent using the same HTTP client as requests to the homeserver, so if the homeserver
+    # address is a unix socket, requests to this URL will also go through that socket.
     message_send_checkpoint_endpoint:
     # Does the homeserver support https://github.com/matrix-org/matrix-spec-proposals/pull/2246?
     async_media: false
