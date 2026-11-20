@@ -1376,15 +1376,15 @@ components:
         required_client_capabilities:
           type: array
           description: |
-            Client capabilities that this flow needs. Clients that negotiate capabilities
-            should hide flows that need a capability they don't have.
+            Client capabilities that this flow needs. Clients should hide flows
+            that need a capability they don't have.
           items:
             $ref: '#/components/schemas/ClientCapability'
     ClientCapability:
       type: string
       description: |
         A feature that the client supports during login.
-        `capability_negotiation` marks that the client negotiates capabilities,
+        `capability_negotiation` marks that the client sends capabilities,
         `webauthn` means it can complete `webauthn` steps,
         `client_http` means it can execute `client_http` steps, and
         `client_websocket` means it can open full duplex tunnels for `client_http` steps.
@@ -1392,9 +1392,8 @@ components:
     ClientCapabilities:
       type: array
       description: |
-        The capabilities the client supports. If the list doesn't contain `capability_negotiation`,
-        or isn't sent at all, the bridge assumes the client supports every capability
-        except `client_http` and `client_websocket`, which always need to be declared.
+        The capabilities the client supports. Capabilities that aren't listed
+        (including when the list isn't sent at all) are assumed to be unsupported.
       items:
         $ref: '#/components/schemas/ClientCapability'
       examples:

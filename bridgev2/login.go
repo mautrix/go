@@ -51,36 +51,14 @@ const (
 
 type ClientCapabilities []ClientCapability
 
-func (cc ClientCapabilities) Negotiated() bool {
-	return slices.Contains(cc, ClientCapabilityNegotiation)
-}
-
 func (cc ClientCapabilities) Has(capability ClientCapability) bool {
-	switch capability {
-	case ClientCapabilityHTTP, ClientCapabilityWebSocket:
-		return slices.Contains(cc, capability)
-	default:
-		return !cc.Negotiated() || slices.Contains(cc, capability)
-	}
+	return slices.Contains(cc, capability)
 }
 
-var ErrWebAuthnUnsupported = RespError{
-	ErrCode:    "COM.BEEPER.WEBAUTHN_UNSUPPORTED",
-	Err:        "Logging in with a passkey is not yet supported",
-	StatusCode: http.StatusBadRequest,
-}
-
-// CheckLoginStep returns an error if the step can't be completed by a client with these capabilities.
-// failOnWebAuthn makes webauthn steps fail for clients that don't negotiate capabilities.
-func (cc ClientCapabilities) CheckLoginStep(step *LoginStep, failOnWebAuthn bool) error {
-	if step == nil || step.Type != LoginStepTypeWebAuthn {
-		return nil
-	} else if cc.Negotiated() {
-		if !cc.Has(ClientCapabilityWebAuthn) {
-			return MissingClientCapabilityError(ClientCapabilityWebAuthn)
-		}
-	} else if failOnWebAuthn {
-		return ErrWebAuthnUnsupported
+// CheckLoginStep returns a missing capability error if the step can't be completed by a client with these capabilities.
+func (cc ClientCapabilities) CheckLoginStep(step *LoginStep) error {
+	if step != nil && step.Type == LoginStepTypeWebAuthn && !cc.Has(ClientCapabilityWebAuthn) {
+		return MissingClientCapabilityError(ClientCapabilityWebAuthn)
 	}
 	return nil
 }

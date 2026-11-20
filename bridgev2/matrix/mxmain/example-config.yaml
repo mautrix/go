@@ -323,10 +323,6 @@ provisioning:
     allow_matrix_auth: true
     # Enable debug API at /debug with provisioning authentication.
     debug_endpoints: false
-    # Should the provisioning API fail immediately if a webauthn step is returned to a client
-    # that doesn't negotiate client capabilities? Clients that negotiate get an error only
-    # if they don't declare the webauthn capability.
-    fail_on_webauthn: false
     # The header that the request ID is sent back in.
     request_id_header: Request-Id
     # Should the request ID be read from the above header of incoming requests

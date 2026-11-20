@@ -16,18 +16,15 @@ import (
 )
 
 func TestClientCapabilities_Has(t *testing.T) {
-	negotiated := bridgev2.ClientCapabilities{bridgev2.ClientCapabilityNegotiation, bridgev2.ClientCapabilityHTTP}
-	assert.True(t, negotiated.Has(bridgev2.ClientCapabilityHTTP))
-	assert.False(t, negotiated.Has(bridgev2.ClientCapabilityWebAuthn))
-	assert.False(t, negotiated.Has(bridgev2.ClientCapabilityWebSocket))
+	caps := bridgev2.ClientCapabilities{bridgev2.ClientCapabilityNegotiation, bridgev2.ClientCapabilityHTTP}
+	assert.True(t, caps.Has(bridgev2.ClientCapabilityHTTP))
+	assert.False(t, caps.Has(bridgev2.ClientCapabilityWebAuthn))
+	assert.False(t, caps.Has(bridgev2.ClientCapabilityWebSocket))
 
-	for _, legacy := range []bridgev2.ClientCapabilities{nil, {}, {bridgev2.ClientCapabilityHTTP}} {
-		assert.False(t, legacy.Negotiated())
-		assert.True(t, legacy.Has(bridgev2.ClientCapabilityWebAuthn))
-		assert.False(t, legacy.Has(bridgev2.ClientCapabilityWebSocket))
+	for _, empty := range []bridgev2.ClientCapabilities{nil, {}} {
+		assert.False(t, empty.Has(bridgev2.ClientCapabilityWebAuthn))
+		assert.False(t, empty.Has(bridgev2.ClientCapabilityHTTP))
 	}
-	assert.True(t, bridgev2.ClientCapabilities{bridgev2.ClientCapabilityHTTP}.Has(bridgev2.ClientCapabilityHTTP))
-	assert.False(t, bridgev2.ClientCapabilities(nil).Has(bridgev2.ClientCapabilityHTTP))
 }
 
 func TestClientCapabilities_HasAll(t *testing.T) {
@@ -47,17 +44,12 @@ func TestMissingClientCapabilityError(t *testing.T) {
 func TestClientCapabilities_CheckLoginStep(t *testing.T) {
 	webAuthnStep := &bridgev2.LoginStep{Type: bridgev2.LoginStepTypeWebAuthn}
 	userInputStep := &bridgev2.LoginStep{Type: bridgev2.LoginStepTypeUserInput}
-	negotiated := bridgev2.ClientCapabilities{bridgev2.ClientCapabilityNegotiation}
-	withWebAuthn := bridgev2.ClientCapabilities{bridgev2.ClientCapabilityNegotiation, bridgev2.ClientCapabilityWebAuthn}
 
-	for _, failOnWebAuthn := range []bool{false, true} {
+	for _, caps := range []bridgev2.ClientCapabilities{nil, {bridgev2.ClientCapabilityNegotiation}} {
 		var respErr bridgev2.RespError
-		require.ErrorAs(t, negotiated.CheckLoginStep(webAuthnStep, failOnWebAuthn), &respErr)
+		require.ErrorAs(t, caps.CheckLoginStep(webAuthnStep), &respErr)
 		assert.Equal(t, bridgev2.ErrMissingClientCapability.ErrCode, respErr.ErrCode)
-		assert.NoError(t, negotiated.CheckLoginStep(userInputStep, failOnWebAuthn))
-		assert.NoError(t, withWebAuthn.CheckLoginStep(webAuthnStep, failOnWebAuthn))
-		assert.NoError(t, bridgev2.ClientCapabilities(nil).CheckLoginStep(userInputStep, failOnWebAuthn))
+		assert.NoError(t, caps.CheckLoginStep(userInputStep))
 	}
-	assert.NoError(t, bridgev2.ClientCapabilities(nil).CheckLoginStep(webAuthnStep, false))
-	assert.ErrorIs(t, bridgev2.ClientCapabilities(nil).CheckLoginStep(webAuthnStep, true), bridgev2.ErrWebAuthnUnsupported)
+	assert.NoError(t, bridgev2.ClientCapabilities{bridgev2.ClientCapabilityWebAuthn}.CheckLoginStep(webAuthnStep))
 }

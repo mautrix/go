@@ -548,7 +548,7 @@ func (prov *ProvisioningAPI) executeStep(
 		case bridgev2.LoginStepTypeUserInput, bridgev2.LoginStepTypeCookies, bridgev2.LoginStepTypeDisplayAndWait, bridgev2.LoginStepTypeComplete:
 			// ok
 		case bridgev2.LoginStepTypeWebAuthn:
-			if err = login.ClientCapabilities.CheckLoginStep(nextStep, prov.br.Config.Provisioning.FailOnWebAuthn); err != nil {
+			if err = login.ClientCapabilities.CheckLoginStep(nextStep); err != nil {
 				zerolog.Ctx(login.Ctx).Warn().Msg("Got WebAuthn step, failing login")
 			}
 		default:
