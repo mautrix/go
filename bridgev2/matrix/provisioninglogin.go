@@ -84,6 +84,8 @@ type ProvLogin struct {
 	CancelCtx context.CancelFunc
 }
 
+const completedLoginGeneration = 10 * time.Minute
+
 var ErrNilStep = errors.New("bridge returned nil step with no error")
 var ErrTooManyLogins = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.TOO_MANY_LOGINS", Err: "Maximum number of logins exceeded", StatusCode: http.StatusForbidden}
 var ErrLoginCancelled = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.LOGIN_CANCELLED", Err: "Login process was cancelled", StatusCode: http.StatusGone}
@@ -173,6 +175,9 @@ func (prov *ProvisioningAPI) getLogin(w http.ResponseWriter, r *http.Request, al
 	prov.loginsLock.RLock()
 	login := prov.logins[loginID]
 	completedLogin := prov.completedLogins[loginID]
+	if completedLogin == nil {
+		completedLogin = prov.prevCompletedLogins[loginID]
+	}
 	prov.loginsLock.RUnlock()
 	if login != nil && login.UserMXID == prov.GetUser(r).MXID {
 		return login
@@ -633,8 +638,10 @@ func (prov *ProvisioningAPI) deleteLogin(login *ProvLogin, completed *completedL
 	}
 	prov.loginsLock.Lock()
 	if completed != nil {
-		if len(prov.completedLogins) > 256 {
-			clear(prov.completedLogins)
+		if time.Since(prov.completedLoginsRotatedAt) > completedLoginGeneration {
+			prov.prevCompletedLogins = prov.completedLogins
+			prov.completedLogins = make(map[string]*completedLoginData)
+			prov.completedLoginsRotatedAt = time.Now()
 		}
 		prov.completedLogins[login.ID] = completed
 	}
