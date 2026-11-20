@@ -94,6 +94,9 @@ type Portal struct {
 	outgoingMessages     map[networkid.TransactionID]*outgoingMessage
 	outgoingMessagesLock sync.Mutex
 
+	handlingRemoteMessages     map[networkid.MessageID]*handlingRemoteMessage
+	handlingRemoteMessagesLock sync.Mutex
+
 	roomCreateLock   sync.Mutex
 	cancelRoomCreate atomic.Pointer[context.CancelFunc]
 	backgroundCtx    context.Context
@@ -118,6 +121,8 @@ type Portal struct {
 var PanicOnStuckEvent = false
 var EventHandlingTimeoutTicks = 10
 
+const remoteMessageWaitTimeout = 1 * time.Minute
+
 func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, queryErr error, key *networkid.PortalKey) (*Portal, error) {
 	if queryErr != nil {
 		return nil, fmt.Errorf("failed to query db: %w", queryErr)
@@ -139,9 +144,10 @@ func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, que
 		Portal: dbPortal,
 		Bridge: br,
 
-		currentlyTypingLogins: make(map[id.UserID]*UserLogin),
-		currentlyTypingGhosts: exsync.NewSet[id.UserID](),
-		outgoingMessages:      make(map[networkid.TransactionID]*outgoingMessage),
+		currentlyTypingLogins:  make(map[id.UserID]*UserLogin),
+		currentlyTypingGhosts:  exsync.NewSet[id.UserID](),
+		outgoingMessages:       make(map[networkid.TransactionID]*outgoingMessage),
+		handlingRemoteMessages: make(map[networkid.MessageID]*handlingRemoteMessage),
 
 		RoomCreated: exsync.NewEvent(),
 	}
@@ -441,6 +447,11 @@ func (portal *Portal) handleSingleEventWithDelayLogging(idx int, rawEvt any) (ou
 	var backgrounded atomic.Bool
 	start := time.Now()
 	var handleDuration time.Duration
+	_, isCreate := rawEvt.(*portalCreateEvent)
+	backgroundCh := make(chan struct{})
+	if !isCreate {
+		ctx = context.WithValue(ctx, contextKeyBackgroundEventHandling, sync.OnceFunc(func() { close(backgroundCh) }))
+	}
 	// Note: this will assume success if the handler times out
 	outerRes = EventHandlingResult{Queued: true, Success: true, Error: ErrHandlerBackgrounded}
 	go portal.handleSingleEvent(ctx, rawEvt, func(res EventHandlingResult) {
@@ -467,7 +478,6 @@ func (portal *Portal) handleSingleEventWithDelayLogging(idx int, rawEvt any) (ou
 		}
 	})
 	tick := time.NewTicker(30 * time.Second)
-	_, isCreate := rawEvt.(*portalCreateEvent)
 	defer tick.Stop()
 	for i := 0; i < EventHandlingTimeoutTicks || isCreate; i++ {
 		select {
@@ -478,6 +488,12 @@ func (portal *Portal) handleSingleEventWithDelayLogging(idx int, rawEvt any) (ou
 					Stringer("duration", handleDuration).
 					Msg("Event that took long finished handling")
 			}
+			return
+		case <-backgroundCh:
+			backgrounded.Store(true)
+			log.Debug().
+				Time("started_at", start).
+				Msg("Event handler is waiting for another event, continuing in background")
 			return
 		case <-tick.C:
 			log.Warn().
@@ -500,6 +516,8 @@ type contextKey int
 const (
 	contextKeyRemoteEvent contextKey = iota
 	contextKeyMatrixEvent
+	contextKeyHandlingRemoteMessages
+	contextKeyBackgroundEventHandling
 )
 
 func GetMatrixEventFromContext(ctx context.Context) (evt *event.Event) {
@@ -3348,6 +3366,11 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 		}
 		return
 	}
+	ctx, _, _, finishHandling, err := portal.startHandlingRemoteMessages(ctx, []networkid.MessageID{evt.GetID()}, nil, false)
+	if err != nil {
+		return EventHandlingResultFailed.WithError(err)
+	}
+	defer finishHandling()
 	existing, err := portal.Bridge.DB.Message.GetAllPartsByID(ctx, portal.Receiver, evt.GetID())
 	if err != nil {
 		log.Err(err).Msg("Failed to check if message is a duplicate")
@@ -3389,6 +3412,106 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 		}
 	}
 	return
+}
+
+type remoteMessageHandler struct {
+	waitingFor *remoteMessageHandler
+}
+
+type handlingRemoteMessage struct {
+	handler *remoteMessageHandler
+	done    chan struct{}
+}
+
+func (portal *Portal) startHandlingRemoteMessages(
+	ctx context.Context, msgIDs []networkid.MessageID, unlockWhileWaiting sync.Locker, capWait bool,
+) (_ context.Context, waited bool, skipped []networkid.MessageID, finish func(), err error) {
+	handler, ok := ctx.Value(contextKeyHandlingRemoteMessages).(*remoteMessageHandler)
+	if !ok {
+		handler = &remoteMessageHandler{}
+		ctx = context.WithValue(ctx, contextKeyHandlingRemoteMessages, handler)
+	}
+	timeout := time.NewTimer(remoteMessageWaitTimeout)
+	defer timeout.Stop()
+	var timedOut bool
+	for {
+		portal.handlingRemoteMessagesLock.Lock()
+		var waitFor *handlingRemoteMessage
+		var waitForID networkid.MessageID
+		var claim []networkid.MessageID
+		skipped = nil
+		for _, msgID := range msgIDs {
+			prev, ok := portal.handlingRemoteMessages[msgID]
+			if slices.Contains(claim, msgID) || slices.Contains(skipped, msgID) || (ok && prev.handler == handler) {
+				continue
+			} else if !ok {
+				claim = append(claim, msgID)
+			} else if (capWait && timedOut) || prev.handler.isWaitingFor(handler) {
+				skipped = append(skipped, msgID)
+			} else {
+				waitFor, waitForID = prev, msgID
+				break
+			}
+		}
+		if waitFor == nil {
+			done := make(chan struct{})
+			for _, msgID := range claim {
+				portal.handlingRemoteMessages[msgID] = &handlingRemoteMessage{handler: handler, done: done}
+			}
+			portal.handlingRemoteMessagesLock.Unlock()
+			if len(skipped) > 0 {
+				zerolog.Ctx(ctx).Warn().
+					Strs("message_ids", exslices.CastToString[string](skipped)).
+					Msg("Not waiting for previous copies of messages to finish handling")
+			}
+			return ctx, waited, skipped, func() {
+				portal.handlingRemoteMessagesLock.Lock()
+				for _, msgID := range claim {
+					delete(portal.handlingRemoteMessages, msgID)
+				}
+				portal.handlingRemoteMessagesLock.Unlock()
+				close(done)
+			}, nil
+		}
+		handler.waitingFor = waitFor.handler
+		portal.handlingRemoteMessagesLock.Unlock()
+		waited = true
+		zerolog.Ctx(ctx).Debug().Str("message_id", string(waitForID)).Msg("Waiting for previous copy of message to finish handling")
+		if unlockWhileWaiting != nil {
+			unlockWhileWaiting.Unlock()
+		}
+		select {
+		case <-waitFor.done:
+		case <-timeout.C:
+			timedOut = true
+			if !capWait {
+				zerolog.Ctx(ctx).Warn().Str("message_id", string(waitForID)).Msg("Previous copy of message is taking long to handle, continuing to wait in background")
+				if background, ok := ctx.Value(contextKeyBackgroundEventHandling).(func()); ok {
+					background()
+				}
+			}
+		case <-ctx.Done():
+			err = ctx.Err()
+		}
+		portal.handlingRemoteMessagesLock.Lock()
+		handler.waitingFor = nil
+		portal.handlingRemoteMessagesLock.Unlock()
+		if unlockWhileWaiting != nil {
+			unlockWhileWaiting.Lock()
+		}
+		if err != nil {
+			return ctx, waited, nil, nil, err
+		}
+	}
+}
+
+func (handler *remoteMessageHandler) isWaitingFor(target *remoteMessageHandler) bool {
+	for ; handler != nil; handler = handler.waitingFor {
+		if handler == target {
+			return true
+		}
+	}
+	return false
 }
 
 func (portal *Portal) sendRemoteErrorNotice(ctx context.Context, intent MatrixAPI, err error, ts time.Time, evtTypeName string) {

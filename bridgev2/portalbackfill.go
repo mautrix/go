@@ -10,10 +10,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"slices"
 	"time"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exerrors"
 	"go.mau.fi/util/exslices"
 	"go.mau.fi/util/ptr"
 	"go.mau.fi/util/variationselector"
@@ -79,8 +81,40 @@ func (portal *Portal) doForwardBackfill(ctx context.Context, source *UserLogin, 
 		Bool("aggressive_deduplication", resp.AggressiveDeduplication).
 		Str("queried_latest_message_id", latestMessageID).
 		Msg("Fetched messages for forward backfill, deduplicating before sending")
+	msgIDs := make([]networkid.MessageID, len(resp.Messages))
+	for i, msg := range resp.Messages {
+		msgIDs[i] = msg.ID
+	}
+	_, waited, skipped, finishHandling, err := portal.startHandlingRemoteMessages(ctx, msgIDs, &portal.backfillLock, true)
+	if err != nil {
+		log.Err(err).Msg("Failed to wait for messages that are still being bridged")
+		return
+	}
+	defer finishHandling()
+	if len(skipped) > 0 {
+		var skippedMessages []*BackfillMessage
+		resp.Messages = slices.DeleteFunc(resp.Messages, func(msg *BackfillMessage) bool {
+			if slices.Contains(skipped, msg.ID) {
+				skippedMessages = append(skippedMessages, msg)
+				return true
+			}
+			return false
+		})
+		go portal.sendSkippedForwardBackfill(log.WithContext(portal.backgroundCtx), source, skippedMessages, resp.MarkRead)
+	}
+	aggressiveDedup := resp.AggressiveDeduplication || waited
+	if !aggressiveDedup {
+		latestMessage, err := portal.Bridge.DB.Message.GetLastPartAtOrBeforeTime(ctx, portal.PortalKey, time.Now().Add(10*time.Second))
+		if err != nil {
+			log.Err(err).Msg("Failed to get latest message after fetching forward backfill")
+			aggressiveDedup = true
+		} else if latestMessage != nil && (lastMessage == nil || latestMessage.RowID != lastMessage.RowID) {
+			log.Debug().Str("new_latest_message_id", string(latestMessage.ID)).Msg("New messages were bridged during forward backfill fetch")
+			aggressiveDedup = true
+		}
+	}
 	// TODO mark backfill queue task as done if last message is nil (-> room was empty) and HasMore is false?
-	resp.Messages = portal.cutoffMessages(ctx, resp.Messages, resp.AggressiveDeduplication, true, lastMessage)
+	resp.Messages = portal.cutoffMessages(ctx, resp.Messages, aggressiveDedup, true, lastMessage)
 	if len(resp.Messages) == 0 {
 		log.Warn().Msg("No messages left to backfill after cutting off old messages")
 		if resp.CompleteCallback != nil {
@@ -94,6 +128,36 @@ func (portal *Portal) doForwardBackfill(ctx context.Context, source *UserLogin, 
 	} else if !resp.MarkRead && !resp.ReadUpTo.IsZero() && !resp.ReadUpTo.Before(resp.Messages[0].Timestamp) &&
 		!portal.isPastUnreadThreshold(resp.Messages) {
 		portal.markBackfillReadUpTo(ctx, source, resp.ReadUpTo)
+	}
+}
+
+func (portal *Portal) sendSkippedForwardBackfill(ctx context.Context, source *UserLogin, messages []*BackfillMessage, markRead bool) {
+	defer func() {
+		if v := recover(); v != nil {
+			zerolog.Ctx(ctx).Err(exerrors.RecoverToError(v)).
+				Bytes(zerolog.ErrorStackFieldName, debug.Stack()).
+				Msg("Panic in skipped forward backfill")
+		}
+	}()
+	msgIDs := make([]networkid.MessageID, len(messages))
+	for i, msg := range messages {
+		msgIDs[i] = msg.ID
+	}
+	_, _, _, finishHandling, err := portal.startHandlingRemoteMessages(ctx, msgIDs, nil, false)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to wait for skipped forward backfill messages")
+		return
+	}
+	defer finishHandling()
+	messages = portal.cutoffMessages(ctx, messages, true, true, nil)
+	if len(messages) == 0 {
+		return
+	}
+	portal.backfillLock.Lock()
+	defer portal.backfillLock.Unlock()
+	err = portal.sendBackfill(ctx, source, messages, true, markRead, false, nil)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to send skipped forward backfill messages")
 	}
 }
 
