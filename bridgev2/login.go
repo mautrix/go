@@ -43,10 +43,9 @@ func MissingClientCapabilityError(capability ClientCapability) RespError {
 type ClientCapability string
 
 const (
-	ClientCapabilityNegotiation ClientCapability = "capability_negotiation"
-	ClientCapabilityWebAuthn    ClientCapability = "webauthn"
-	ClientCapabilityHTTP        ClientCapability = "client_http"
-	ClientCapabilityWebSocket   ClientCapability = "client_websocket"
+	ClientCapabilityWebAuthn  ClientCapability = "webauthn"
+	ClientCapabilityHTTP      ClientCapability = "client_http"
+	ClientCapabilityWebSocket ClientCapability = "client_websocket"
 )
 
 type ClientCapabilities []ClientCapability

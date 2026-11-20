@@ -16,7 +16,7 @@ import (
 )
 
 func TestClientCapabilities_Has(t *testing.T) {
-	caps := bridgev2.ClientCapabilities{bridgev2.ClientCapabilityNegotiation, bridgev2.ClientCapabilityHTTP}
+	caps := bridgev2.ClientCapabilities{bridgev2.ClientCapabilityHTTP}
 	assert.True(t, caps.Has(bridgev2.ClientCapabilityHTTP))
 	assert.False(t, caps.Has(bridgev2.ClientCapabilityWebAuthn))
 	assert.False(t, caps.Has(bridgev2.ClientCapabilityWebSocket))
@@ -28,7 +28,7 @@ func TestClientCapabilities_Has(t *testing.T) {
 }
 
 func TestClientCapabilities_HasAll(t *testing.T) {
-	caps := bridgev2.ClientCapabilities{bridgev2.ClientCapabilityNegotiation, bridgev2.ClientCapabilityWebAuthn}
+	caps := bridgev2.ClientCapabilities{bridgev2.ClientCapabilityWebAuthn}
 	assert.True(t, caps.HasAll())
 	assert.True(t, caps.HasAll(bridgev2.ClientCapabilityWebAuthn))
 	assert.False(t, caps.HasAll(bridgev2.ClientCapabilityWebAuthn, bridgev2.ClientCapabilityHTTP))
@@ -45,7 +45,7 @@ func TestClientCapabilities_CheckLoginStep(t *testing.T) {
 	webAuthnStep := &bridgev2.LoginStep{Type: bridgev2.LoginStepTypeWebAuthn}
 	userInputStep := &bridgev2.LoginStep{Type: bridgev2.LoginStepTypeUserInput}
 
-	for _, caps := range []bridgev2.ClientCapabilities{nil, {bridgev2.ClientCapabilityNegotiation}} {
+	for _, caps := range []bridgev2.ClientCapabilities{nil, {bridgev2.ClientCapabilityHTTP}} {
 		var respErr bridgev2.RespError
 		require.ErrorAs(t, caps.CheckLoginStep(webAuthnStep), &respErr)
 		assert.Equal(t, bridgev2.ErrMissingClientCapability.ErrCode, respErr.ErrCode)

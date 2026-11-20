@@ -1384,11 +1384,10 @@ components:
       type: string
       description: |
         A feature that the client supports during login.
-        `capability_negotiation` marks that the client sends capabilities,
         `webauthn` means it can complete `webauthn` steps,
         `client_http` means it can execute `client_http` steps, and
         `client_websocket` means it can open full duplex tunnels for `client_http` steps.
-      enum: [ capability_negotiation, webauthn, client_http, client_websocket ]
+      enum: [ webauthn, client_http, client_websocket ]
     ClientCapabilities:
       type: array
       description: |
@@ -1397,7 +1396,7 @@ components:
       items:
         $ref: '#/components/schemas/ClientCapability'
       examples:
-      - [ capability_negotiation ]
+      - [ webauthn ]
     BridgeName:
       type: object
       description: Info about the network that the bridge is bridging to.
