@@ -61,7 +61,7 @@ type ProvisioningAPI struct {
 	fedClient *federation.Client
 
 	logins map[string]*ProvLogin
-	// Two generations, so each finished login is kept for at least completedLoginGeneration.
+	// Two generations, so each finished login is kept until two rotations have passed.
 	completedLogins          map[string]*completedLoginData
 	prevCompletedLogins      map[string]*completedLoginData
 	completedLoginsRotatedAt time.Time
