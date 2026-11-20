@@ -63,9 +63,6 @@ type DecryptedOlmEvent struct {
 	Recipient        id.UserID           `json:"recipient"`
 	RecipientKeys    OlmEventKeys        `json:"recipient_keys"`
 
-	// Deprecated: not a real field, do not use
-	SenderDeviceID id.DeviceID `json:"sender_device"`
-
 	Type    event.Type    `json:"type"`
 	Content event.Content `json:"content"`
 }
