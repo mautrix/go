@@ -121,7 +121,6 @@ type ProvisioningConfig struct {
 	SharedSecret           string `yaml:"shared_secret"`
 	AllowMatrixAuth        bool   `yaml:"allow_matrix_auth"`
 	DebugEndpoints         bool   `yaml:"debug_endpoints"`
-	FailOnWebAuthn         bool   `yaml:"fail_on_webauthn"`
 	RequestIDHeader        string `yaml:"request_id_header"`
 	TrustIncomingRequestID bool   `yaml:"trust_incoming_request_id"`
 }
