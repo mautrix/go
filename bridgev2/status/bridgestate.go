@@ -174,7 +174,7 @@ func (pong BridgeState) Fill(user BridgeStateFiller) BridgeState {
 	return pong
 }
 
-func (pong *BridgeState) SendHTTP(ctx context.Context, url, token string) error {
+func (pong *BridgeState) SendHTTP(ctx context.Context, cli *http.Client, url, token string) error {
 	var body []byte
 	var err error
 	if body, err = json.Marshal(&pong); err != nil {
@@ -197,7 +197,10 @@ func (pong *BridgeState) SendHTTP(ctx context.Context, url, token string) error 
 	req.Header.Set("User-Agent", mautrix.DefaultUserAgent+" (bridge state sender)")
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	if cli == nil {
+		cli = http.DefaultClient
+	}
+	resp, err := cli.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
