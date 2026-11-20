@@ -185,6 +185,10 @@ func (prov *ProvisioningAPI) getLogin(w http.ResponseWriter, r *http.Request, al
 	if login != nil && login.UserMXID == prov.GetUser(r).MXID {
 		return login
 	} else if allowCompleted && login == nil && completedLogin != nil && completedLogin.userID == prov.GetUser(r).MXID {
+		if completedLogin.err != nil {
+			RespondWithError(w, completedLogin.err, "Internal error in login step")
+			return nil
+		}
 		exhttp.WriteJSONResponse(w, http.StatusOK, &RespSubmitLogin{
 			LoginID: loginID,
 			LoginStep: &bridgev2.LoginStep{
@@ -557,11 +561,11 @@ func (prov *ProvisioningAPI) executeStep(
 			err = fmt.Errorf("invalid response step type %q from login process", nextStep.Type)
 		}
 	}
+	if err == nil && nextStep == nil {
+		err = ErrNilStep
+	}
 	if err != nil {
-		prov.deleteLogin(login, nil, true, err)
-		return
-	} else if nextStep == nil {
-		prov.deleteLogin(login, nil, true, ErrNilStep)
+		prov.deleteLogin(login, &completedLoginData{userID: login.UserMXID, err: err}, true, err)
 		return
 	}
 	nextStep.TxnID = LoginStepTxnIDPrefix + xid.New().String()
@@ -640,7 +644,7 @@ func (prov *ProvisioningAPI) deleteLogin(login *ProvLogin, completed *completedL
 		})
 	}
 	prov.loginsLock.Lock()
-	if completed != nil {
+	if _, ok := prov.logins[login.ID]; ok && completed != nil {
 		if len(prov.completedLogins) >= completedLoginGenerationSize || time.Since(prov.completedLoginsRotatedAt) > completedLoginGeneration {
 			prov.prevCompletedLogins = prov.completedLogins
 			prov.completedLogins = make(map[string]*completedLoginData)
