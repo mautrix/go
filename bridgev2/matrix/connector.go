@@ -239,7 +239,7 @@ func (br *Connector) Start(ctx context.Context) error {
 	br.EventProcessor.Start(ctx)
 	go br.UpdateBotProfile(ctx)
 	if br.Crypto != nil {
-		go br.Crypto.Start()
+		br.Crypto.Start()
 	}
 	parsed, _ := url.Parse(br.Bridge.Network.GetName().NetworkURL)
 	if parsed != nil {

@@ -17,7 +17,6 @@ import (
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/dbutil"
 	"go.mau.fi/util/exhttp"
-	"go.mau.fi/util/exsync"
 
 	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
 	"maunium.net/go/mautrix/bridgev2/database"
@@ -58,7 +57,7 @@ type Bridge struct {
 	stopping            atomic.Bool
 
 	wakeupBackfillQueue chan struct{}
-	stopBackfillQueue   *exsync.Event
+	stopBackfillQueue   atomic.Pointer[context.CancelFunc]
 	manualBackfills     chan *ManualBackfill
 
 	BackgroundCtx       context.Context
@@ -91,7 +90,6 @@ func NewBridge(
 
 		wakeupBackfillQueue: make(chan struct{}),
 		manualBackfills:     make(chan *ManualBackfill, 64),
-		stopBackfillQueue:   exsync.NewEvent(),
 	}
 	if br.Config == nil {
 		br.Config = &bridgeconfig.BridgeConfig{CommandPrefix: "!bridge"}
@@ -214,7 +212,7 @@ func (br *Bridge) StartConnectors(ctx context.Context) error {
 		return fmt.Errorf("failed to start network connector: %w", err)
 	}
 	if br.Network.GetCapabilities().DisappearingMessages && !br.Background {
-		go br.DisappearLoop.Start()
+		br.DisappearLoop.Start()
 	}
 	br.startUnknownRoomCleanup(ctx)
 	return nil
@@ -434,7 +432,11 @@ func (br *Bridge) StartLoginsForUsers(ctx context.Context, users []*User) {
 		br.SendGlobalBridgeState(ctx, status.BridgeState{StateEvent: status.StateUnconfigured})
 	}
 	if !br.Background {
-		go br.RunBackfillQueue()
+		queueCtx, stopQueue := context.WithCancel(br.BackgroundCtx)
+		if oldStop := br.stopBackfillQueue.Swap(&stopQueue); oldStop != nil {
+			(*oldStop)()
+		}
+		go br.RunBackfillQueue(queueCtx)
 	}
 
 	br.Log.Info().Msg("Bridge started")
@@ -501,7 +503,10 @@ func (br *Bridge) stop(isRunOnce bool, timeout time.Duration) {
 	br.Log.Info().Msg("Shutting down bridge")
 	br.stopping.Store(true)
 	br.DisappearLoop.Stop()
-	br.stopBackfillQueue.Set()
+	if stopQueue := br.stopBackfillQueue.Load(); stopQueue != nil {
+		(*stopQueue)()
+	}
+	br.flushManualBackfillQueue()
 	br.Matrix.PreStop()
 	if !isRunOnce {
 		br.cacheLock.Lock()

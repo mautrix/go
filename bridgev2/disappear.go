@@ -29,12 +29,17 @@ const DisappearCheckInterval = 1 * time.Hour
 
 func (dl *DisappearLoop) Start() {
 	log := dl.br.Log.With().Str("component", "disappear loop").Logger()
-	ctx, stop := context.WithCancel(log.WithContext(context.Background()))
+	ctx, stop := context.WithCancel(log.WithContext(dl.br.BackgroundCtx))
 	if oldStop := dl.stop.Swap(&stop); oldStop != nil {
 		(*oldStop)()
 	}
+	go dl.loop(ctx)
+}
+
+func (dl *DisappearLoop) loop(ctx context.Context) {
+	log := zerolog.Ctx(ctx)
 	log.Debug().Msg("Disappearing message loop starting")
-	for {
+	for ctx.Err() == nil {
 		nextCheck := time.Now().Add(DisappearCheckInterval)
 		dl.nextCheck.Store(&nextCheck)
 		const MessageLimit = 200
