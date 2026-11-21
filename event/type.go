@@ -272,6 +272,7 @@ var (
 	AccountDataBeeperMute         = Type{"com.beeper.mute", AccountDataEventType}
 	AccountDataSpaceOrder         = Type{"org.matrix.msc3230.space_order", AccountDataEventType}
 	AccountDataPerMessageProfiles = Type{"fi.mau.msc4461.per_message_profiles.v3", AccountDataEventType}
+	AccountDataProfileAnnotations = Type{"dev.zirco.msc4441.profile_annotations", AccountDataEventType}
 
 	AccountDataImagePackRooms         = Type{"m.image_pack.rooms", AccountDataEventType}
 	AccountDataUnstableImagePackRooms = Type{"im.ponies.emote_rooms", AccountDataEventType}
