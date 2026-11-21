@@ -621,9 +621,6 @@ func (mach *OlmMachine) SendEncryptedToDevice(ctx context.Context, device *id.De
 		return err
 	}
 
-	mach.olmLock.Lock()
-	defer mach.olmLock.Unlock()
-
 	olmSess, err := mach.CryptoStore.GetLatestSession(ctx, device.IdentityKey)
 	if err != nil {
 		return err

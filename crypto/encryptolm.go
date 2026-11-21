@@ -36,9 +36,6 @@ func (mach *OlmMachine) EncryptToDevices(ctx context.Context, eventType event.Ty
 		return nil, fmt.Errorf("failed to create outbound sessions: %w", err)
 	}
 
-	mach.olmLock.Lock()
-	defer mach.olmLock.Unlock()
-
 	encryptedReq := &mautrix.ReqSendToDevice{
 		Messages: make(map[id.UserID]map[id.DeviceID]*event.Content),
 	}
@@ -82,10 +79,13 @@ func (mach *OlmMachine) EncryptToDevices(ctx context.Context, eventType event.Ty
 }
 
 func (mach *OlmMachine) encryptOlmEvent(ctx context.Context, session *OlmSession, recipient *id.Device, evtType event.Type, content event.Content) *event.EncryptedEventContent {
+	senderDeviceKeys := mach.getKeysForOlmMessage(ctx)
+	mach.olmLock.Lock()
+	defer mach.olmLock.Unlock()
 	evt := &DecryptedOlmEvent{
 		Sender:           mach.Client.UserID,
 		SenderDeviceID:   mach.Client.DeviceID,
-		SenderDeviceKeys: mach.getKeysForOlmMessage(ctx),
+		SenderDeviceKeys: senderDeviceKeys,
 		Keys:             OlmEventKeys{Ed25519: mach.account.SigningKey()},
 		Recipient:        recipient.UserID,
 		RecipientKeys:    OlmEventKeys{Ed25519: recipient.SigningKey},
