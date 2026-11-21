@@ -644,7 +644,17 @@ func (portal *Portal) sendLegacyBackfill(ctx context.Context, source *UserLogin,
 				Time("message_ts", msg.Timestamp)
 		}, true)
 		if !res.Success {
-			return res.Error
+			if !blockBubblingEventError(res.Error) {
+				return res.Error
+			}
+			// The homeserver refused this message (e.g. the sender's ghost lacks the power level a group
+			// requires now, but didn't when the message was sent). Retrying won't help, and aborting would
+			// drop every later message in the batch, so skip it and keep going.
+			zerolog.Ctx(ctx).Warn().Err(res.Error).
+				Str("message_id", string(msg.ID)).
+				Any("sender_id", msg.Sender).
+				Time("message_ts", msg.Timestamp).
+				Msg("Skipping backfill message rejected by homeserver")
 		}
 		if len(dbMessages) > 0 {
 			lastPart = dbMessages[len(dbMessages)-1].MXID
