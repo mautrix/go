@@ -12,13 +12,11 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/binary"
 	"fmt"
-	"math/rand/v2"
 	"strings"
 
 	"github.com/rs/zerolog"
-	"go.mau.fi/util/exerrors"
+	"go.mau.fi/util/random"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
@@ -32,13 +30,17 @@ import (
 
 const MediaIDPrefix = "\U0001F408"
 const EncryptedMediaIDPrefix = "\U0001F63C"
+const EncryptedDBMediaIDPrefix = "\U0001F63D"
 const MediaIDTruncatedHashLength = 16
 const EncryptedMediaIDRandomPartLength = 8
+const EncryptedDBMediaIDRandomPartLength = 16
 const ContentURIMaxLength = 255
 
 func init() {
 	if len(MediaIDPrefix) != len(EncryptedMediaIDPrefix) {
 		panic("MediaIDPrefix and EncryptedMediaIDPrefix must be the same length")
+	} else if len(MediaIDPrefix) != len(EncryptedDBMediaIDPrefix) {
+		panic("MediaIDPrefix and EncryptedDBMediaIDPrefix must be the same length")
 	}
 }
 
@@ -73,24 +75,16 @@ func (br *Connector) hashMediaID(data []byte) []byte {
 }
 
 func (br *Connector) GenerateContentURI(ctx context.Context, mediaID networkid.MediaID) (id.ContentURIString, error) {
-	return br.generateContentURIInternal(mediaID, false)
+	return br.generateContentURIInternal(mediaID)
 }
 
-func (br *Connector) generateContentURIInternal(mediaID networkid.MediaID, encrypted bool) (id.ContentURIString, error) {
+func (br *Connector) generateContentURIInternal(mediaID networkid.MediaID) (id.ContentURIString, error) {
 	if br.MediaProxy == nil || br.Config.DirectMedia.ServeOnly {
 		return "", bridgev2.ErrDirectMediaNotEnabled
 	}
 	prefixLen := len(MediaIDPrefix)
-	if encrypted {
-		prefixLen = len(EncryptedMediaIDPrefix) + EncryptedMediaIDRandomPartLength
-	}
 	buf := make([]byte, prefixLen+len(mediaID)+MediaIDTruncatedHashLength)
-	if encrypted {
-		copy(buf, EncryptedMediaIDPrefix)
-		binary.BigEndian.PutUint64(buf[len(EncryptedMediaIDPrefix):len(EncryptedMediaIDPrefix)+EncryptedMediaIDRandomPartLength], rand.Uint64())
-	} else {
-		copy(buf, MediaIDPrefix)
-	}
+	copy(buf, MediaIDPrefix)
 	copy(buf[prefixLen:], mediaID)
 	truncatedHash := br.hashMediaID(buf[:prefixLen+len(mediaID)])
 	copy(buf[prefixLen+len(mediaID):], truncatedHash)
@@ -104,22 +98,47 @@ func (br *Connector) generateContentURIInternal(mediaID networkid.MediaID, encry
 	return mxc, nil
 }
 
+func (br *Connector) generateEncryptedContentURI() (id.ContentURIString, string, error) {
+	if br.MediaProxy == nil || br.Config.DirectMedia.ServeOnly {
+		return "", "", bridgev2.ErrDirectMediaNotEnabled
+	}
+	prefixLen := len(EncryptedDBMediaIDPrefix) + EncryptedDBMediaIDRandomPartLength
+	buf := make([]byte, prefixLen+MediaIDTruncatedHashLength)
+	copy(buf, EncryptedDBMediaIDPrefix)
+	copy(buf[len(EncryptedDBMediaIDPrefix):prefixLen], random.Bytes(EncryptedDBMediaIDRandomPartLength))
+	truncatedHash := br.hashMediaID(buf[:prefixLen])
+	copy(buf[prefixLen:], truncatedHash)
+	mediaIDStr := base64.RawURLEncoding.EncodeToString(buf)
+	mxc := id.ContentURI{
+		Homeserver: br.MediaProxy.GetServerName(),
+		FileID:     br.Config.DirectMedia.MediaIDPrefix + mediaIDStr,
+	}.CUString()
+	if len(mxc) > ContentURIMaxLength {
+		return "", "", fmt.Errorf("content URI too long (%d > %d)", len(mxc), ContentURIMaxLength)
+	}
+	return mxc, mediaIDStr, nil
+}
+
 func (br *Connector) GenerateContentURIWithCrypto(ctx context.Context, roomID id.RoomID, mediaID networkid.MediaID) (id.ContentURIString, *event.EncryptedFileInfo, error) {
 	if roomID != "" && br.Config.DirectMedia.Encrypted {
 		if encrypted, err := br.isEncrypted(ctx, roomID); err != nil {
 			return "", nil, fmt.Errorf("failed to check if room is encrypted: %w", err)
 		} else if encrypted {
-			mxc, err := br.generateContentURIInternal(mediaID, true)
+			if br.MediaProxy == nil || br.Config.DirectMedia.ServeOnly {
+				return "", nil, bridgev2.ErrDirectMediaNotEnabled
+			} else if len(mediaID) == 0 {
+				return "", nil, fmt.Errorf("empty media ID")
+			}
+			mxc, mediaIDStr, err := br.generateEncryptedContentURI()
 			if err != nil {
 				return "", nil, err
 			}
-			mediaIDStr := exerrors.Must(mxc.Parse()).FileID
-			mediaIDStr = strings.TrimPrefix(mediaIDStr, br.Config.DirectMedia.MediaIDPrefix)
 			floeFile := attachment.NewFLOEFile()
 			err = br.Bridge.DB.EncryptedDirectMedia.Put(ctx, &database.EncryptedDirectMedia{
-				MediaID:    mediaIDStr,
-				FLOEKey:    floeFile.FLOEKey,
-				FLOEHeader: floeFile.FLOEHeader,
+				MediaID:       mediaIDStr,
+				RemoteMediaID: mediaID,
+				FLOEKey:       floeFile.FLOEKey,
+				FLOEHeader:    floeFile.FLOEHeader,
 			})
 			if err != nil {
 				return "", nil, fmt.Errorf("failed to store encryption info for media ID: %w", err)
@@ -130,7 +149,7 @@ func (br *Connector) GenerateContentURIWithCrypto(ctx context.Context, roomID id
 			}, nil
 		}
 	}
-	mxc, err := br.generateContentURIInternal(mediaID, false)
+	mxc, err := br.generateContentURIInternal(mediaID)
 	return mxc, nil, err
 }
 
@@ -145,40 +164,57 @@ func (br *Connector) ParseContentURI(ctx context.Context, mxc id.ContentURIStrin
 		return nil, fmt.Errorf("mxc URI homeserver does not match media proxy server name")
 	}
 	mediaIDStr := strings.TrimPrefix(parsed.FileID, br.Config.DirectMedia.MediaIDPrefix)
-	mediaID, _, err := br.parseMediaID(mediaIDStr)
-	return mediaID, err
+	mediaID, _, storedInDB, err := br.parseMediaID(mediaIDStr)
+	if err != nil {
+		return nil, err
+	} else if storedInDB {
+		meta, err := br.Bridge.DB.EncryptedDirectMedia.Get(ctx, mediaIDStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get encrypted direct media info: %w", err)
+		} else if meta == nil || len(meta.RemoteMediaID) == 0 {
+			return nil, fmt.Errorf("no remote media ID found for encrypted media ID")
+		}
+		mediaID = meta.RemoteMediaID
+	}
+	return mediaID, nil
 }
 
-func (br *Connector) parseMediaID(mediaIDStr string) (networkid.MediaID, bool, error) {
+func (br *Connector) parseMediaID(mediaIDStr string) (networkid.MediaID, bool, bool, error) {
 	mediaID, err := base64.RawURLEncoding.DecodeString(mediaIDStr)
-	var encrypted bool
 	minLength := len(MediaIDPrefix) + MediaIDTruncatedHashLength + 1
 	if err != nil || len(mediaID) < minLength {
-		return nil, false, mediaproxy.ErrInvalidMediaIDSyntax
+		return nil, false, false, mediaproxy.ErrInvalidMediaIDSyntax
 	}
 	receivedHash := mediaID[len(mediaID)-MediaIDTruncatedHashLength:]
 	expectedHash := br.hashMediaID(mediaID[:len(mediaID)-MediaIDTruncatedHashLength])
 	if !hmac.Equal(receivedHash, expectedHash) {
-		return nil, false, mautrix.MNotFound.WithMessage("Invalid checksum in media ID part")
+		return nil, false, false, mautrix.MNotFound.WithMessage("Invalid checksum in media ID part")
 	}
+	if bytes.HasPrefix(mediaID, []byte(EncryptedDBMediaIDPrefix)) {
+		if len(mediaID) != len(EncryptedDBMediaIDPrefix)+EncryptedDBMediaIDRandomPartLength+MediaIDTruncatedHashLength {
+			return nil, false, false, mediaproxy.ErrInvalidMediaIDSyntax
+		}
+		return nil, true, true, nil
+	}
+	var encrypted bool
 	extraPrefixLength := 0
 	if bytes.HasPrefix(mediaID, []byte(EncryptedMediaIDPrefix)) {
 		encrypted = true
 		extraPrefixLength = EncryptedMediaIDRandomPartLength
 	} else if !bytes.HasPrefix(mediaID, []byte(MediaIDPrefix)) {
-		return nil, false, mediaproxy.ErrInvalidMediaIDSyntax
+		return nil, false, false, mediaproxy.ErrInvalidMediaIDSyntax
 	}
 	minLength += extraPrefixLength
 	if len(mediaID) < minLength {
-		return nil, false, mediaproxy.ErrInvalidMediaIDSyntax
+		return nil, false, false, mediaproxy.ErrInvalidMediaIDSyntax
 	}
 	remoteMediaID := networkid.MediaID(mediaID[len(MediaIDPrefix)+extraPrefixLength : len(mediaID)-MediaIDTruncatedHashLength])
-	return remoteMediaID, encrypted, nil
+	return remoteMediaID, encrypted, false, nil
 }
 
 func (br *Connector) getDirectMedia(ctx context.Context, mediaIDStr string, params map[string]string) (response mediaproxy.GetMediaResponse, err error) {
 	mediaIDStr = strings.TrimPrefix(mediaIDStr, br.Config.DirectMedia.MediaIDPrefix)
-	remoteMediaID, encrypted, err := br.parseMediaID(mediaIDStr)
+	remoteMediaID, encrypted, storedInDB, err := br.parseMediaID(mediaIDStr)
 	if err != nil {
 		return response, err
 	}
@@ -194,6 +230,12 @@ func (br *Connector) getDirectMedia(ctx context.Context, mediaIDStr string, para
 				Time("handled_at", meta.HandledAt).
 				Msg("Got query for encrypted direct media that was already handled")
 			return nil, fmt.Errorf("no key found for encrypted media ID")
+		}
+		if storedInDB {
+			if len(meta.RemoteMediaID) == 0 {
+				return nil, fmt.Errorf("no remote media ID found for encrypted media ID")
+			}
+			remoteMediaID = meta.RemoteMediaID
 		}
 		crypto = (&attachment.FLOEFile{
 			Version:    attachment.VersionBeeperFLOE,
