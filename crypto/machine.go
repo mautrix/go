@@ -211,7 +211,7 @@ func (mach *OlmMachine) Destroy() {
 }
 
 func (mach *OlmMachine) saveAccount(ctx context.Context) error {
-	err := mach.CryptoStore.PutAccount(ctx, mach.account)
+	err := mach.CryptoStore.PutAccount(context.WithoutCancel(ctx), mach.account)
 	if err != nil {
 		mach.Log.Error().Err(err).Msg("Failed to save account")
 	}

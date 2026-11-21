@@ -101,6 +101,7 @@ func (mach *OlmMachine) encryptOlmEvent(ctx context.Context, session *OlmSession
 	if err != nil {
 		panic(err)
 	}
+	ctx = context.WithoutCancel(ctx)
 	ciphertextStr := string(ciphertext)
 	ciphertextHash, _ := olmMessageHash(ciphertextStr)
 	log.Debug().
@@ -162,6 +163,7 @@ func (mach *OlmMachine) createOutboundSessions(ctx context.Context, input map[id
 	if err != nil {
 		return fmt.Errorf("failed to claim keys: %w", err)
 	}
+	ctx = context.WithoutCancel(ctx)
 	log := mach.machOrContextLog(ctx)
 	for userID, user := range resp.OneTimeKeys {
 		for deviceID, oneTimeKeys := range user {
