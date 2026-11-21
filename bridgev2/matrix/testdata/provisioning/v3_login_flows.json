@@ -1,0 +1,14 @@
+{
+	"flows": [
+		{
+			"id": "password",
+			"name": "Password",
+			"description": "Log in with your username and password"
+		},
+		{
+			"id": "legacy",
+			"name": "Legacy",
+			"description": "A flow that hasn't been converted yet"
+		}
+	]
+}

@@ -1,0 +1,16 @@
+{
+	"login_id": "login-id",
+	"type": "complete",
+	"step_id": "fi.mau.test.complete",
+	"txn_id": "",
+	"instructions": {
+		"key": "provisioning-test:step.complete.instructions",
+		"text": "Successfully logged in as +15550100",
+		"params": {
+			"name": "+15550100"
+		}
+	},
+	"complete": {
+		"user_login_id": "15550100"
+	}
+}

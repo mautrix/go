@@ -153,6 +153,13 @@ func (prov *ProvisioningAPI) Init() {
 	prov.Router.HandleFunc("GET /v3/image_pack/list", prov.ListImagePacks)
 	prov.Router.HandleFunc("POST /v3/resolve_media/{eventID}", prov.PostResolveMedia)
 	prov.Router.HandleFunc("DELETE /v3/direct_media_keys/{mediaID}", prov.DeleteDirectMediaKeys)
+	// These return login copy, which v4 encodes as l10n.Message objects, see provisioning_v3.go
+	prov.Router.HandleFunc("GET /v4/whoami", prov.GetWhoami)
+	prov.Router.HandleFunc("GET /v4/login/flows", prov.GetLoginFlows)
+	prov.Router.HandleFunc("POST /v4/login/start/{flowID}", prov.PostLoginStart)
+	prov.Router.HandleFunc("POST /v4/login/step/{loginProcessID}/{stepID}/{stepType}", prov.PostLoginStep)
+	prov.Router.HandleFunc("POST /v4/login/step/{loginProcessID}/{stepID}/cancel", prov.PostLoginStepCancel)
+	prov.Router.HandleFunc("POST /v4/login/client_http/{loginProcessID}/{txnID}/{reqID}", prov.PostLoginClientHTTP)
 
 	if prov.br.Config.Provisioning.DebugEndpoints {
 		prov.log.Debug().Msg("Enabling debug API at /debug")
@@ -379,7 +386,11 @@ func (prov *ProvisioningAPI) GetWhoami(w http.ResponseWriter, r *http.Request) {
 			SpaceRoom: login.SpaceRoom,
 		}
 	}
-	exhttp.WriteJSONResponse(w, http.StatusOK, resp)
+	if isV3Request(r) {
+		exhttp.WriteJSONResponse(w, http.StatusOK, &v3RespWhoami{RespWhoami: resp, LoginFlows: toV3LoginFlows(resp.LoginFlows).Flows})
+	} else {
+		exhttp.WriteJSONResponse(w, http.StatusOK, resp)
+	}
 }
 
 type RespLoginFlows struct {
@@ -392,9 +403,7 @@ type RespSubmitLogin struct {
 }
 
 func (prov *ProvisioningAPI) GetLoginFlows(w http.ResponseWriter, r *http.Request) {
-	exhttp.WriteJSONResponse(w, http.StatusOK, &RespLoginFlows{
-		Flows: prov.net.GetLoginFlows(),
-	})
+	writeLoginFlows(w, r, prov.net.GetLoginFlows())
 }
 
 func (prov *ProvisioningAPI) GetCapabilities(w http.ResponseWriter, r *http.Request) {

@@ -4,6 +4,20 @@ info:
   description: |-
     This is the provisioning API implemented in mautrix-go's bridgev2 package.
     It can be used with any bridge built on that package.
+
+    ## Versions
+
+    Endpoints that return login copy (`whoami`, `login/flows`, `login/start`,
+    `login/step` and `login/client_http`) have a v4 version, documented here.
+    v4 encodes login flow names and descriptions, step instructions, and field
+    names, descriptions and placeholders as
+    [LocalizableMessage](#/components/schemas/LocalizableMessage) objects, and
+    select options as [LoginInputOption](#/components/schemas/LoginInputOption)
+    objects. Their v3 versions are still served and return the message `text`
+    as a plain string and select options as a list of values.
+
+    Bridges without v4 return `M_UNRECOGNIZED`, so clients can fall back to
+    v3. A login started with one version can be continued with the other.
   license:
     name: Mozilla Public License Version 2.0
     url: https://github.com/mautrix/go/blob/main/LICENSE
@@ -21,7 +35,7 @@ tags:
 - name: misc
   description: Miscellaneous bridge operations
 paths:
-  /v3/whoami:
+  /v4/whoami:
     get:
       tags: [ auth ]
       summary: Get info about the bridge and your logins.
@@ -43,7 +57,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       security:
       - matrix_auth: [ ]
-  /v3/login/flows:
+  /v4/login/flows:
     get:
       tags: [ auth ]
       summary: Get the available login flows.
@@ -89,7 +103,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       security:
       - matrix_auth: [ ]
-  /v3/login/start/{flowID}:
+  /v4/login/start/{flowID}:
     post:
       tags: [ auth ]
       summary: Start a new login process.
@@ -97,7 +111,7 @@ paths:
         This endpoint starts a new login process, which is used to log into the bridge.
 
         The basic flow of the entire login, including calling this endpoint, is:
-        1. Call `GET /v3/login/flows` to get the list of available flows.
+        1. Call `GET /v4/login/flows` to get the list of available flows.
            If there's more than one flow, ask the user to pick which one they want to use.
         2. Call this endpoint with the chosen flow ID to start the login.
            The first login step will be returned.
@@ -164,7 +178,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       security:
       - matrix_auth: [ ]
-  /v3/login/step/{loginProcessID}/{stepID}/user_input:
+  /v4/login/step/{loginProcessID}/{stepID}/user_input:
     post:
       tags: [ auth ]
       summary: Submit user input in a login process.
@@ -194,7 +208,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       security:
       - matrix_auth: [ ]
-  /v3/login/step/{loginProcessID}/{stepID}/cookies:
+  /v4/login/step/{loginProcessID}/{stepID}/cookies:
     post:
       tags: [ auth ]
       summary: Submit extracted cookies in a login process.
@@ -224,7 +238,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       security:
       - matrix_auth: [ ]
-  /v3/login/client_http/{loginProcessID}/{txnID}/{reqID}:
+  /v4/login/client_http/{loginProcessID}/{txnID}/{reqID}:
     post:
       tags: [ auth ]
       summary: Submit an HTTP response executed by the client in a login process.
@@ -300,7 +314,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       security:
       - matrix_auth: [ ]
-  /v3/login/step/{loginProcessID}/{stepID}/webauthn:
+  /v4/login/step/{loginProcessID}/{stepID}/webauthn:
     post:
       tags: [ auth ]
       summary: Submit a WebAuthn response in a login process.
@@ -328,7 +342,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       security:
       - matrix_auth: [ ]
-  /v3/login/step/{loginProcessID}/{stepID}/display_and_wait:
+  /v4/login/step/{loginProcessID}/{stepID}/display_and_wait:
     post:
       tags: [ auth ]
       summary: Wait for the next step after displaying data to the user.
@@ -350,7 +364,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       security:
       - matrix_auth: [ ]
-  /v3/login/step/{loginProcessID}/{stepID}/cancel:
+  /v4/login/step/{loginProcessID}/{stepID}/cancel:
     post:
       tags: [ auth ]
       summary: Go back from a cancellable login step without cancelling the login process.
@@ -1046,9 +1060,8 @@ components:
           description: An opaque transaction ID for this step. This can be used for safely retrying steps.
           examples: [ bls_d9odvo93kqebp739hrmg ]
         instructions:
-          type: string
+          $ref: '#/components/schemas/LocalizableMessage'
           description: Human-readable instructions for completing this login step.
-          examples: [ Scan the QR code ]
       oneOf:
       - description: Display and wait login step
         required: [ type, display_and_wait ]
@@ -1105,19 +1118,16 @@ components:
                       description: The internal ID of the field. This must be used as the key in the object when submitting the data back to the bridge.
                       examples: [ uid, email, 2fa_password, meow ]
                     name:
-                      type: string
+                      $ref: '#/components/schemas/LocalizableMessage'
                       description: The name of the field shown to the user.
-                      examples: [ Username, Password, Phone number, 2FA code, Meow ]
                     description:
-                      type: string
+                      $ref: '#/components/schemas/LocalizableMessage'
                       description: A more detailed description of the field shown to the user.
-                      examples:
-                      - Include the country code with a +
                     default_value:
                       type: string
                       description: A default value that the client can pre-fill the field with.
                     placeholder:
-                      type: string
+                      $ref: '#/components/schemas/LocalizableMessage'
                       description: Placeholder text that the client can show in the field when it's empty. If not set, clients may use a default placeholder based on the field type.
                     autofill_domain:
                       type: string
@@ -1140,7 +1150,7 @@ components:
                       type: array
                       description: For fields of type select, the valid options.
                       items:
-                        type: string
+                        $ref: '#/components/schemas/LoginInputOption'
               attachments:
                 type: array
                 description: A list of media attachments to show the user alongside the form fields.
@@ -1338,21 +1348,61 @@ components:
         type: array
         items:
           type: string
+    LocalizableMessage:
+      type: object
+      description: |
+        A user-facing string. `text` is always the fully rendered English text
+        and can be displayed as-is. If `key` is set, clients that have their own
+        translation for the key can render it with `params` instead.
+      required: [ text ]
+      properties:
+        key:
+          type: string
+          description: |
+            Identifies the template the message was rendered from, in the form
+            `<namespace>:<id>`. Each project publishes its templates in a
+            catalog file. Missing if the message isn't localizable, e.g. when
+            the text comes from the remote network.
+          examples: [ "mautrix-signal:login.flow.qr.name" ]
+        text:
+          type: string
+          description: The fully rendered English text.
+          examples: [ QR code ]
+        params:
+          type: object
+          description: |
+            The values substituted into the template's `{name}` placeholders to
+            produce `text`. For plural templates, the catalog names the
+            parameter that holds the count.
+          additionalProperties:
+            oneOf:
+            - type: string
+            - type: integer
+          examples:
+          - phone: "+15550100"
+    LoginInputOption:
+      type: object
+      description: An option of a select field.
+      required: [ value, label ]
+      properties:
+        value:
+          type: string
+          description: The value to submit to the bridge when this option is chosen.
+          examples: [ sms ]
+        label:
+          $ref: '#/components/schemas/LocalizableMessage'
+          description: The label shown to the user.
     LoginFlow:
       type: object
       description: An individual login flow which can be used to sign into the remote network.
       required: [ name, description, id ]
       properties:
         name:
-          type: string
+          $ref: '#/components/schemas/LocalizableMessage'
           description: A human-readable name for the login flow.
-          examples:
-          - QR code
         description:
-          type: string
+          $ref: '#/components/schemas/LocalizableMessage'
           description: A human-readable description of the login flow.
-          examples:
-          - Log in by scanning a QR code on the Signal app
         id:
           type: string
           description: An internal ID that is passed to the /login/start call to start a login with this flow.
