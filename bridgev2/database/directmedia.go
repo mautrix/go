@@ -22,23 +22,24 @@ type EncryptedDirectMediaQuery struct {
 }
 
 type EncryptedDirectMedia struct {
-	BridgeID   networkid.BridgeID
-	MediaID    string
-	FLOEKey    string
-	FLOEHeader string
-	HandledAt  time.Time
+	BridgeID      networkid.BridgeID
+	MediaID       string
+	RemoteMediaID networkid.MediaID
+	FLOEKey       string
+	FLOEHeader    string
+	HandledAt     time.Time
 }
 
 const (
 	insertEncryptedDirectMediaQuery = `
-		INSERT INTO encrypted_direct_media (bridge_id, media_id, floe_key, floe_header, handled_at)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO encrypted_direct_media (bridge_id, media_id, remote_media_id, floe_key, floe_header, handled_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
 	`
 	markEncryptedDirectMediaHandledQuery = `
-		UPDATE encrypted_direct_media SET handled_at=$3, floe_key=NULL, floe_header=NULL WHERE bridge_id=$1 AND media_id=$2
+		UPDATE encrypted_direct_media SET handled_at=$3, remote_media_id=NULL, floe_key=NULL, floe_header=NULL WHERE bridge_id=$1 AND media_id=$2
 	`
 	getEncryptedDirectMediaQuery = `
-		SELECT bridge_id, media_id, floe_key, floe_header, handled_at
+		SELECT bridge_id, media_id, remote_media_id, floe_key, floe_header, handled_at
 		FROM encrypted_direct_media WHERE bridge_id=$1 AND media_id=$2
 	`
 )
@@ -59,22 +60,29 @@ func (edmq *EncryptedDirectMediaQuery) Get(ctx context.Context, mediaID string) 
 func (edm *EncryptedDirectMedia) Scan(row dbutil.Scannable) (*EncryptedDirectMedia, error) {
 	var handledAt sql.NullInt64
 	var floeKey, floeHeader sql.NullString
-	err := row.Scan(&edm.BridgeID, &edm.MediaID, &floeKey, &floeHeader, &handledAt)
+	var remoteMediaID []byte
+	err := row.Scan(&edm.BridgeID, &edm.MediaID, &remoteMediaID, &floeKey, &floeHeader, &handledAt)
 	if err != nil {
 		return nil, err
 	}
 	if handledAt.Int64 > 0 {
 		edm.HandledAt = time.Unix(0, handledAt.Int64)
 	}
+	edm.RemoteMediaID = networkid.MediaID(remoteMediaID)
 	edm.FLOEKey = floeKey.String
 	edm.FLOEHeader = floeHeader.String
 	return edm, nil
 }
 
 func (edm *EncryptedDirectMedia) sqlVariables() []any {
+	var remoteMediaID []byte
+	if len(edm.RemoteMediaID) > 0 {
+		remoteMediaID = edm.RemoteMediaID
+	}
 	return []any{
 		edm.BridgeID,
 		edm.MediaID,
+		remoteMediaID,
 		dbutil.StrPtr(edm.FLOEKey),
 		dbutil.StrPtr(edm.FLOEHeader),
 		dbutil.ConvertedPtr(edm.HandledAt, time.Time.UnixNano),
