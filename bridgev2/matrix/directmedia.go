@@ -34,7 +34,7 @@ const MediaIDPrefix = "\U0001F408"
 const EncryptedMediaIDPrefix = "\U0001F63C"
 const MediaIDTruncatedHashLength = 16
 const EncryptedMediaIDRandomPartLength = 8
-const ContentURIMaxLength = 255
+const ContentURIMaxLength = 511
 
 func init() {
 	if len(MediaIDPrefix) != len(EncryptedMediaIDPrefix) {
