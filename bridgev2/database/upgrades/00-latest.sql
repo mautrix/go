@@ -1,4 +1,4 @@
--- v0 -> v33 (compatible with v9+): Latest revision
+-- v0 -> v34 (compatible with v9+): Latest revision
 CREATE TABLE "user" (
 	bridge_id       TEXT NOT NULL,
 	mxid            TEXT NOT NULL,
@@ -236,8 +236,9 @@ CREATE TABLE public_media (
 );
 
 CREATE TABLE encrypted_direct_media (
-	bridge_id   TEXT NOT NULL,
-	media_id    TEXT NOT NULL,
+	bridge_id   TEXT  NOT NULL,
+	media_id    TEXT  NOT NULL,
+	internal_id bytea NOT NULL,
 	floe_key    TEXT,
 	floe_header TEXT,
 	handled_at  BIGINT,
