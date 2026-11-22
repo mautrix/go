@@ -238,7 +238,7 @@ CREATE TABLE public_media (
 CREATE TABLE encrypted_direct_media (
 	bridge_id   TEXT  NOT NULL,
 	media_id    TEXT  NOT NULL,
-	internal_id bytea NOT NULL,
+	internal_id bytea,
 	floe_key    TEXT,
 	floe_header TEXT,
 	handled_at  BIGINT,
