@@ -164,7 +164,7 @@ func (br *Connector) ParseContentURI(ctx context.Context, mxc id.ContentURIStrin
 func (br *Connector) parseMediaID(mediaIDStr string) (networkid.MediaID, bool, error) {
 	mediaID, err := base64.RawURLEncoding.DecodeString(mediaIDStr)
 	var encrypted bool
-	minLength := len(MediaIDPrefix) + MediaIDTruncatedHashLength + 1
+	minLength := len(MediaIDPrefix) + MediaIDTruncatedHashLength
 	if err != nil || len(mediaID) < minLength {
 		return nil, false, mediaproxy.ErrInvalidMediaIDSyntax
 	}
@@ -218,6 +218,8 @@ func (br *Connector) getDirectMedia(ctx context.Context, mediaIDStr string, para
 			FLOEKey:    meta.FLOEKey,
 			FLOEHeader: meta.FLOEHeader,
 		}).ToStandard()
+	} else if len(remoteMediaID) == 0 {
+		return nil, fmt.Errorf("no remote media ID found in unencrypted direct media ID")
 	}
 	resp, err := br.Bridge.Network.(bridgev2.DirectMediableNetwork).Download(ctx, remoteMediaID, params)
 	if err != nil {
