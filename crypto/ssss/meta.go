@@ -150,8 +150,8 @@ func (pd *PassphraseMetadata) GetKey(passphrase string) ([]byte, error) {
 	}
 
 	bits := 256
-	if pd.Bits != 0 {
-		bits = pd.Bits
+	if pd.Bits != 0 && pd.Bits != 256 {
+		return nil, fmt.Errorf("%w: invalid bits value %d", ErrCorruptedKeyMetadata, pd.Bits)
 	}
 
 	return utils.PBKDF2SHA512([]byte(passphrase), []byte(pd.Salt), pd.Iterations, bits), nil
