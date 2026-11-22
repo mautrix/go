@@ -7,7 +7,7 @@
 package federation
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"net/http"
 	"strconv"
 	"time"
@@ -134,7 +134,7 @@ type PostQueryKeysResponse struct {
 // https://spec.matrix.org/v1.9/server-server-api/#post_matrixkeyv2query
 func (ks *KeyServer) PostQueryKeys(w http.ResponseWriter, r *http.Request) {
 	var req ReqQueryKeys
-	err := json.NewDecoder(r.Body).Decode(&req)
+	err := json.UnmarshalRead(r.Body, &req)
 	if err != nil {
 		mautrix.MBadJSON.WithMessage("failed to parse request: %v", err).Write(w)
 		return

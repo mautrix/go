@@ -9,7 +9,8 @@ package federation
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -99,8 +100,8 @@ func (c *Client) QueryKeys(ctx context.Context, serverName string, req *ReqQuery
 	return
 }
 
-type PDU = json.RawMessage
-type EDU = json.RawMessage
+type PDU = jsontext.Value
+type EDU = jsontext.Value
 
 type ReqSendTransaction struct {
 	Destination string `json:"destination"`
@@ -619,7 +620,7 @@ func (c *Client) compileRequest(ctx context.Context, params RequestParams) (*htt
 		Host:   params.ServerName,
 	}, params.Path.FullPath()...)
 	reqURL.RawQuery = params.Query.Encode()
-	var reqJSON json.RawMessage
+	var reqJSON jsontext.Value
 	var reqBody io.Reader
 	if params.RequestJSON != nil {
 		var err error
@@ -666,11 +667,11 @@ func (c *Client) compileRequest(ctx context.Context, params RequestParams) (*htt
 }
 
 type signableRequest struct {
-	Method      string          `json:"method"`
-	URI         string          `json:"uri"`
-	Origin      string          `json:"origin"`
-	Destination string          `json:"destination"`
-	Content     json.RawMessage `json:"content,omitempty"`
+	Method      string         `json:"method"`
+	URI         string         `json:"uri"`
+	Origin      string         `json:"origin"`
+	Destination string         `json:"destination"`
+	Content     jsontext.Value `json:"content,omitempty"`
 }
 
 func (r *signableRequest) Verify(key id.SigningKey, sig string) error {
