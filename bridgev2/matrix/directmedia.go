@@ -103,31 +103,43 @@ func (br *Connector) generateContentURIInternal(mediaID networkid.MediaID, encry
 	return mxc, nil
 }
 
+func (br *Connector) generateEncryptedContentURI(ctx context.Context, mediaID networkid.MediaID, allowRetry bool) (*event.EncryptedFileInfo, error) {
+	mxc, err := br.generateContentURIInternal(nil, true)
+	if err != nil {
+		return nil, err
+	}
+	mediaIDStr := exerrors.Must(mxc.Parse()).FileID
+	mediaIDStr = strings.TrimPrefix(mediaIDStr, br.Config.DirectMedia.MediaIDPrefix)
+	floeFile := attachment.NewFLOEFile()
+	err = br.Bridge.DB.EncryptedDirectMedia.Put(ctx, &database.EncryptedDirectMedia{
+		MediaID:    mediaIDStr,
+		InternalID: mediaID,
+		FLOEKey:    floeFile.FLOEKey,
+		FLOEHeader: floeFile.FLOEHeader,
+	})
+	if err != nil {
+		if ctx.Err() == nil && allowRetry {
+			// A single encrypted bridge should never grow big enough to get conflicts on a 64-bit random number,
+			// but retry once just to be extra safe.
+			zerolog.Ctx(ctx).Warn().Err(err).
+				Msg("Failed to save encrypted direct media row, retrying")
+			return br.generateEncryptedContentURI(ctx, mediaID, false)
+		}
+		return nil, fmt.Errorf("failed to store encryption info for media ID: %w", err)
+	}
+	return &event.EncryptedFileInfo{
+		EncryptedFile: *floeFile.ToStandard(),
+		URL:           mxc,
+	}, nil
+}
+
 func (br *Connector) GenerateContentURIWithCrypto(ctx context.Context, roomID id.RoomID, mediaID networkid.MediaID) (id.ContentURIString, *event.EncryptedFileInfo, error) {
 	if roomID != "" && br.Config.DirectMedia.Encrypted {
 		if encrypted, err := br.isEncrypted(ctx, roomID); err != nil {
 			return "", nil, fmt.Errorf("failed to check if room is encrypted: %w", err)
 		} else if encrypted {
-			mxc, err := br.generateContentURIInternal(nil, true)
-			if err != nil {
-				return "", nil, err
-			}
-			mediaIDStr := exerrors.Must(mxc.Parse()).FileID
-			mediaIDStr = strings.TrimPrefix(mediaIDStr, br.Config.DirectMedia.MediaIDPrefix)
-			floeFile := attachment.NewFLOEFile()
-			err = br.Bridge.DB.EncryptedDirectMedia.Put(ctx, &database.EncryptedDirectMedia{
-				MediaID:    mediaIDStr,
-				InternalID: mediaID,
-				FLOEKey:    floeFile.FLOEKey,
-				FLOEHeader: floeFile.FLOEHeader,
-			})
-			if err != nil {
-				return "", nil, fmt.Errorf("failed to store encryption info for media ID: %w", err)
-			}
-			return "", &event.EncryptedFileInfo{
-				EncryptedFile: *floeFile.ToStandard(),
-				URL:           mxc,
-			}, nil
+			file, err := br.generateEncryptedContentURI(ctx, mediaID, true)
+			return "", file, err
 		}
 	}
 	mxc, err := br.generateContentURIInternal(mediaID, false)
