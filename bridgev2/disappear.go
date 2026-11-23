@@ -31,7 +31,7 @@ const DisappearCheckInterval = 1 * time.Hour
 
 func (dl *DisappearLoop) Start() {
 	log := dl.br.Log.With().Str("component", "disappear loop").Logger()
-	ctx, stop := context.WithCancel(log.WithContext(context.Background()))
+	ctx, stop := context.WithCancel(log.WithContext(dl.br.BackgroundCtx))
 	if oldStop := dl.stop.Swap(&stop); oldStop != nil {
 		(*oldStop)()
 	}
