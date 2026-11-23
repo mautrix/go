@@ -82,8 +82,7 @@ func (rr *ReadReceipt) IsThread() bool {
 
 func (rr *ReadReceipt) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 	var parsed map[string]any
-	// Hacky compatibility hack against crappy clients that send double-encoded read receipts.
-	// TODO is this actually needed? clients can't currently set custom content in receipts 🤔
+	// Compatibility hack against very old read receipts sent by broken clients that broken servers accepted.
 	if dec.PeekKind() == jsontext.KindString {
 		var strData string
 		err := json.UnmarshalDecode(dec, &strData)
