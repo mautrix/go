@@ -12,13 +12,12 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/binary"
 	"fmt"
-	"math/rand/v2"
 	"strings"
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exerrors"
+	"go.mau.fi/util/random"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
@@ -87,7 +86,7 @@ func (br *Connector) generateContentURIInternal(mediaID networkid.MediaID, encry
 	buf := make([]byte, prefixLen+len(mediaID)+MediaIDTruncatedHashLength)
 	if encrypted {
 		copy(buf, EncryptedMediaIDPrefix)
-		binary.BigEndian.PutUint64(buf[len(EncryptedMediaIDPrefix):len(EncryptedMediaIDPrefix)+EncryptedMediaIDRandomPartLength], rand.Uint64())
+		copy(buf[len(EncryptedMediaIDPrefix):], random.Bytes(EncryptedMediaIDRandomPartLength))
 	} else {
 		copy(buf, MediaIDPrefix)
 	}
@@ -104,30 +103,43 @@ func (br *Connector) generateContentURIInternal(mediaID networkid.MediaID, encry
 	return mxc, nil
 }
 
+func (br *Connector) generateEncryptedContentURI(ctx context.Context, mediaID networkid.MediaID, allowRetry bool) (*event.EncryptedFileInfo, error) {
+	mxc, err := br.generateContentURIInternal(nil, true)
+	if err != nil {
+		return nil, err
+	}
+	mediaIDStr := exerrors.Must(mxc.Parse()).FileID
+	mediaIDStr = strings.TrimPrefix(mediaIDStr, br.Config.DirectMedia.MediaIDPrefix)
+	floeFile := attachment.NewFLOEFile()
+	err = br.Bridge.DB.EncryptedDirectMedia.Put(ctx, &database.EncryptedDirectMedia{
+		MediaID:    mediaIDStr,
+		InternalID: mediaID,
+		FLOEKey:    floeFile.FLOEKey,
+		FLOEHeader: floeFile.FLOEHeader,
+	})
+	if err != nil {
+		if ctx.Err() == nil && allowRetry {
+			// A single encrypted bridge should never grow big enough to get conflicts on a 64-bit random number,
+			// but retry once just to be extra safe.
+			zerolog.Ctx(ctx).Warn().Err(err).
+				Msg("Failed to save encrypted direct media row, retrying")
+			return br.generateEncryptedContentURI(ctx, mediaID, false)
+		}
+		return nil, fmt.Errorf("failed to store encryption info for media ID: %w", err)
+	}
+	return &event.EncryptedFileInfo{
+		EncryptedFile: *floeFile.ToStandard(),
+		URL:           mxc,
+	}, nil
+}
+
 func (br *Connector) GenerateContentURIWithCrypto(ctx context.Context, roomID id.RoomID, mediaID networkid.MediaID) (id.ContentURIString, *event.EncryptedFileInfo, error) {
 	if roomID != "" && br.Config.DirectMedia.Encrypted {
 		if encrypted, err := br.isEncrypted(ctx, roomID); err != nil {
 			return "", nil, fmt.Errorf("failed to check if room is encrypted: %w", err)
 		} else if encrypted {
-			mxc, err := br.generateContentURIInternal(mediaID, true)
-			if err != nil {
-				return "", nil, err
-			}
-			mediaIDStr := exerrors.Must(mxc.Parse()).FileID
-			mediaIDStr = strings.TrimPrefix(mediaIDStr, br.Config.DirectMedia.MediaIDPrefix)
-			floeFile := attachment.NewFLOEFile()
-			err = br.Bridge.DB.EncryptedDirectMedia.Put(ctx, &database.EncryptedDirectMedia{
-				MediaID:    mediaIDStr,
-				FLOEKey:    floeFile.FLOEKey,
-				FLOEHeader: floeFile.FLOEHeader,
-			})
-			if err != nil {
-				return "", nil, fmt.Errorf("failed to store encryption info for media ID: %w", err)
-			}
-			return "", &event.EncryptedFileInfo{
-				EncryptedFile: *floeFile.ToStandard(),
-				URL:           mxc,
-			}, nil
+			file, err := br.generateEncryptedContentURI(ctx, mediaID, true)
+			return "", file, err
 		}
 	}
 	mxc, err := br.generateContentURIInternal(mediaID, false)
@@ -152,7 +164,7 @@ func (br *Connector) ParseContentURI(ctx context.Context, mxc id.ContentURIStrin
 func (br *Connector) parseMediaID(mediaIDStr string) (networkid.MediaID, bool, error) {
 	mediaID, err := base64.RawURLEncoding.DecodeString(mediaIDStr)
 	var encrypted bool
-	minLength := len(MediaIDPrefix) + MediaIDTruncatedHashLength + 1
+	minLength := len(MediaIDPrefix) + MediaIDTruncatedHashLength
 	if err != nil || len(mediaID) < minLength {
 		return nil, false, mediaproxy.ErrInvalidMediaIDSyntax
 	}
@@ -195,11 +207,19 @@ func (br *Connector) getDirectMedia(ctx context.Context, mediaIDStr string, para
 				Msg("Got query for encrypted direct media that was already handled")
 			return nil, fmt.Errorf("no key found for encrypted media ID")
 		}
+		if len(remoteMediaID) == 0 {
+			remoteMediaID = meta.InternalID
+			if len(remoteMediaID) == 0 {
+				return nil, fmt.Errorf("no remote media ID stored for encrypted media ID")
+			}
+		}
 		crypto = (&attachment.FLOEFile{
 			Version:    attachment.VersionBeeperFLOE,
 			FLOEKey:    meta.FLOEKey,
 			FLOEHeader: meta.FLOEHeader,
 		}).ToStandard()
+	} else if len(remoteMediaID) == 0 {
+		return nil, fmt.Errorf("no remote media ID found in unencrypted direct media ID")
 	}
 	resp, err := br.Bridge.Network.(bridgev2.DirectMediableNetwork).Download(ctx, remoteMediaID, params)
 	if err != nil {
