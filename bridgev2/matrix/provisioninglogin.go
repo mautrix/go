@@ -92,10 +92,13 @@ const (
 	completedLoginGenerationSize = 128
 )
 
+const loginTimeout = 30 * time.Minute
+
 var ErrNilStep = errors.New("bridge returned nil step with no error")
 var ErrTooManyLogins = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.TOO_MANY_LOGINS", Err: "Maximum number of logins exceeded", StatusCode: http.StatusForbidden}
 var ErrLoginCancelled = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.LOGIN_CANCELLED", Err: "Login process was cancelled", StatusCode: http.StatusGone}
 var ErrLoginTimedOut = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.LOGIN_TIMED_OUT", Err: "Login process timed out", StatusCode: http.StatusGone}
+var ErrLoginLost = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.LOGIN_LOST", Err: "Login process may have been lost because the bridge restarted", StatusCode: http.StatusGone}
 var ErrLoginAlreadyFinished = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.LOGIN_ALREADY_FINISHED", Err: "Login process was already finished", StatusCode: http.StatusGone}
 
 func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Request) {
@@ -133,7 +136,7 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	loginID := xid.New().String()
-	ctx, cancel := context.WithTimeout(prov.br.Bridge.BackgroundCtx, 30*time.Minute)
+	ctx, cancel := context.WithTimeout(prov.br.Bridge.BackgroundCtx, loginTimeout)
 	ctx = user.Log.With().
 		Str("login_id", loginID).
 		Logger().WithContext(ctx)
@@ -224,6 +227,13 @@ func (prov *ProvisioningAPI) getLogin(w http.ResponseWriter, r *http.Request, al
 				},
 			},
 		})
+		return nil
+	}
+	// Logins time out after 30 minutes, so an ID from before the restart but newer than that was still running.
+	if parsedID, err := xid.FromString(loginID); login == nil && err == nil &&
+		parsedID.Time().Before(prov.startedAt) && parsedID.Time().After(prov.startedAt.Add(-loginTimeout)) {
+		zerolog.Ctx(r.Context()).Warn().Str("login_id", loginID).Msg("Login was started before the bridge restarted")
+		ErrLoginLost.Write(w)
 		return nil
 	}
 	zerolog.Ctx(r.Context()).Warn().Str("login_id", loginID).Msg("Login not found")

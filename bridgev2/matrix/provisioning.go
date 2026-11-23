@@ -66,6 +66,7 @@ type ProvisioningAPI struct {
 	completedLogins          map[string]*completedLoginData
 	prevCompletedLogins      map[string]*completedLoginData
 	completedLoginsRotatedAt time.Time
+	startedAt                time.Time
 	loginsLock               sync.RWMutex
 
 	matrixAuthCache     map[string]matrixAuthCacheEntry
@@ -129,6 +130,8 @@ func (prov *ProvisioningAPI) Init() {
 	prov.logins = make(map[string]*ProvLogin)
 	prov.completedLogins = make(map[string]*completedLoginData)
 	prov.completedLoginsRotatedAt = time.Now()
+	// Login IDs are xids, which only have second precision.
+	prov.startedAt = time.Now().Truncate(time.Second)
 	prov.net = prov.br.Bridge.Network
 	prov.log = prov.br.Log.With().Str("component", "provisioning").Logger()
 	prov.fedClient = federation.NewClient("", nil, nil, exhttp.SensibleClientSettings.WithGlobalTimeout(20*time.Second))
