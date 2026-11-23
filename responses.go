@@ -183,11 +183,9 @@ type RespUserDisplayName struct {
 
 type RespUserProfile struct {
 	DisplayName string         `json:"displayname,omitempty"`
-	AvatarURL   id.ContentURI  `json:"avatar_url"`
-	Extra       map[string]any `json:"-"`
+	AvatarURL   id.ContentURI  `json:"avatar_url,omitzero"`
+	Extra       map[string]any `json:",embed,unknown"`
 }
-
-type marshalableUserProfile RespUserProfile
 
 func (r *RespUserProfile) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 	err := json.UnmarshalDecode(dec, &r.Extra)
@@ -202,24 +200,6 @@ func (r *RespUserProfile) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 	delete(r.Extra, "displayname")
 	delete(r.Extra, "avatar_url")
 	return nil
-}
-
-func (r *RespUserProfile) MarshalJSONTo(enc *jsontext.Encoder) error {
-	if len(r.Extra) == 0 {
-		return json.MarshalEncode(enc, (*marshalableUserProfile)(r))
-	}
-	marshalMap := maps.Clone(r.Extra)
-	if r.DisplayName != "" {
-		marshalMap["displayname"] = r.DisplayName
-	} else {
-		delete(marshalMap, "displayname")
-	}
-	if !r.AvatarURL.IsEmpty() {
-		marshalMap["avatar_url"] = r.AvatarURL.String()
-	} else {
-		delete(marshalMap, "avatar_url")
-	}
-	return json.MarshalEncode(enc, marshalMap)
 }
 
 type RespSearchUserDirectory struct {
@@ -244,11 +224,13 @@ func (r *UserDirectoryEntry) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 }
 
 func (r *UserDirectoryEntry) MarshalJSONTo(enc *jsontext.Encoder) error {
-	if r.Extra == nil {
-		r.Extra = make(map[string]any)
+	profile := r.RespUserProfile
+	profile.Extra = maps.Clone(r.Extra)
+	if profile.Extra == nil {
+		profile.Extra = make(map[string]any, 1)
 	}
-	r.Extra["user_id"] = r.UserID.String()
-	return r.RespUserProfile.MarshalJSONTo(enc)
+	profile.Extra["user_id"] = r.UserID
+	return json.MarshalEncode(enc, &profile)
 }
 
 type RespMutualRooms struct {
