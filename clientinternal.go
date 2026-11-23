@@ -22,8 +22,8 @@ import (
 type ClientInternals Client
 
 // Deprecated: client internals should be used carefully and only when necessary.
-func (client *Client) Internal() *ClientInternals {
-	return (*ClientInternals)(client)
+func (cli *Client) Internal() *ClientInternals {
+	return (*ClientInternals)(cli)
 }
 
 func (cli *ClientInternals) IncrementSyncingID() uint32 {
