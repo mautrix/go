@@ -8,7 +8,6 @@ package event
 
 import (
 	"encoding/json/jsontext"
-	"encoding/json/v2"
 	"time"
 
 	"go.mau.fi/util/jsontime"
@@ -36,87 +35,6 @@ type Event struct {
 
 	ToUserID   id.UserID   `json:"to_user_id,omitempty"`   // The user ID that the to-device event was sent to. Only present in MSC2409 appservice transactions.
 	ToDeviceID id.DeviceID `json:"to_device_id,omitempty"` // The device ID that the to-device event was sent to. Only present in MSC2409 appservice transactions.
-}
-
-type eventForMarshaling struct {
-	StateKey  *string    `json:"state_key,omitzero"`
-	Sender    id.UserID  `json:"sender,omitempty"`
-	Type      Type       `json:"type"`
-	Timestamp int64      `json:"origin_server_ts,omitzero"`
-	ID        id.EventID `json:"event_id,omitempty"`
-	RoomID    id.RoomID  `json:"room_id,omitempty"`
-	Content   Content    `json:"content"`
-	Redacts   id.EventID `json:"redacts,omitempty"`
-	Unsigned  *Unsigned  `json:"unsigned,omitzero"`
-
-	Sticky *Sticky `json:"msc4354_sticky,omitzero"`
-
-	PrevContent   *Content    `json:"prev_content,omitzero"`
-	ReplacesState *id.EventID `json:"replaces_state,omitzero"`
-
-	Unknown jsontext.Value `json:",embed,unknown"`
-
-	ToUserID   id.UserID   `json:"to_user_id,omitempty"`
-	ToDeviceID id.DeviceID `json:"to_device_id,omitempty"`
-}
-
-// UnmarshalJSON unmarshals the event, including moving prev_content from the top level to inside unsigned.
-func (evt *Event) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
-	var efm eventForMarshaling
-	err := json.UnmarshalDecode(dec, &efm)
-	if err != nil {
-		return err
-	}
-	evt.StateKey = efm.StateKey
-	evt.Sender = efm.Sender
-	evt.Type = efm.Type
-	evt.Timestamp = efm.Timestamp
-	evt.ID = efm.ID
-	evt.RoomID = efm.RoomID
-	evt.Content = efm.Content
-	evt.Redacts = efm.Redacts
-	evt.Sticky = efm.Sticky
-	if efm.Unsigned != nil {
-		evt.Unsigned = *efm.Unsigned
-	}
-	if efm.PrevContent != nil && evt.Unsigned.PrevContent == nil {
-		evt.Unsigned.PrevContent = efm.PrevContent
-	}
-	if efm.ReplacesState != nil && *efm.ReplacesState != "" && evt.Unsigned.ReplacesState == "" {
-		evt.Unsigned.ReplacesState = *efm.ReplacesState
-	}
-	evt.Unknown = efm.Unknown
-	evt.ToUserID = efm.ToUserID
-	evt.ToDeviceID = efm.ToDeviceID
-	return nil
-}
-
-// MarshalJSON marshals the event, including omitting the unsigned field if it's empty.
-//
-// This is necessary because Unsigned is not a pointer (for convenience reasons),
-// and encoding/json doesn't know how to check if a non-pointer struct is empty.
-//
-// TODO(tulir): maybe it makes more sense to make Unsigned a pointer and make an easy and safe way to access it?
-func (evt *Event) MarshalJSONTo(enc *jsontext.Encoder) error {
-	unsigned := &evt.Unsigned
-	if unsigned.IsEmpty() {
-		unsigned = nil
-	}
-	return json.MarshalEncode(enc, &eventForMarshaling{
-		StateKey:   evt.StateKey,
-		Sender:     evt.Sender,
-		Type:       evt.Type,
-		Timestamp:  evt.Timestamp,
-		ID:         evt.ID,
-		RoomID:     evt.RoomID,
-		Content:    evt.Content,
-		Redacts:    evt.Redacts,
-		Unsigned:   unsigned,
-		Sticky:     evt.Sticky,
-		Unknown:    evt.Unknown,
-		ToUserID:   evt.ToUserID,
-		ToDeviceID: evt.ToDeviceID,
-	})
 }
 
 type Sticky struct {
