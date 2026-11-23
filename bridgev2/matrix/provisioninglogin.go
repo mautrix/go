@@ -98,7 +98,7 @@ var ErrNilStep = errors.New("bridge returned nil step with no error")
 var ErrTooManyLogins = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.TOO_MANY_LOGINS", Err: "Maximum number of logins exceeded", StatusCode: http.StatusForbidden}
 var ErrLoginCancelled = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.LOGIN_CANCELLED", Err: "Login process was cancelled", StatusCode: http.StatusGone}
 var ErrLoginTimedOut = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.LOGIN_TIMED_OUT", Err: "Login process timed out", StatusCode: http.StatusGone}
-var ErrLoginLost = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.LOGIN_LOST", Err: "Login process was lost because the bridge restarted", StatusCode: http.StatusGone}
+var ErrLoginLost = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.LOGIN_LOST", Err: "Login process may have been lost because the bridge restarted", StatusCode: http.StatusGone}
 var ErrLoginAlreadyFinished = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.LOGIN_ALREADY_FINISHED", Err: "Login process was already finished", StatusCode: http.StatusGone}
 
 func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Request) {
