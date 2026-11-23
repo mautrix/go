@@ -371,6 +371,10 @@ func (cli *Client) RequestStart(req *http.Request) {
 	}
 }
 
+type internalContextKey int
+
+const defaultMaxAttemptsContextKey internalContextKey = 0
+
 // WithMaxRetries updates the context to set the maximum number of retries for any HTTP requests made with the context.
 //
 // 0 means the request will only be attempted once and will not be retried.
@@ -561,6 +565,7 @@ func (cli *Client) MakeFullRequestWithResp(ctx context.Context, params FullReque
 			params.MaxAttempts = maxAttempts
 		} else {
 			params.MaxAttempts = 1 + cli.DefaultHTTPRetries
+			ctx = context.WithValue(ctx, defaultMaxAttemptsContextKey, true)
 		}
 	}
 	if params.BackoffDuration == 0 {
@@ -903,7 +908,9 @@ func (cli *Client) executeCompiledRequest(
 		if errors.Is(attemptCause, ErrContextCancelRetry) {
 			retryCause = attemptCause
 		}
-		retryTriggered := errors.Is(attemptCause, ErrContextCancelRetry)
+		// Requests that explicitly asked for a single attempt aren't replayed on a retry trigger either.
+		retryTriggered := errors.Is(attemptCause, ErrContextCancelRetry) &&
+			(retries > 0 || origCtx.Value(defaultMaxAttemptsContextKey) != nil)
 		if retryTriggered || (retries > 0 && !errors.Is(err, context.Canceled)) {
 			return cli.doRetry(
 				origCtx, req, retryCause, retries, backoff, responseJSON, handler, dontReadResponse, sizeLimit, client,
