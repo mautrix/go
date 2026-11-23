@@ -7,7 +7,7 @@
 package event
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"time"
 
 	"maunium.net/go/mautrix/id"

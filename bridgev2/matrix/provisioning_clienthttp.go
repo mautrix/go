@@ -10,7 +10,8 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -32,12 +33,12 @@ var _ http.RoundTripper = (*ProvLogin)(nil)
 const maxClientHTTPResponseSize = 10 * 1024 * 1024
 
 func decodeGzippedClientHTTPResponse(body io.Reader, resp *bridgev2.LoginClientHTTPResponse) error {
-	decoder := json.NewDecoder(body)
-	err := decoder.Decode(resp)
+	decoder := jsontext.NewDecoder(body)
+	err := json.UnmarshalDecode(decoder, resp)
 	if err != nil {
 		return err
 	}
-	gzipBody, err := gzip.NewReader(io.MultiReader(decoder.Buffered(), body))
+	gzipBody, err := gzip.NewReader(io.MultiReader(bytes.NewReader(decoder.UnreadBuffer()), body))
 	if err != nil {
 		return err
 	}
@@ -65,7 +66,7 @@ func (prov *ProvisioningAPI) PostLoginClientHTTP(w http.ResponseWriter, r *http.
 	if r.Header.Get("Content-Type") == bridgev2.ClientHTTPResponseGzipContentType {
 		err = decodeGzippedClientHTTPResponse(body, &resp)
 	} else {
-		err = json.NewDecoder(body).Decode(&resp)
+		err = json.UnmarshalRead(body, &resp)
 	}
 	if err != nil {
 		log.Err(err).Msg("Failed to decode request body")

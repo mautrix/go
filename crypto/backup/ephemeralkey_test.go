@@ -10,7 +10,7 @@ import (
 	"crypto/ecdh"
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"testing"
 

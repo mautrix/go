@@ -7,7 +7,8 @@
 package event
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 
 	"go.mau.fi/util/jsonbytes"
@@ -42,15 +43,15 @@ type EncryptedEventContent struct {
 	// Only present for beeper stream events
 	IV jsonbytes.UnpaddedBytes `json:"iv,omitempty"`
 
-	Ciphertext json.RawMessage `json:"ciphertext"`
+	Ciphertext jsontext.Value `json:"ciphertext"`
 
 	MegolmCiphertext []byte `json:"-"`
 	// Only present for beeper stream events
 	BeeperStreamCiphertext jsonbytes.UnpaddedBytes `json:"-"`
 	OlmCiphertext          OlmCiphertexts          `json:"-"`
 
-	RelatesTo *RelatesTo `json:"m.relates_to,omitempty"`
-	Mentions  *Mentions  `json:"m.mentions,omitempty"`
+	RelatesTo *RelatesTo `json:"m.relates_to,omitzero"`
+	Mentions  *Mentions  `json:"m.mentions,omitzero"`
 }
 
 type OlmCiphertexts map[id.Curve25519]struct {
@@ -106,7 +107,7 @@ type RoomKeyEventContent struct {
 	RoomID        id.RoomID    `json:"room_id"`
 	SessionID     id.SessionID `json:"session_id"`
 	SessionKey    string       `json:"session_key"`
-	SharedHistory *bool        `json:"shared_history,omitempty"`
+	SharedHistory *bool        `json:"shared_history,omitzero"`
 
 	MaxAge      int64 `json:"com.beeper.max_age_ms,omitzero"`
 	MaxMessages int   `json:"com.beeper.max_messages,omitzero"`

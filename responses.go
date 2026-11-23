@@ -2,7 +2,7 @@ package mautrix
 
 import (
 	"bytes"
-	"encoding/json"
+	"encoding/json/v2"
 	"maps"
 	"reflect"
 	"slices"
@@ -315,7 +315,7 @@ type RespLogin struct {
 	AccessToken string           `json:"access_token"`
 	DeviceID    id.DeviceID      `json:"device_id"`
 	UserID      id.UserID        `json:"user_id"`
-	WellKnown   *ClientWellKnown `json:"well_known,omitempty"`
+	WellKnown   *ClientWellKnown `json:"well_known,omitzero"`
 
 	RefreshToken string `json:"refresh_token,omitempty"`
 	ExpiresInMS  int64  `json:"expires_in_ms,omitzero"`
@@ -340,8 +340,8 @@ type RespMembers struct {
 
 type LazyLoadSummary struct {
 	Heroes             []id.UserID `json:"m.heroes,omitempty"`
-	JoinedMemberCount  *int        `json:"m.joined_member_count,omitempty"`
-	InvitedMemberCount *int        `json:"m.invited_member_count,omitempty"`
+	JoinedMemberCount  *int        `json:"m.joined_member_count,omitzero"`
+	InvitedMemberCount *int        `json:"m.invited_member_count,omitzero"`
 }
 
 func (lls *LazyLoadSummary) IsZero() bool {
@@ -435,30 +435,30 @@ func (oc OTKCount) IsZero() bool {
 type SyncLeftRoom struct {
 	Summary    LazyLoadSummary `json:"summary,omitzero"`
 	State      SyncEventsList  `json:"state,omitzero"`
-	StateAfter *SyncEventsList `json:"state_after,omitempty"`
+	StateAfter *SyncEventsList `json:"state_after,omitzero"`
 	Timeline   SyncTimeline    `json:"timeline,omitzero"`
 }
 
 type BeeperInboxPreviewEvent struct {
 	EventID   id.EventID         `json:"event_id"`
 	Timestamp jsontime.UnixMilli `json:"origin_server_ts"`
-	Event     *event.Event       `json:"event,omitempty"`
+	Event     *event.Event       `json:"event,omitzero"`
 }
 
 type SyncJoinedRoom struct {
 	Summary     LazyLoadSummary `json:"summary,omitzero"`
 	State       SyncEventsList  `json:"state,omitzero"`
-	StateAfter  *SyncEventsList `json:"state_after,omitempty"`
+	StateAfter  *SyncEventsList `json:"state_after,omitzero"`
 	Timeline    SyncTimeline    `json:"timeline,omitzero"`
 	Ephemeral   SyncEventsList  `json:"ephemeral,omitzero"`
 	AccountData SyncEventsList  `json:"account_data,omitzero"`
 	Sticky      SyncEventsList  `json:"msc4354_sticky,omitzero"`
 
-	UnreadNotifications *UnreadNotificationCounts `json:"unread_notifications,omitempty"`
+	UnreadNotifications *UnreadNotificationCounts `json:"unread_notifications,omitzero"`
 	// https://github.com/matrix-org/matrix-spec-proposals/pull/2654
-	MSC2654UnreadCount *int `json:"org.matrix.msc2654.unread_count,omitempty"`
+	MSC2654UnreadCount *int `json:"org.matrix.msc2654.unread_count,omitzero"`
 	// Beeper extension
-	BeeperInboxPreview *BeeperInboxPreviewEvent `json:"com.beeper.inbox.preview,omitempty"`
+	BeeperInboxPreview *BeeperInboxPreviewEvent `json:"com.beeper.inbox.preview,omitzero"`
 }
 
 type UnreadNotificationCounts struct {
@@ -592,14 +592,14 @@ type RespBeeperBatchSend struct {
 
 // RespCapabilities is the JSON response for https://spec.matrix.org/v1.3/client-server-api/#get_matrixclientv3capabilities
 type RespCapabilities struct {
-	RoomVersions              *CapRoomVersions              `json:"m.room_versions,omitempty"`
-	ChangePassword            *CapBooleanTrue               `json:"m.change_password,omitempty"`
-	SetDisplayname            *CapBooleanTrue               `json:"m.set_displayname,omitempty"`
-	SetAvatarURL              *CapBooleanTrue               `json:"m.set_avatar_url,omitempty"`
-	ThreePIDChanges           *CapBooleanTrue               `json:"m.3pid_changes,omitempty"`
-	GetLoginToken             *CapBooleanTrue               `json:"m.get_login_token,omitempty"`
-	WebPush                   *CapWebPush                   `json:"org.matrix.msc4174.webpush,omitempty"`
-	UnstableAccountModeration *CapUnstableAccountModeration `json:"uk.timedout.msc4323,omitempty"`
+	RoomVersions              *CapRoomVersions              `json:"m.room_versions,omitzero"`
+	ChangePassword            *CapBooleanTrue               `json:"m.change_password,omitzero"`
+	SetDisplayname            *CapBooleanTrue               `json:"m.set_displayname,omitzero"`
+	SetAvatarURL              *CapBooleanTrue               `json:"m.set_avatar_url,omitzero"`
+	ThreePIDChanges           *CapBooleanTrue               `json:"m.3pid_changes,omitzero"`
+	GetLoginToken             *CapBooleanTrue               `json:"m.get_login_token,omitzero"`
+	WebPush                   *CapWebPush                   `json:"org.matrix.msc4174.webpush,omitzero"`
+	UnstableAccountModeration *CapUnstableAccountModeration `json:"uk.timedout.msc4323,omitzero"`
 
 	Custom map[string]any `json:"-"`
 }
@@ -651,7 +651,7 @@ func (rc *RespCapabilities) MarshalJSON() ([]byte, error) {
 	}
 	var buf bytes.Buffer
 	buf.WriteString(`{"capabilities":`)
-	err := json.NewEncoder(&buf).Encode(marshalableCopy)
+	err := json.MarshalWrite(&buf, marshalableCopy)
 	if err != nil {
 		return nil, err
 	}
@@ -885,7 +885,7 @@ type SearchResultGroup struct {
 type SearchResult struct {
 	Rank    float64      `json:"rank"`
 	Event   *event.Event `json:"result"`
-	Context *RespContext `json:"context,omitempty"`
+	Context *RespContext `json:"context,omitzero"`
 }
 
 type RespPushers struct {

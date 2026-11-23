@@ -19,24 +19,24 @@ const (
 // Filter is used by clients to specify how the server should filter responses to e.g. sync requests
 // Specified by: https://spec.matrix.org/v1.2/client-server-api/#filtering
 type Filter struct {
-	AccountData *FilterPart `json:"account_data,omitempty"`
+	AccountData *FilterPart `json:"account_data,omitzero"`
 	EventFields []string    `json:"event_fields,omitempty"`
 	EventFormat EventFormat `json:"event_format,omitempty"`
-	Presence    *FilterPart `json:"presence,omitempty"`
-	Room        *RoomFilter `json:"room,omitempty"`
+	Presence    *FilterPart `json:"presence,omitzero"`
+	Room        *RoomFilter `json:"room,omitzero"`
 
-	BeeperToDevice *FilterPart `json:"com.beeper.to_device,omitempty"`
+	BeeperToDevice *FilterPart `json:"com.beeper.to_device,omitzero"`
 }
 
 // RoomFilter is used to define filtering rules for room events
 type RoomFilter struct {
-	AccountData  *FilterPart `json:"account_data,omitempty"`
-	Ephemeral    *FilterPart `json:"ephemeral,omitempty"`
+	AccountData  *FilterPart `json:"account_data,omitzero"`
+	Ephemeral    *FilterPart `json:"ephemeral,omitzero"`
 	IncludeLeave bool        `json:"include_leave,omitzero"`
 	NotRooms     []id.RoomID `json:"not_rooms,omitempty"`
 	Rooms        []id.RoomID `json:"rooms,omitempty"`
-	State        *FilterPart `json:"state,omitempty"`
-	Timeline     *FilterPart `json:"timeline,omitempty"`
+	State        *FilterPart `json:"state,omitzero"`
+	Timeline     *FilterPart `json:"timeline,omitzero"`
 }
 
 // FilterPart is used to define filtering rules for specific categories of events
@@ -48,7 +48,7 @@ type FilterPart struct {
 	NotTypes                  []event.Type `json:"not_types,omitempty"`
 	Senders                   []id.UserID  `json:"senders,omitempty"`
 	Types                     []event.Type `json:"types,omitempty"`
-	ContainsURL               *bool        `json:"contains_url,omitempty"`
+	ContainsURL               *bool        `json:"contains_url,omitzero"`
 	LazyLoadMembers           bool         `json:"lazy_load_members,omitzero"`
 	IncludeRedundantMembers   bool         `json:"include_redundant_members,omitzero"`
 	UnreadThreadNotifications bool         `json:"unread_thread_notifications,omitzero"`

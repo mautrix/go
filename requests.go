@@ -1,7 +1,8 @@
 package mautrix
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"maps"
 	"strconv"
@@ -75,7 +76,7 @@ type ReqRegister[UIAType any] struct {
 	InitialDeviceDisplayName string      `json:"initial_device_display_name,omitempty"`
 	InhibitLogin             bool        `json:"inhibit_login,omitzero"`
 	RefreshToken             bool        `json:"refresh_token,omitzero"`
-	Auth                     UIAType     `json:"auth,omitempty"`
+	Auth                     UIAType     `json:"auth,omitzero"`
 
 	// Type for registration, only used for appservice user registrations
 	// https://spec.matrix.org/v1.2/application-service-api/#server-admin-style-permissions
@@ -146,7 +147,7 @@ type ReqCreateRoom struct {
 	IsDirect        bool            `json:"is_direct,omitzero"`
 	RoomVersion     id.RoomVersion  `json:"room_version,omitempty"`
 
-	PowerLevelOverride *event.PowerLevelsEventContent `json:"power_level_content_override,omitempty"`
+	PowerLevelOverride *event.PowerLevelsEventContent `json:"power_level_content_override,omitzero"`
 
 	MeowRoomID            id.RoomID   `json:"fi.mau.room_id,omitempty"`
 	MeowCreateTS          int64       `json:"fi.mau.origin_server_ts,omitzero"`
@@ -184,7 +185,7 @@ type ReqMembers struct {
 type ReqJoinRoom struct {
 	Via              []string `json:"-"`
 	Reason           string   `json:"reason,omitempty"`
-	ThirdPartySigned any      `json:"third_party_signed,omitempty"`
+	ThirdPartySigned any      `json:"third_party_signed,omitzero"`
 }
 
 type ReqKnockRoom struct {
@@ -263,7 +264,7 @@ type OneTimeKey struct {
 
 	// Raw data in the one-time key. This must be used for signature verification to ensure unrecognized fields
 	// aren't thrown away (because that would invalidate the signature).
-	RawData json.RawMessage `json:"-"`
+	RawData jsontext.Value `json:"-"`
 }
 
 type serializableOTK OneTimeKey
@@ -291,7 +292,7 @@ func (otk *OneTimeKey) MarshalJSON() ([]byte, error) {
 }
 
 type ReqUploadKeys struct {
-	DeviceKeys  *DeviceKeys             `json:"device_keys,omitempty"`
+	DeviceKeys  *DeviceKeys             `json:"device_keys,omitzero"`
 	OneTimeKeys map[id.KeyID]OneTimeKey `json:"one_time_keys,omitempty"`
 }
 
@@ -366,7 +367,7 @@ type UploadCrossSigningKeysReq[UIAType any] struct {
 	Master      CrossSigningKeys `json:"master_key"`
 	SelfSigning CrossSigningKeys `json:"self_signing_key"`
 	UserSigning CrossSigningKeys `json:"user_signing_key"`
-	Auth        UIAType          `json:"auth,omitempty"`
+	Auth        UIAType          `json:"auth,omitzero"`
 }
 
 type KeyMap map[id.DeviceKeyID]string
@@ -435,13 +436,13 @@ type ReqDeviceInfo struct {
 
 // ReqDeleteDevice is the JSON request for https://spec.matrix.org/v1.2/client-server-api/#delete_matrixclientv3devicesdeviceid
 type ReqDeleteDevice[UIAType any] struct {
-	Auth UIAType `json:"auth,omitempty"`
+	Auth UIAType `json:"auth,omitzero"`
 }
 
 // ReqDeleteDevices is the JSON request for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3delete_devices
 type ReqDeleteDevices[UIAType any] struct {
 	Devices []id.DeviceID `json:"devices"`
-	Auth    UIAType       `json:"auth,omitempty"`
+	Auth    UIAType       `json:"auth,omitzero"`
 }
 
 type ReqPutPushRule struct {
@@ -470,9 +471,9 @@ type ReqSetReadMarkers struct {
 	// Allow moving m.fully_read backwards via MSC4446.
 	AllowBackward bool `json:"com.beeper.allow_backward,omitzero"`
 
-	BeeperReadExtra        any `json:"com.beeper.read.extra,omitempty"`
-	BeeperReadPrivateExtra any `json:"com.beeper.read.private.extra,omitempty"`
-	BeeperFullyReadExtra   any `json:"com.beeper.fully_read.extra,omitempty"`
+	BeeperReadExtra        any `json:"com.beeper.read.extra,omitzero"`
+	BeeperReadPrivateExtra any `json:"com.beeper.read.private.extra,omitzero"`
+	BeeperFullyReadExtra   any `json:"com.beeper.fully_read.extra,omitzero"`
 }
 
 type BeeperInboxDone struct {
@@ -481,9 +482,9 @@ type BeeperInboxDone struct {
 }
 
 type ReqSetBeeperInboxState struct {
-	MarkedUnread *bool              `json:"marked_unread,omitempty"`
-	Done         *BeeperInboxDone   `json:"done,omitempty"`
-	ReadMarkers  *ReqSetReadMarkers `json:"read_markers,omitempty"`
+	MarkedUnread *bool              `json:"marked_unread,omitzero"`
+	Done         *BeeperInboxDone   `json:"done,omitzero"`
+	ReadMarkers  *ReqSetReadMarkers `json:"read_markers,omitzero"`
 }
 
 type ReqSendReceipt struct {
@@ -499,7 +500,7 @@ type ReqPublicRooms struct {
 	ThirdPartyInstanceID string `json:"third_party_instance_id,omitempty"`
 	Server               string `json:"server,omitempty"`
 
-	Filter *PublicRoomsFilter `json:"filter,omitempty"`
+	Filter *PublicRoomsFilter `json:"filter,omitzero"`
 }
 
 type PublicRoomsFilter struct {
@@ -619,10 +620,10 @@ type ReqRoomKeyBackup struct {
 }
 
 type ReqKeyBackupData struct {
-	FirstMessageIndex int             `json:"first_message_index"`
-	ForwardedCount    int             `json:"forwarded_count"`
-	IsVerified        bool            `json:"is_verified"`
-	SessionData       json.RawMessage `json:"session_data"`
+	FirstMessageIndex int            `json:"first_message_index"`
+	ForwardedCount    int            `json:"forwarded_count"`
+	IsVerified        bool           `json:"is_verified"`
+	SessionData       jsontext.Value `json:"session_data"`
 }
 
 type ReqReport struct {
@@ -724,7 +725,7 @@ type ReqSearch struct {
 	NextBatch string `json:"-"`
 
 	SearchTerm   string      `json:"search_term"`
-	Filter       *FilterPart `json:"filter,omitempty"`
+	Filter       *FilterPart `json:"filter,omitzero"`
 	Keys         []string    `json:"keys,omitempty"`
 	IncludeState bool        `json:"include_state,omitzero"`
 	OrderBy      string      `json:"order_by,omitempty"`

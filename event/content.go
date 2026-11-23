@@ -8,7 +8,8 @@ package event
 
 import (
 	"bytes"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"maps"
@@ -145,7 +146,7 @@ var TypeMap = map[Type]reflect.Type{
 // rather than overriding the whole object with the one in Raw).
 // If one of them is nil, then only the other is used. If both (Parsed and Raw) are nil, VeryRaw is used instead.
 type Content struct {
-	VeryRaw json.RawMessage
+	VeryRaw jsontext.Value
 	Raw     map[string]any
 	Parsed  any
 }

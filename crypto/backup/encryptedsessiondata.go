@@ -11,7 +11,7 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 
 	"go.mau.fi/util/jsonbytes"

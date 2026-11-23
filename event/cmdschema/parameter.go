@@ -7,7 +7,7 @@
 package cmdschema
 
 import (
-	"encoding/json"
+	jsonv1 "encoding/json"
 	"fmt"
 	"slices"
 
@@ -20,8 +20,8 @@ type Parameter struct {
 	Key          string                         `json:"key"`
 	Schema       *ParameterSchema               `json:"schema"`
 	Optional     bool                           `json:"optional,omitzero"`
-	Description  *event.ExtensibleTextContainer `json:"description,omitempty"`
-	DefaultValue any                            `json:"fi.mau.default_value,omitempty"`
+	Description  *event.ExtensibleTextContainer `json:"description,omitzero"`
+	DefaultValue any                            `json:"fi.mau.default_value,omitzero"`
 }
 
 func (p *Parameter) Equals(other *Parameter) bool {
@@ -105,9 +105,9 @@ const (
 type ParameterSchema struct {
 	SchemaType SchemaType         `json:"schema_type"`
 	Type       PrimitiveType      `json:"type,omitempty"`     // Only for primitive
-	Items      *ParameterSchema   `json:"items,omitempty"`    // Only for array
+	Items      *ParameterSchema   `json:"items,omitzero"`     // Only for array
 	Variants   []*ParameterSchema `json:"variants,omitempty"` // Only for union
-	Value      any                `json:"value,omitempty"`    // Only for literal
+	Value      any                `json:"value,omitzero"`     // Only for literal
 }
 
 func Literal(value any) *ParameterSchema {
@@ -238,7 +238,7 @@ func (ps *ParameterSchema) validate(parent SchemaType) error {
 		return nil
 	case SchemaTypeLiteral:
 		switch typedVal := ps.Value.(type) {
-		case string, float64, int, int64, json.Number, bool, RoomIDValue, *RoomIDValue:
+		case string, float64, int, int64, jsonv1.Number, bool, RoomIDValue, *RoomIDValue:
 			// ok
 		case map[string]any:
 			if typedVal["type"] != "event_id" && typedVal["type"] != "room_id" {

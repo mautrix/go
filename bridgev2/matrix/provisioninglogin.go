@@ -7,8 +7,10 @@
 package matrix
 
 import (
+	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -104,7 +106,11 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	var req ReqLoginStart
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+	if body, err := io.ReadAll(r.Body); err != nil {
+		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to read request body")
+		mautrix.MNotJSON.WithMessage("Failed to read request body").Write(w)
+		return
+	} else if err = json.Unmarshal(body, &req); err != nil && len(bytes.TrimSpace(body)) > 0 {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to decode request body")
 		mautrix.MNotJSON.WithMessage("Failed to decode request body").Write(w)
 		return
@@ -240,10 +246,10 @@ func (prov *ProvisioningAPI) PostLoginStep(w http.ResponseWriter, r *http.Reques
 	stepID := r.PathValue("stepID")
 	stepType := bridgev2.LoginStepType(r.PathValue("stepType"))
 	var params map[string]string
-	var rawParams json.RawMessage
+	var rawParams jsontext.Value
 	switch stepType {
 	case bridgev2.LoginStepTypeUserInput, bridgev2.LoginStepTypeCookies:
-		err := json.NewDecoder(r.Body).Decode(&params)
+		err := json.UnmarshalRead(r.Body, &params)
 		if err != nil {
 			zerolog.Ctx(r.Context()).Err(err).Msg("Failed to decode request body")
 			mautrix.MNotJSON.WithMessage("Failed to decode request body").Write(w)
@@ -256,7 +262,7 @@ func (prov *ProvisioningAPI) PostLoginStep(w http.ResponseWriter, r *http.Reques
 			zerolog.Ctx(r.Context()).Err(err).Msg("Failed to read request body")
 			mautrix.MNotJSON.WithMessage("Failed to read request body").Write(w)
 			return
-		} else if !json.Valid(rawParams) {
+		} else if !jsontext.Value(rawParams).IsValid() {
 			mautrix.MNotJSON.WithMessage("Request body is not valid JSON").Write(w)
 			return
 		}
@@ -414,7 +420,7 @@ func (prov *ProvisioningAPI) doLoginStep(
 	expectedID string,
 	expectedTxnID string,
 	params map[string]string,
-	rawParams json.RawMessage,
+	rawParams jsontext.Value,
 ) (*bridgev2.LoginStep, error) {
 	log := zerolog.Ctx(ctx).With().Str("login_id", login.ID).Logger()
 	if login.Ctx.Err() != nil {
@@ -501,7 +507,7 @@ func (prov *ProvisioningAPI) executeStep(
 	ctx context.Context,
 	currentStepType bridgev2.LoginStepType,
 	params map[string]string,
-	rawParams json.RawMessage,
+	rawParams jsontext.Value,
 	startParams *bridgev2.LoginStartParams,
 	stepResult *stepExecutionResult,
 ) {

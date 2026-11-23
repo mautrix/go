@@ -8,7 +8,7 @@ package matrix
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -499,7 +499,7 @@ func (prov *ProvisioningAPI) PostViewLimitedMedia(w http.ResponseWriter, r *http
 	var request struct {
 		Limit *event.BeeperViewLimitedMedia `json:"com.beeper.view_limited"`
 	}
-	err := json.NewDecoder(r.Body).Decode(&request)
+	err := json.UnmarshalRead(r.Body, &request)
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to decode request body")
 		mautrix.MNotJSON.WithMessage("Failed to decode request body").Write(w)
@@ -563,7 +563,7 @@ type ReqSearchUsers struct {
 
 func (prov *ProvisioningAPI) PostSearchUsers(w http.ResponseWriter, r *http.Request) {
 	var req ReqSearchUsers
-	err := json.NewDecoder(r.Body).Decode(&req)
+	err := json.UnmarshalRead(r.Body, &req)
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to decode request body")
 		mautrix.MNotJSON.WithMessage("Failed to decode request body").Write(w)
@@ -591,7 +591,7 @@ func (prov *ProvisioningAPI) PostCreateDM(w http.ResponseWriter, r *http.Request
 
 func (prov *ProvisioningAPI) PostCreateGroup(w http.ResponseWriter, r *http.Request) {
 	var req bridgev2.GroupCreateParams
-	err := json.NewDecoder(r.Body).Decode(&req)
+	err := json.UnmarshalRead(r.Body, &req)
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to decode request body")
 		mautrix.MNotJSON.WithMessage("Failed to decode request body").Write(w)
@@ -619,7 +619,7 @@ func (prov *ProvisioningAPI) PostUpdateProfile(w http.ResponseWriter, r *http.Re
 		return
 	}
 	var req bridgev2.ProfileUpdateParams
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.UnmarshalRead(r.Body, &req); err != nil {
 		mautrix.MNotJSON.WithMessage("Failed to decode request body").Write(w)
 		return
 	}
@@ -738,7 +738,7 @@ func (prov *ProvisioningAPI) PostResolveMedia(w http.ResponseWriter, r *http.Req
 		return
 	}
 	var params provisionutil.ReqResolveMedia
-	err := json.NewDecoder(r.Body).Decode(&params)
+	err := json.UnmarshalRead(r.Body, &params)
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to decode request body")
 		mautrix.MNotJSON.WithMessage("Failed to decode request body").Write(w)

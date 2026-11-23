@@ -1,7 +1,7 @@
 package event
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 )
 
 type MSC1767Audio struct {

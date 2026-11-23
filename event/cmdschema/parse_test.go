@@ -7,8 +7,8 @@
 package cmdschema
 
 import (
-	"bytes"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"strings"
 	"testing"
 
@@ -76,17 +76,17 @@ type CommandTestData struct {
 }
 
 type CommandTestUnit struct {
-	Name   string          `json:"name"`
-	Input  string          `json:"input"`
-	Broken string          `json:"broken,omitempty"`
-	Error  bool            `json:"error"`
-	Output json.RawMessage `json:"output"`
+	Name   string         `json:"name"`
+	Input  string         `json:"input"`
+	Broken string         `json:"broken,omitempty"`
+	Error  bool           `json:"error"`
+	Output jsontext.Value `json:"output"`
 }
 
-func compactJSON(input json.RawMessage) json.RawMessage {
-	var buf bytes.Buffer
-	exerrors.PanicIfNotNil(json.Compact(&buf, input))
-	return buf.Bytes()
+func compactJSON(input jsontext.Value) jsontext.Value {
+	output := input.Clone()
+	exerrors.PanicIfNotNil(output.Compact())
+	return output
 }
 
 func TestMSC4391BotCommandEventContent_ParseInput(t *testing.T) {

@@ -24,7 +24,7 @@ type EventContent struct {
 	Command     string                         `json:"command"`
 	Aliases     []string                       `json:"aliases,omitempty"`
 	Parameters  []*Parameter                   `json:"parameters,omitempty"`
-	Description *event.ExtensibleTextContainer `json:"description,omitempty"`
+	Description *event.ExtensibleTextContainer `json:"description,omitzero"`
 	TailParam   string                         `json:"fi.mau.tail_parameter,omitempty"`
 }
 

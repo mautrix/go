@@ -7,7 +7,7 @@ import "C"
 import (
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/json"
+	"encoding/json/v2"
 	"runtime"
 	"unsafe"
 

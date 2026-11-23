@@ -1,7 +1,7 @@
 package event
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
 
 	"go.mau.fi/util/jsontime"
 
@@ -12,7 +12,7 @@ type ScheduledDelayedEvent struct {
 	DelayID      id.DelayID         `json:"delay_id"`
 	RoomID       id.RoomID          `json:"room_id"`
 	Type         Type               `json:"type"`
-	StateKey     *string            `json:"state_key,omitempty"`
+	StateKey     *string            `json:"state_key,omitzero"`
 	Delay        int64              `json:"delay"`
 	RunningSince jsontime.UnixMilli `json:"running_since"`
 	Content      Content            `json:"content"`
@@ -34,7 +34,7 @@ type FinalisedDelayedEvent struct {
 	DelayedEvent *ScheduledDelayedEvent `json:"scheduled_event"`
 	Outcome      DelayOutcome           `json:"outcome"`
 	Reason       DelayReason            `json:"reason"`
-	Error        json.RawMessage        `json:"error,omitempty"`
+	Error        jsontext.Value         `json:"error,omitempty"`
 	EventID      id.EventID             `json:"event_id,omitempty"`
 	Timestamp    jsontime.UnixMilli     `json:"origin_server_ts"`
 }

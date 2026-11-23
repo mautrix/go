@@ -12,7 +12,8 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 
 	"go.mau.fi/util/jsonbytes"
@@ -23,8 +24,8 @@ import (
 )
 
 type innerPayload struct {
-	Type    string          `json:"type"`
-	Content json.RawMessage `json:"content"`
+	Type    string         `json:"type"`
+	Content jsontext.Value `json:"content"`
 }
 
 func makeStreamKey() jsonbytes.UnpaddedBytes {
@@ -49,7 +50,7 @@ func deriveStreamID(key []byte, roomID id.RoomID, eventID id.EventID) string {
 	return base64.RawStdEncoding.EncodeToString(mac.Sum(nil))
 }
 
-func encryptLogicalEvent(logicalType event.Type, payload json.RawMessage, roomID id.RoomID, eventID id.EventID, key []byte) (*event.Content, error) {
+func encryptLogicalEvent(logicalType event.Type, payload jsontext.Value, roomID id.RoomID, eventID id.EventID, key []byte) (*event.Content, error) {
 	if roomID == "" || eventID == "" {
 		return nil, fmt.Errorf("missing beeper stream identifiers")
 	}
@@ -76,7 +77,7 @@ func encryptLogicalEvent(logicalType event.Type, payload json.RawMessage, roomID
 	}, nil
 }
 
-func decryptLogicalEvent(content *event.Content, key []byte) (event.Type, json.RawMessage, error) {
+func decryptLogicalEvent(content *event.Content, key []byte) (event.Type, jsontext.Value, error) {
 	gcm, err := newStreamGCM(key)
 	if err != nil {
 		return event.Type{}, nil, err

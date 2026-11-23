@@ -7,7 +7,8 @@
 package mautrix_test
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -104,7 +105,7 @@ func TestRespCapabilities_UnmarshalJSON(t *testing.T) {
 func TestRespCapabilities_MarshalJSON(t *testing.T) {
 	marshaled, err := canonicaljson.Marshal(&sampleObject)
 	require.NoError(t, err)
-	origData := json.RawMessage(sampleData)
+	origData := jsontext.Value(sampleData)
 	require.NoError(t, canonicaljson.Canonicalize(&origData))
 	assert.Equal(t, string(marshaled), string(origData))
 	assert.Len(t, sampleObject.Custom, 1)

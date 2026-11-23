@@ -7,7 +7,8 @@
 package event
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"time"
 
 	"go.mau.fi/util/jsontime"
@@ -17,7 +18,7 @@ import (
 
 // Event represents a single Matrix event.
 type Event struct {
-	StateKey  *string    `json:"state_key,omitempty"`       // The state key for the event. Only present on State Events.
+	StateKey  *string    `json:"state_key,omitzero"`        // The state key for the event. Only present on State Events.
 	Sender    id.UserID  `json:"sender,omitempty"`          // The user ID of the sender of the event
 	Type      Type       `json:"type"`                      // The event type
 	Timestamp int64      `json:"origin_server_ts,omitzero"` // The unix timestamp when this message was sent by the origin server
@@ -27,18 +28,18 @@ type Event struct {
 	Redacts   id.EventID `json:"redacts,omitempty"`         // The event ID that was redacted if a m.room.redaction event
 	Unsigned  Unsigned   `json:"unsigned,omitzero"`         // Unsigned content set by own homeserver.
 
-	Sticky *Sticky `json:"msc4354_sticky,omitempty"`
+	Sticky *Sticky `json:"msc4354_sticky,omitzero"`
 
 	Mautrix MautrixInfo `json:"-"`
 
-	Unknown json.RawMessage `json:",embed,unknown,omitempty"`
+	Unknown jsontext.Value `json:",embed,unknown"`
 
 	ToUserID   id.UserID   `json:"to_user_id,omitempty"`   // The user ID that the to-device event was sent to. Only present in MSC2409 appservice transactions.
 	ToDeviceID id.DeviceID `json:"to_device_id,omitempty"` // The device ID that the to-device event was sent to. Only present in MSC2409 appservice transactions.
 }
 
 type eventForMarshaling struct {
-	StateKey  *string    `json:"state_key,omitempty"`
+	StateKey  *string    `json:"state_key,omitzero"`
 	Sender    id.UserID  `json:"sender,omitempty"`
 	Type      Type       `json:"type"`
 	Timestamp int64      `json:"origin_server_ts,omitzero"`
@@ -48,12 +49,12 @@ type eventForMarshaling struct {
 	Redacts   id.EventID `json:"redacts,omitempty"`
 	Unsigned  *Unsigned  `json:"unsigned,omitzero"`
 
-	Sticky *Sticky `json:"msc4354_sticky,omitempty"`
+	Sticky *Sticky `json:"msc4354_sticky,omitzero"`
 
-	PrevContent   *Content    `json:"prev_content,omitempty"`
-	ReplacesState *id.EventID `json:"replaces_state,omitempty"`
+	PrevContent   *Content    `json:"prev_content,omitzero"`
+	ReplacesState *id.EventID `json:"replaces_state,omitzero"`
 
-	Unknown json.RawMessage `json:",embed,unknown,omitempty"`
+	Unknown jsontext.Value `json:",embed,unknown"`
 
 	ToUserID   id.UserID   `json:"to_user_id,omitempty"`
 	ToDeviceID id.DeviceID `json:"to_device_id,omitempty"`
@@ -165,21 +166,21 @@ func (evt *Event) GetStateKey() string {
 }
 
 type Unsigned struct {
-	PrevContent     *Content   `json:"prev_content,omitempty"`
+	PrevContent     *Content   `json:"prev_content,omitzero"`
 	PrevSender      id.UserID  `json:"prev_sender,omitempty"`
 	Membership      Membership `json:"membership,omitempty"`
 	ReplacesState   id.EventID `json:"replaces_state,omitempty"`
 	Age             int64      `json:"age,omitzero"`
 	TransactionID   string     `json:"transaction_id,omitempty"`
-	Relations       *Relations `json:"m.relations,omitempty"`
-	RedactedBecause *Event     `json:"redacted_because,omitempty"`
+	Relations       *Relations `json:"m.relations,omitzero"`
+	RedactedBecause *Event     `json:"redacted_because,omitzero"`
 	InviteRoomState []*Event   `json:"invite_room_state,omitempty"`
 
 	StickyDurationTTL jsontime.Milliseconds `json:"msc4354_sticky_duration_ttl_ms,omitzero"`
 
 	BeeperHSOrder       int64               `json:"com.beeper.hs.order,omitzero"`
 	BeeperHSSuborder    int16               `json:"com.beeper.hs.suborder,omitzero"`
-	BeeperHSOrderString *BeeperEncodedOrder `json:"com.beeper.hs.order_string,omitempty"`
+	BeeperHSOrderString *BeeperEncodedOrder `json:"com.beeper.hs.order_string,omitzero"`
 	BeeperFromBackup    bool                `json:"com.beeper.from_backup,omitzero"`
 
 	ElementSoftFailed         bool `json:"io.element.synapse.soft_failed,omitzero"`

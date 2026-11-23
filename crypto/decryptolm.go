@@ -10,7 +10,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"slices"
@@ -58,7 +58,7 @@ type DecryptedOlmEvent struct {
 	SenderDevice *id.Device   `json:"-"`
 
 	Sender           id.UserID           `json:"sender"`
-	SenderDeviceKeys *mautrix.DeviceKeys `json:"sender_device_keys,omitempty"`
+	SenderDeviceKeys *mautrix.DeviceKeys `json:"sender_device_keys,omitzero"`
 	Keys             OlmEventKeys        `json:"keys"`
 	Recipient        id.UserID           `json:"recipient"`
 	RecipientKeys    OlmEventKeys        `json:"recipient_keys"`

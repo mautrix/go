@@ -8,7 +8,8 @@ package appservice
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -34,9 +35,9 @@ type WebsocketRequest struct {
 }
 
 type WebsocketCommand struct {
-	ReqID   int             `json:"id,omitzero"`
-	Command string          `json:"command"`
-	Data    json.RawMessage `json:"data"`
+	ReqID   int            `json:"id,omitzero"`
+	Command string         `json:"command"`
+	Data    jsontext.Value `json:"data"`
 
 	Ctx context.Context `json:"-"`
 }
@@ -50,7 +51,7 @@ func (wsc *WebsocketCommand) MakeResponse(ok bool, data any) *WebsocketRequest {
 		cmd = "error"
 	}
 	if err, isError := data.(error); isError {
-		var errorData json.RawMessage
+		var errorData jsontext.Value
 		var jsonErr error
 		unwrappedErr := err
 		var prefixMessage string
@@ -181,7 +182,7 @@ func (as *AppService) SendWebsocket(ctx context.Context, cmd *WebsocketRequest) 
 	if err != nil {
 		return err
 	}
-	err = json.NewEncoder(wr).Encode(cmd)
+	err = json.MarshalWrite(wr, cmd)
 	if err != nil {
 		_ = wr.Close()
 		return err
@@ -392,7 +393,7 @@ func (as *AppService) StartWebsocket(ctx context.Context, baseURL string, onConn
 	})
 	if resp != nil && resp.StatusCode >= 400 {
 		var errResp mautrix.RespError
-		err = json.NewDecoder(resp.Body).Decode(&errResp)
+		err = json.UnmarshalRead(resp.Body, &errResp)
 		if err != nil {
 			return fmt.Errorf("websocket request returned HTTP %d with non-JSON body", resp.StatusCode)
 		} else {

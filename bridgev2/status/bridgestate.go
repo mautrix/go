@@ -9,7 +9,7 @@ package status
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"maps"
@@ -89,7 +89,7 @@ type RemoteProfile struct {
 	Name     string              `json:"name,omitempty"`
 	Avatar   id.ContentURIString `json:"avatar,omitempty"`
 
-	AvatarFile *event.EncryptedFileInfo `json:"avatar_file,omitempty"`
+	AvatarFile *event.EncryptedFileInfo `json:"avatar_file,omitzero"`
 }
 
 func coalesce[T ~string](a, b T) T {
@@ -131,7 +131,7 @@ type BridgeState struct {
 	RemoteName    string                `json:"remote_name,omitempty"`
 	RemoteProfile RemoteProfile         `json:"remote_profile,omitzero"`
 
-	Version any `json:"version,omitempty"`
+	Version any `json:"version,omitzero"`
 
 	Reason string         `json:"reason,omitempty"`
 	Info   map[string]any `json:"info,omitempty"`

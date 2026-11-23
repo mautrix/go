@@ -6,7 +6,7 @@
 
 package pushrules
 
-import "encoding/json"
+import "encoding/json/v2"
 
 // PushActionType is the type of a PushAction
 type PushActionType string
@@ -76,7 +76,7 @@ func (actions PushActionArray) Should() (should PushActionArrayShould) {
 type PushAction struct {
 	Action PushActionType  `json:"action"`
 	Tweak  PushActionTweak `json:"set_tweak,omitempty"`
-	Value  any             `json:"value,omitempty"`
+	Value  any             `json:"value,omitzero"`
 }
 
 // UnmarshalJSON parses JSON into this PushAction.

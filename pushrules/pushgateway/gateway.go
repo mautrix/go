@@ -9,7 +9,8 @@ package pushgateway
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"net/http"
@@ -72,20 +73,20 @@ type Device struct {
 type PushNotification struct {
 	Devices []Device `json:"devices"`
 
-	Counts *NotificationCounts `json:"counts,omitempty"`
+	Counts *NotificationCounts `json:"counts,omitzero"`
 
-	EventID           id.EventID      `json:"event_id,omitempty"`
-	Priority          PushPriority    `json:"prio,omitempty"`
-	RoomAlias         id.RoomAlias    `json:"room_alias,omitempty"`
-	RoomID            id.RoomID       `json:"room_id,omitempty"`
-	RoomName          string          `json:"room_name,omitempty"`
-	Sender            id.UserID       `json:"sender,omitempty"`
-	SenderDisplayName string          `json:"sender_display_name,omitempty"`
-	Type              string          `json:"type,omitempty"`
-	Content           json.RawMessage `json:"content,omitempty"`
-	UserIsTarget      bool            `json:"user_is_target,omitzero"`
+	EventID           id.EventID     `json:"event_id,omitempty"`
+	Priority          PushPriority   `json:"prio,omitempty"`
+	RoomAlias         id.RoomAlias   `json:"room_alias,omitempty"`
+	RoomID            id.RoomID      `json:"room_id,omitempty"`
+	RoomName          string         `json:"room_name,omitempty"`
+	Sender            id.UserID      `json:"sender,omitempty"`
+	SenderDisplayName string         `json:"sender_display_name,omitempty"`
+	Type              string         `json:"type,omitempty"`
+	Content           jsontext.Value `json:"content,omitempty"`
+	UserIsTarget      bool           `json:"user_is_target,omitzero"`
 
-	BeeperTTL                 *int      `json:"com.beeper.ttl,omitempty"`
+	BeeperTTL                 *int      `json:"com.beeper.ttl,omitzero"`
 	BeeperUserID              id.UserID `json:"com.beeper.user_id,omitempty"`
 	BeeperLastFullyReadRoomID id.RoomID `json:"com.beeper.last_fully_read_room_id,omitempty"`
 }

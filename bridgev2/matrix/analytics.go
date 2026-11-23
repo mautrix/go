@@ -2,7 +2,7 @@ package matrix
 
 import (
 	"bytes"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"net/http"
 
@@ -17,7 +17,7 @@ func (br *Connector) trackSync(userID id.UserID, event string, properties map[st
 	} else {
 		analyticsUserID = userID.String()
 	}
-	err := json.NewEncoder(&buf).Encode(map[string]any{
+	err := json.MarshalWrite(&buf, map[string]any{
 		"userId":     analyticsUserID,
 		"event":      event,
 		"properties": properties,

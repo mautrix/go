@@ -9,7 +9,7 @@ package backup
 import (
 	"crypto/ecdh"
 	"encoding/base64"
-	"encoding/json"
+	"encoding/json/v2"
 )
 
 // EphemeralKey is a wrapper around an ECDH X25519 public key that implements

@@ -10,7 +10,7 @@ package mxmain
 import (
 	"context"
 	_ "embed"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"os"
@@ -161,7 +161,8 @@ func (br *BridgeMain) PreInit() {
 		}
 		output.Mautrix.Commit = mautrix.Commit
 		output.Mautrix.Version = mautrix.Version
-		_ = json.NewEncoder(os.Stdout).Encode(output)
+		_ = json.MarshalWrite(os.Stdout, output)
+		_, _ = os.Stdout.WriteString("\n")
 		os.Exit(0)
 	} else if *writeExampleConfig {
 		if *configPath != "-" && *configPath != "/dev/stdout" && *configPath != "/dev/stderr" {

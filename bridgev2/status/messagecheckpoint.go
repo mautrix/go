@@ -9,7 +9,7 @@ package status
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"net/http"
 	"time"
@@ -171,7 +171,7 @@ type CheckpointsJSON struct {
 
 func (cj *CheckpointsJSON) SendHTTP(ctx context.Context, cli *http.Client, endpoint string, token string) error {
 	var body bytes.Buffer
-	if err := json.NewEncoder(&body).Encode(cj); err != nil {
+	if err := json.MarshalWrite(&body, cj); err != nil {
 		return fmt.Errorf("failed to encode message checkpoint JSON: %w", err)
 	}
 

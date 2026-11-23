@@ -10,7 +10,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"fmt"
 
 	"go.mau.fi/util/dbutil"
@@ -27,7 +27,7 @@ type GhostQuery struct {
 	*dbutil.QueryHelper[*Ghost]
 }
 
-type ExtraProfile map[string]json.RawMessage
+type ExtraProfile map[string]jsontext.Value
 
 func (ep *ExtraProfile) Set(key string, value any) error {
 	if key == "displayname" || key == "avatar_url" {
@@ -49,7 +49,7 @@ func (ep *ExtraProfile) With(key string, value any) *ExtraProfile {
 	return ep
 }
 
-func canonicalize(data json.RawMessage) json.RawMessage {
+func canonicalize(data jsontext.Value) jsontext.Value {
 	canonicalized, _ := canonicaljson.Marshal(data)
 	return canonicalized
 }

@@ -2,7 +2,7 @@ package verificationhelper
 
 import (
 	"crypto/ecdh"
-	"encoding/json"
+	"encoding/json/v2"
 )
 
 type ECDHPrivateKey struct {

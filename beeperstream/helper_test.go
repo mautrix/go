@@ -8,7 +8,8 @@ package beeperstream
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"net/http"
@@ -76,7 +77,7 @@ func newSendToDeviceRecorderServer(t *testing.T) (*httptest.Server, *sendToDevic
 			path: r.URL.Path,
 			body: body,
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{})
+		_ = json.MarshalWrite(w, map[string]any{})
 	}))
 	t.Cleanup(ts.Close)
 	return ts, recorder
@@ -93,10 +94,10 @@ func (r *sendToDeviceRecorder) next(t *testing.T) capturedSendToDeviceRequest {
 	}
 }
 
-func (r *sendToDeviceRecorder) rawContent(t *testing.T, req capturedSendToDeviceRequest, userID id.UserID, deviceID id.DeviceID) json.RawMessage {
+func (r *sendToDeviceRecorder) rawContent(t *testing.T, req capturedSendToDeviceRequest, userID id.UserID, deviceID id.DeviceID) jsontext.Value {
 	t.Helper()
 	var payload struct {
-		Messages map[string]map[string]json.RawMessage `json:"messages"`
+		Messages map[string]map[string]jsontext.Value `json:"messages"`
 	}
 	require.NoError(t, json.Unmarshal(req.body, &payload))
 	require.Contains(t, payload.Messages, string(userID), "missing target user in request")

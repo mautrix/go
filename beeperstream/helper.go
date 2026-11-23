@@ -9,7 +9,8 @@ package beeperstream
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"maps"
@@ -310,8 +311,8 @@ func contentFromRawMap(raw map[string]any) (*event.Content, error) {
 	return &event.Content{VeryRaw: veryRaw, Raw: maps.Clone(raw)}, nil
 }
 
-func contentFromRawJSON(veryRaw json.RawMessage) (*event.Content, error) {
-	content := &event.Content{VeryRaw: append(json.RawMessage(nil), veryRaw...)}
+func contentFromRawJSON(veryRaw jsontext.Value) (*event.Content, error) {
+	content := &event.Content{VeryRaw: append(jsontext.Value(nil), veryRaw...)}
 	if len(content.VeryRaw) == 0 {
 		content.VeryRaw = []byte("{}")
 	}
@@ -324,15 +325,15 @@ func contentFromRawJSON(veryRaw json.RawMessage) (*event.Content, error) {
 	return content, nil
 }
 
-func marshalContent(content *event.Content) (json.RawMessage, error) {
+func marshalContent(content *event.Content) (jsontext.Value, error) {
 	if content == nil {
-		return json.RawMessage(`{}`), nil
+		return jsontext.Value(`{}`), nil
 	}
 	raw, err := content.MarshalJSON()
 	if err != nil {
 		return nil, err
 	}
-	return append(json.RawMessage(nil), raw...), nil
+	return append(jsontext.Value(nil), raw...), nil
 }
 
 func normalizeUpdateContent(roomID id.RoomID, eventID id.EventID, content map[string]any) (*event.Content, error) {

@@ -8,7 +8,8 @@ package appservice
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"io"
 	"net"
@@ -270,7 +271,7 @@ func (as *AppService) PostPing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body, err := io.ReadAll(r.Body)
-	if err != nil || len(body) == 0 || !json.Valid(body) {
+	if err != nil || len(body) == 0 || !jsontext.Value(body).IsValid() {
 		mautrix.MNotJSON.WithMessage("Invalid or missing request body").Write(w)
 		return
 	}

@@ -8,7 +8,8 @@ package mockserver
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"maps"
@@ -32,7 +33,7 @@ import (
 )
 
 func mustDecode(r *http.Request, data any) {
-	exerrors.PanicIfNotNil(json.NewDecoder(r.Body).Decode(data))
+	exerrors.PanicIfNotNil(json.UnmarshalRead(r.Body, data))
 }
 
 type userAndDeviceID struct {
@@ -46,7 +47,7 @@ type MockServer struct {
 
 	AccessTokenToUserID map[string]userAndDeviceID
 	DeviceInbox         map[id.UserID]map[id.DeviceID][]event.Event
-	AccountData         map[id.UserID]map[event.Type]json.RawMessage
+	AccountData         map[id.UserID]map[event.Type]jsontext.Value
 	DeviceKeys          map[id.UserID]map[id.DeviceID]mautrix.DeviceKeys
 	OneTimeKeys         map[id.UserID]map[id.DeviceID]map[id.KeyID]mautrix.OneTimeKey
 	MasterKeys          map[id.UserID]mautrix.CrossSigningKeys
@@ -63,7 +64,7 @@ func Create(t testing.TB) *MockServer {
 	server := MockServer{
 		AccessTokenToUserID: map[string]userAndDeviceID{},
 		DeviceInbox:         map[id.UserID]map[id.DeviceID][]event.Event{},
-		AccountData:         map[id.UserID]map[event.Type]json.RawMessage{},
+		AccountData:         map[id.UserID]map[event.Type]jsontext.Value{},
 		DeviceKeys:          map[id.UserID]map[id.DeviceID]mautrix.DeviceKeys{},
 		OneTimeKeys:         map[id.UserID]map[id.DeviceID]map[id.KeyID]mautrix.OneTimeKey{},
 		MasterKeys:          map[id.UserID]mautrix.CrossSigningKeys{},
@@ -152,9 +153,9 @@ func (ms *MockServer) putAccountData(w http.ResponseWriter, r *http.Request) {
 
 	jsonData, _ := io.ReadAll(r.Body)
 	if _, ok := ms.AccountData[userID]; !ok {
-		ms.AccountData[userID] = map[event.Type]json.RawMessage{}
+		ms.AccountData[userID] = map[event.Type]jsontext.Value{}
 	}
-	ms.AccountData[userID][eventType] = json.RawMessage(jsonData)
+	ms.AccountData[userID][eventType] = jsontext.Value(jsonData)
 	ms.emptyResp(w, r)
 }
 

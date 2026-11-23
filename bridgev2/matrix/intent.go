@@ -9,7 +9,8 @@ package matrix
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -529,8 +530,8 @@ func (as *ASIntent) SetAvatarURL(ctx context.Context, avatarURL id.ContentURIStr
 	return as.Matrix().SetAvatarURL(ctx, parsedAvatarURL)
 }
 
-func dataToFields(data any) (map[string]json.RawMessage, error) {
-	fields, ok := data.(map[string]json.RawMessage)
+func dataToFields(data any) (map[string]jsontext.Value, error) {
+	fields, ok := data.(map[string]jsontext.Value)
 	if ok {
 		return fields, nil
 	}
@@ -542,12 +543,12 @@ func dataToFields(data any) (map[string]json.RawMessage, error) {
 	return fields, err
 }
 
-func marshalField(val any) json.RawMessage {
+func marshalField(val any) jsontext.Value {
 	data, _ := canonicaljson.Marshal(val)
 	return data
 }
 
-var nullJSON = json.RawMessage("null")
+var nullJSON = jsontext.Value("null")
 
 func (as *ASIntent) SetProfile(ctx context.Context, data any) error {
 	return as.Matrix().UnstableOverwriteProfile(ctx, data)

@@ -7,7 +7,9 @@
 package event
 
 import (
-	"encoding/json"
+	jsonv1 "encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"html"
 	"slices"
@@ -115,8 +117,8 @@ type MessageEventContent struct {
 
 	// Extra fields for media types
 	URL      id.ContentURIString `json:"url,omitempty"`
-	Info     *FileInfo           `json:"info,omitempty"`
-	File     *EncryptedFileInfo  `json:"file,omitempty"`
+	Info     *FileInfo           `json:"info,omitzero"`
+	File     *EncryptedFileInfo  `json:"file,omitzero"`
 	FileName string              `json:"filename,omitempty"`
 
 	UnstableGalleryItemType MessageType            `json:"itemtype,omitempty"`
@@ -124,9 +126,9 @@ type MessageEventContent struct {
 	GalleryItems            []*MessageEventContent `json:"items,omitempty"`
 
 	// Edits and relations
-	NewContent *MessageEventContent `json:"m.new_content,omitempty"`
-	RelatesTo  *RelatesTo           `json:"m.relates_to,omitempty"`
-	Mentions   *Mentions            `json:"m.mentions,omitempty"`
+	NewContent *MessageEventContent `json:"m.new_content,omitzero"`
+	RelatesTo  *RelatesTo           `json:"m.relates_to,omitzero"`
+	Mentions   *Mentions            `json:"m.mentions,omitzero"`
 
 	replyFallbackRemoved bool
 
@@ -138,17 +140,17 @@ type MessageEventContent struct {
 	ImageSourcePacks map[id.ContentURIString]*ImageSource    `json:"com.beeper.msc4459.image_source_packs,omitempty"`
 	BridgedEmojis    map[id.ContentURIString]*BridgedSticker `json:"com.beeper.bridged_emojis,omitempty"`
 
-	MessageSendRetry             *BeeperRetryMetadata     `json:"com.beeper.message_send_retry,omitempty"`
-	BeeperPerMessageProfile      *BeeperPerMessageProfile `json:"com.beeper.per_message_profile,omitempty"`
-	BeeperActionMessage          *BeeperActionMessage     `json:"com.beeper.action_message,omitempty"`
+	MessageSendRetry             *BeeperRetryMetadata     `json:"com.beeper.message_send_retry,omitzero"`
+	BeeperPerMessageProfile      *BeeperPerMessageProfile `json:"com.beeper.per_message_profile,omitzero"`
+	BeeperActionMessage          *BeeperActionMessage     `json:"com.beeper.action_message,omitzero"`
 	BeeperLinkPreviews           []*BeeperLinkPreview     `json:"com.beeper.linkpreviews,omitzero"`
-	BeeperStream                 *BeeperStreamInfo        `json:"com.beeper.stream,omitempty"`
-	BeeperDisappearingTimer      *BeeperDisappearingTimer `json:"com.beeper.disappearing_timer,omitempty"`
-	BeeperViewLimited            *BeeperViewLimitedMedia  `json:"com.beeper.view_limited,omitempty"`
+	BeeperStream                 *BeeperStreamInfo        `json:"com.beeper.stream,omitzero"`
+	BeeperDisappearingTimer      *BeeperDisappearingTimer `json:"com.beeper.disappearing_timer,omitzero"`
+	BeeperViewLimited            *BeeperViewLimitedMedia  `json:"com.beeper.view_limited,omitzero"`
 	BeeperBroadcastOutsideThread bool                     `json:"com.beeper.broadcast_outside_thread,omitzero"`
 
-	MSC1767Audio *MSC1767Audio `json:"org.matrix.msc1767.audio,omitempty"`
-	MSC3245Voice *MSC3245Voice `json:"org.matrix.msc3245.voice,omitempty"`
+	MSC1767Audio *MSC1767Audio `json:"org.matrix.msc1767.audio,omitzero"`
+	MSC3245Voice *MSC3245Voice `json:"org.matrix.msc3245.voice,omitzero"`
 
 	MSC4391BotCommand *MSC4391BotCommandInput `json:"org.matrix.msc4391.command,omitempty"`
 }
@@ -305,7 +307,7 @@ type MSC4391BotCommandInputCustom[T any] struct {
 	Arguments T      `json:"arguments,omitempty"`
 }
 
-type MSC4391BotCommandInput = MSC4391BotCommandInputCustom[json.RawMessage]
+type MSC4391BotCommandInput = MSC4391BotCommandInputCustom[jsontext.Value]
 
 type EncryptedFileInfo struct {
 	attachment.EncryptedFile
@@ -336,9 +338,9 @@ type FileInfo struct {
 
 type serializableFileInfo struct {
 	MimeType      string                `json:"mimetype,omitempty"`
-	ThumbnailInfo *serializableFileInfo `json:"thumbnail_info,omitempty"`
+	ThumbnailInfo *serializableFileInfo `json:"thumbnail_info,omitzero"`
 	ThumbnailURL  id.ContentURIString   `json:"thumbnail_url,omitempty"`
-	ThumbnailFile *EncryptedFileInfo    `json:"thumbnail_file,omitempty"`
+	ThumbnailFile *EncryptedFileInfo    `json:"thumbnail_file,omitzero"`
 
 	Blurhash     string `json:"blurhash,omitempty"`
 	AnoaBlurhash string `json:"xyz.amorgan.blurhash,omitempty"`
@@ -346,12 +348,12 @@ type serializableFileInfo struct {
 	MauGIF     bool `json:"fi.mau.gif,omitzero"`
 	IsAnimated bool `json:"is_animated,omitzero"`
 
-	Width    json.Number `json:"w,omitempty,omitzero"`
-	Height   json.Number `json:"h,omitempty,omitzero"`
-	Duration json.Number `json:"duration,omitempty,omitzero"`
-	Size     json.Number `json:"size,omitempty,omitzero"`
+	Width    jsonv1.Number `json:"w,omitempty,omitzero"`
+	Height   jsonv1.Number `json:"h,omitempty,omitzero"`
+	Duration jsonv1.Number `json:"duration,omitempty,omitzero"`
+	Size     jsonv1.Number `json:"size,omitempty,omitzero"`
 
-	BridgedSticker *BridgedSticker `json:"fi.mau.bridged_sticker,omitempty"`
+	BridgedSticker *BridgedSticker `json:"fi.mau.bridged_sticker,omitzero"`
 }
 
 func (fileInfo *FileInfo) IsZero() bool {
@@ -390,17 +392,17 @@ func (sfi *serializableFileInfo) CopyFrom(fileInfo *FileInfo) *serializableFileI
 		BridgedSticker: fileInfo.BridgedSticker,
 	}
 	if fileInfo.Width > 0 {
-		sfi.Width = json.Number(strconv.Itoa(fileInfo.Width))
+		sfi.Width = jsonv1.Number(strconv.Itoa(fileInfo.Width))
 	}
 	if fileInfo.Height > 0 {
-		sfi.Height = json.Number(strconv.Itoa(fileInfo.Height))
+		sfi.Height = jsonv1.Number(strconv.Itoa(fileInfo.Height))
 	}
 	if fileInfo.Size > 0 {
-		sfi.Size = json.Number(strconv.Itoa(fileInfo.Size))
+		sfi.Size = jsonv1.Number(strconv.Itoa(fileInfo.Size))
 
 	}
 	if fileInfo.Duration > 0 {
-		sfi.Duration = json.Number(strconv.Itoa(int(fileInfo.Duration)))
+		sfi.Duration = jsonv1.Number(strconv.Itoa(int(fileInfo.Duration)))
 	}
 	return sfi
 }
@@ -458,7 +460,7 @@ func (fileInfo *FileInfo) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func MarshalMerge(base any, extraMap map[string]any) (json.RawMessage, error) {
+func MarshalMerge(base any, extraMap map[string]any) (jsontext.Value, error) {
 	// TODO replace all uses of this method with jsonv2's extra field once jsonv2 is available
 	baseSerialized, err := json.Marshal(base)
 	if len(extraMap) == 0 || err != nil {
@@ -477,7 +479,7 @@ func MarshalMerge(base any, extraMap map[string]any) (json.RawMessage, error) {
 	output = append(output, baseSerialized[:len(baseSerialized)-1]...)
 	output = append(output, ',')
 	output = append(output, extraSerialized[1:]...)
-	if !json.Valid(output) {
+	if !jsontext.Value(output).IsValid() {
 		return nil, fmt.Errorf("failed to merge extra: %s", output)
 	}
 	return output, nil
@@ -488,7 +490,7 @@ func (fileInfo *FileInfo) MarshalJSON() ([]byte, error) {
 	return MarshalMerge((&serializableFileInfo{}).CopyFrom(fileInfo), fileInfo.Extra)
 }
 
-func numberToInt(val json.Number) int {
+func numberToInt(val jsonv1.Number) int {
 	f64, _ := val.Float64()
 	if f64 > 0 {
 		return int(f64)

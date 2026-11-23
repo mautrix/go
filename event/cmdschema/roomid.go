@@ -7,7 +7,8 @@
 package cmdschema
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"slices"
 	"strings"
@@ -29,8 +30,8 @@ type RoomIDValue struct {
 
 func NormalizeRoomIDValue(input any) (riv *RoomIDValue, err error) {
 	switch typedValue := input.(type) {
-	case map[string]any, json.RawMessage:
-		var raw json.RawMessage
+	case map[string]any, jsontext.Value:
+		var raw jsontext.Value
 		if raw, err = json.Marshal(input); err != nil {
 			err = fmt.Errorf("failed to roundtrip room ID value: %w", err)
 		} else if err = json.Unmarshal(raw, &riv); err != nil {

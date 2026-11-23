@@ -7,7 +7,7 @@
 package pushrules
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 
 	"maunium.net/go/mautrix/event"
 )

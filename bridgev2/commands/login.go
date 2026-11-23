@@ -8,7 +8,8 @@ package commands
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"html"
 	"net/url"
@@ -542,7 +543,7 @@ type webauthnLoginCommandState struct {
 const webauthnSnippet = "Run the following JS on <%s>:\n\n```js\nconsole.log((await navigator.credentials.get({\n  publicKey: PublicKeyCredential.parseRequestOptionsFromJSON(%s)\n})).toJSON())\n```\n\nThen paste the resulting JSON object here."
 
 func (wlcs *webauthnLoginCommandState) prompt(ce *Event, params *bridgev2.LoginWebAuthnParams) {
-	marshaledPubKey, _ := json.MarshalIndent(params.PublicKey, "", "    ")
+	marshaledPubKey, _ := json.Marshal(params.PublicKey, jsontext.WithIndent("    "))
 	ce.Reply(webauthnSnippet, params.URL, marshaledPubKey)
 	StoreCommandState(ce.User, &CommandState{
 		Next:   MinimalCommandHandlerFunc(wlcs.submit),
@@ -554,7 +555,7 @@ func (wlcs *webauthnLoginCommandState) prompt(ce *Event, params *bridgev2.LoginW
 
 func (wlcs *webauthnLoginCommandState) submit(ce *Event) {
 	rawArgBytes := []byte(strings.TrimSpace(ce.RawArgs))
-	if !json.Valid(rawArgBytes) {
+	if !jsontext.Value(rawArgBytes).IsValid() {
 		ce.Reply("Input is not valid JSON")
 		return
 	}

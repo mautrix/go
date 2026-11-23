@@ -7,7 +7,7 @@
 package event_test
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -183,5 +183,5 @@ const expectedCustomMarshalResult = `{"body":"test","msgtype":"m.text","net.maun
 func TestMessageEventContent__Marshal_Custom(t *testing.T) {
 	data, err := json.Marshal(customParsedMessage)
 	assert.NoError(t, err)
-	assert.Equal(t, expectedCustomMarshalResult, string(data))
+	assert.JSONEq(t, expectedCustomMarshalResult, string(data))
 }

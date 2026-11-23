@@ -8,7 +8,7 @@ package bridgev2
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -147,7 +147,7 @@ type LoginProcessCookies interface {
 
 type LoginProcessWebAuthn interface {
 	LoginProcess
-	SubmitWebAuthnResponse(ctx context.Context, response json.RawMessage) (*LoginStep, error)
+	SubmitWebAuthnResponse(ctx context.Context, response jsontext.Value) (*LoginStep, error)
 }
 
 type LoginFlow struct {
@@ -195,12 +195,12 @@ type LoginStep struct {
 
 	// Exactly one of the following structs must be filled depending on the step type.
 
-	DisplayAndWaitParams *LoginDisplayAndWaitParams `json:"display_and_wait,omitempty"`
-	CookiesParams        *LoginCookiesParams        `json:"cookies,omitempty"`
-	ClientHTTPParams     *LoginClientHTTPParams     `json:"client_http,omitempty"`
-	UserInputParams      *LoginUserInputParams      `json:"user_input,omitempty"`
-	WebAuthnParams       *LoginWebAuthnParams       `json:"webauthn,omitempty"`
-	CompleteParams       *LoginCompleteParams       `json:"complete,omitempty"`
+	DisplayAndWaitParams *LoginDisplayAndWaitParams `json:"display_and_wait,omitzero"`
+	CookiesParams        *LoginCookiesParams        `json:"cookies,omitzero"`
+	ClientHTTPParams     *LoginClientHTTPParams     `json:"client_http,omitzero"`
+	UserInputParams      *LoginUserInputParams      `json:"user_input,omitzero"`
+	WebAuthnParams       *LoginWebAuthnParams       `json:"webauthn,omitzero"`
+	CompleteParams       *LoginCompleteParams       `json:"complete,omitzero"`
 }
 
 func (ls *LoginStep) MarshalZerologObject(e *zerolog.Event) {
@@ -276,7 +276,7 @@ type LoginWebAuthnParams struct {
 
 	// Standard parameters for https://developer.mozilla.org/en-US/docs/Web/API/CredentialsContainer/get
 	// Only publicKey seems to be used in practice, so the other options aren't allowed yet.
-	PublicKey json.RawMessage `json:"publicKey,omitempty"`
+	PublicKey jsontext.Value `json:"publicKey,omitempty"`
 }
 
 type LoginDisplayAndWaitParams struct {

@@ -52,7 +52,7 @@ type InRoomVerificationEvent struct {
 	// RelatesTo indicates the m.key.verification.request that this message is
 	// related to. Note that for encrypted messages, this property should be in
 	// the unencrypted portion of the event.
-	RelatesTo *RelatesTo `json:"m.relates_to,omitempty"`
+	RelatesTo *RelatesTo `json:"m.relates_to,omitzero"`
 }
 
 var _ Relatable = (*InRoomVerificationEvent)(nil)
