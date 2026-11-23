@@ -262,9 +262,7 @@ type OneTimeKey struct {
 	Unsigned   map[string]any        `json:"unsigned,omitempty"`
 	IsSigned   bool                  `json:"-"`
 
-	// Raw data in the one-time key. This must be used for signature verification to ensure unrecognized fields
-	// aren't thrown away (because that would invalidate the signature).
-	RawData jsontext.Value `json:"-"`
+	Unknown jsontext.Value `json:",embed,unknown"`
 }
 
 type serializableOTK OneTimeKey
@@ -274,15 +272,11 @@ func (otk *OneTimeKey) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 		otk.Signatures = nil
 		otk.Unsigned = nil
 		otk.IsSigned = false
+		otk.Unknown = nil
 		return json.UnmarshalDecode(dec, &otk.Key)
 	}
-	data, err := dec.ReadValue()
-	if err != nil {
-		return err
-	}
-	otk.RawData = data.Clone()
 	otk.IsSigned = true
-	return json.Unmarshal(otk.RawData, (*serializableOTK)(otk), dec.Options())
+	return json.UnmarshalDecode(dec, (*serializableOTK)(otk))
 }
 
 func (otk *OneTimeKey) MarshalJSONTo(enc *jsontext.Encoder) error {
