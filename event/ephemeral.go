@@ -7,6 +7,7 @@
 package event
 
 import (
+	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"time"
 
@@ -79,21 +80,21 @@ func (rr *ReadReceipt) IsThread() bool {
 	return rr.ThreadID != "" && rr.ThreadID != ReadReceiptThreadMain
 }
 
-func (rr *ReadReceipt) UnmarshalJSON(data []byte) error {
+func (rr *ReadReceipt) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	var parsed map[string]any
 	// Hacky compatibility hack against crappy clients that send double-encoded read receipts.
 	// TODO is this actually needed? clients can't currently set custom content in receipts 🤔
-	if data[0] == '"' && data[len(data)-1] == '"' {
+	if dec.PeekKind() == '"' {
 		var strData string
-		err := json.Unmarshal(data, &strData)
+		err := json.UnmarshalDecode(dec, &strData)
 		if err != nil {
 			return err
 		}
-		data = []byte(strData)
-	}
-
-	var parsed map[string]any
-	err := json.Unmarshal(data, &parsed)
-	if err != nil {
+		err = json.Unmarshal([]byte(strData), &parsed)
+		if err != nil {
+			return err
+		}
+	} else if err := json.UnmarshalDecode(dec, &parsed); err != nil {
 		return err
 	}
 	threadID, _ := parsed["thread_id"].(string)
@@ -110,7 +111,7 @@ func (rr *ReadReceipt) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (rr ReadReceipt) MarshalJSON() ([]byte, error) {
+func (rr ReadReceipt) MarshalJSONTo(enc *jsontext.Encoder) error {
 	data := rr.Extra
 	if data == nil {
 		data = make(map[string]any)
@@ -121,7 +122,7 @@ func (rr ReadReceipt) MarshalJSON() ([]byte, error) {
 	if !rr.Timestamp.IsZero() {
 		data["ts"] = rr.Timestamp.UnixMilli()
 	}
-	return json.Marshal(data)
+	return json.MarshalEncode(enc, data)
 }
 
 type Presence string

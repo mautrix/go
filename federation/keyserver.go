@@ -62,8 +62,8 @@ func (ks *KeyServer) Register(r *http.ServeMux, log zerolog.Logger) {
 	keyRouter.HandleFunc("GET /v2/query/{serverName}", ks.GetQueryKeys)
 	keyRouter.HandleFunc("POST /v2/query", ks.PostQueryKeys)
 	errorBodies := exhttp.ErrorBodies{
-		NotFound:         exerrors.Must(new(mautrix.MUnrecognized.WithMessage("Unrecognized endpoint")).MarshalJSON()),
-		MethodNotAllowed: exerrors.Must(new(mautrix.MUnrecognized.WithMessage("Invalid method for endpoint")).MarshalJSON()),
+		NotFound:         exerrors.Must(json.Marshal(new(mautrix.MUnrecognized.WithMessage("Unrecognized endpoint")))),
+		MethodNotAllowed: exerrors.Must(json.Marshal(new(mautrix.MUnrecognized.WithMessage("Invalid method for endpoint")))),
 	}
 	r.Handle("/_matrix/key/", exhttp.ApplyMiddleware(
 		keyRouter,

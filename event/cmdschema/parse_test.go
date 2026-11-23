@@ -25,9 +25,9 @@ type QuoteParseOutput struct {
 	Quoted    bool
 }
 
-func (qpo *QuoteParseOutput) UnmarshalJSON(data []byte) error {
+func (qpo *QuoteParseOutput) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 	var arr []any
-	if err := json.Unmarshal(data, &arr); err != nil {
+	if err := json.UnmarshalDecode(dec, &arr); err != nil {
 		return err
 	}
 	qpo.Parsed = arr[0].(string)

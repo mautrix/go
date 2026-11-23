@@ -7,6 +7,7 @@
 package event
 
 import (
+	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"fmt"
 	"strings"
@@ -140,8 +141,8 @@ func (et *Type) GuessClass() TypeClass {
 	}
 }
 
-func (et *Type) UnmarshalJSON(data []byte) error {
-	err := json.Unmarshal(data, &et.Type)
+func (et *Type) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	err := json.UnmarshalDecode(dec, &et.Type)
 	if err != nil {
 		return err
 	}
@@ -149,8 +150,8 @@ func (et *Type) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (et *Type) MarshalJSON() ([]byte, error) {
-	return json.Marshal(&et.Type)
+func (et Type) MarshalJSONTo(enc *jsontext.Encoder) error {
+	return enc.WriteToken(jsontext.String(et.Type))
 }
 
 func (et *Type) UnmarshalText(data []byte) error {

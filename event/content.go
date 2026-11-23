@@ -7,7 +7,6 @@
 package event
 
 import (
-	"bytes"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"errors"
@@ -157,48 +156,51 @@ type Relatable interface {
 	SetRelatesTo(rel *RelatesTo)
 }
 
-func (content *Content) UnmarshalJSON(data []byte) error {
-	content.VeryRaw = bytes.Clone(data)
-	err := json.Unmarshal(data, &content.Raw)
-	return err
+func (content *Content) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	data, err := dec.ReadValue()
+	if err != nil {
+		return err
+	}
+	content.VeryRaw = data.Clone()
+	return json.Unmarshal(content.VeryRaw, &content.Raw)
 }
 
-func (content *Content) MarshalJSON() ([]byte, error) {
+func (content *Content) MarshalJSONTo(enc *jsontext.Encoder) error {
 	if content.Raw == nil {
 		if content.Parsed == nil {
 			if content.VeryRaw == nil {
-				return []byte("{}"), nil
+				return enc.WriteValue(jsontext.Value("{}"))
 			}
-			return content.VeryRaw, nil
+			return enc.WriteValue(content.VeryRaw)
 		}
-		return json.Marshal(content.Parsed)
+		return json.MarshalEncode(enc, content.Parsed)
 	} else if content.Parsed != nil {
 		// TODO this whole thing is incredibly hacky
 		// It needs to produce JSON, where:
 		// * content.Parsed is applied after content.Raw
-		// * MarshalJSON() is respected inside content.Parsed
+		// * Custom marshalers are respected inside content.Parsed
 		// * Custom field inside nested objects of content.Raw are preserved,
 		//   even if content.Parsed contains the higher-level objects.
 		// * content.Raw is not modified
 
 		unparsed, err := json.Marshal(content.Parsed)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		var rawParsed map[string]any
 		err = json.Unmarshal(unparsed, &rawParsed)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		output := make(map[string]any)
 		maps.Copy(output, content.Raw)
 
 		mergeMaps(output, rawParsed)
-		return json.Marshal(output)
+		return json.MarshalEncode(enc, output)
 	}
-	return json.Marshal(content.Raw)
+	return json.MarshalEncode(enc, content.Raw)
 }
 
 // Deprecated: use errors.Is directly

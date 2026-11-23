@@ -10,11 +10,12 @@ import (
 	jsonv1 "encoding/json"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
-	"fmt"
 	"html"
 	"slices"
 	"strconv"
 	"strings"
+
+	"golang.org/x/exp/maps"
 
 	"maunium.net/go/mautrix/crypto/attachment"
 	"maunium.net/go/mautrix/id"
@@ -354,6 +355,8 @@ type serializableFileInfo struct {
 	Size     jsonv1.Number `json:"size,omitempty,omitzero"`
 
 	BridgedSticker *BridgedSticker `json:"fi.mau.bridged_sticker,omitzero"`
+
+	Extra map[string]any `json:",embed,unknown"`
 }
 
 func (fileInfo *FileInfo) IsZero() bool {
@@ -390,6 +393,8 @@ func (sfi *serializableFileInfo) CopyFrom(fileInfo *FileInfo) *serializableFileI
 		AnoaBlurhash: fileInfo.AnoaBlurhash,
 
 		BridgedSticker: fileInfo.BridgedSticker,
+
+		Extra: withoutStandardFileInfoFields(fileInfo.Extra),
 	}
 	if fileInfo.Width > 0 {
 		sfi.Width = jsonv1.Number(strconv.Itoa(fileInfo.Width))
@@ -421,6 +426,8 @@ func (sfi *serializableFileInfo) CopyTo(fileInfo *FileInfo) {
 		Blurhash:       sfi.Blurhash,
 		AnoaBlurhash:   sfi.AnoaBlurhash,
 		BridgedSticker: sfi.BridgedSticker,
+
+		Extra: sfi.Extra,
 	}
 	if sfi.ThumbnailInfo != nil {
 		fileInfo.ThumbnailInfo = &FileInfo{}
@@ -428,66 +435,35 @@ func (sfi *serializableFileInfo) CopyTo(fileInfo *FileInfo) {
 	}
 }
 
-func (fileInfo *FileInfo) deleteStandardExtraFields() {
-	if len(fileInfo.Extra) == 0 {
-		return
-	}
-	delete(fileInfo.Extra, "mimetype")
-	delete(fileInfo.Extra, "thumbnail_info")
-	delete(fileInfo.Extra, "thumbnail_url")
-	delete(fileInfo.Extra, "thumbnail_file")
-	delete(fileInfo.Extra, "blurhash")
-	delete(fileInfo.Extra, "xyz.amorgan.blurhash")
-	delete(fileInfo.Extra, "fi.mau.gif")
-	delete(fileInfo.Extra, "is_animated")
-	delete(fileInfo.Extra, "w")
-	delete(fileInfo.Extra, "h")
-	delete(fileInfo.Extra, "duration")
-	delete(fileInfo.Extra, "size")
-	delete(fileInfo.Extra, "fi.mau.bridged_sticker")
+var standardFileInfoFields = []string{
+	"mimetype", "thumbnail_info", "thumbnail_url", "thumbnail_file", "blurhash", "xyz.amorgan.blurhash",
+	"fi.mau.gif", "is_animated", "w", "h", "duration", "size", "fi.mau.bridged_sticker",
 }
 
-func (fileInfo *FileInfo) UnmarshalJSON(data []byte) error {
-	sfi := &serializableFileInfo{}
-	if err := json.Unmarshal(data, sfi); err != nil {
+func withoutStandardFileInfoFields(extra map[string]any) map[string]any {
+	for _, field := range standardFileInfoFields {
+		if _, found := extra[field]; found {
+			extra = maps.Clone(extra)
+			for _, field = range standardFileInfoFields {
+				delete(extra, field)
+			}
+			break
+		}
+	}
+	return extra
+}
+
+func (fileInfo *FileInfo) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	var sfi serializableFileInfo
+	if err := json.UnmarshalDecode(dec, &sfi); err != nil {
 		return err
 	}
 	sfi.CopyTo(fileInfo)
-	if err := json.Unmarshal(data, &fileInfo.Extra); err != nil {
-		return err
-	}
-	fileInfo.deleteStandardExtraFields()
 	return nil
 }
 
-func MarshalMerge(base any, extraMap map[string]any) (jsontext.Value, error) {
-	// TODO replace all uses of this method with jsonv2's extra field once jsonv2 is available
-	baseSerialized, err := json.Marshal(base)
-	if len(extraMap) == 0 || err != nil {
-		return baseSerialized, err
-	}
-	extraSerialized, err := json.Marshal(extraMap)
-	if err != nil {
-		return nil, err
-	}
-	if len(baseSerialized) <= 4 || baseSerialized[0] != '{' {
-		return extraSerialized, nil
-	} else if len(extraSerialized) <= 4 || extraSerialized[0] != '{' {
-		return baseSerialized, nil
-	}
-	output := make([]byte, 0, len(baseSerialized)+len(extraSerialized)-1)
-	output = append(output, baseSerialized[:len(baseSerialized)-1]...)
-	output = append(output, ',')
-	output = append(output, extraSerialized[1:]...)
-	if !jsontext.Value(output).IsValid() {
-		return nil, fmt.Errorf("failed to merge extra: %s", output)
-	}
-	return output, nil
-}
-
-func (fileInfo *FileInfo) MarshalJSON() ([]byte, error) {
-	fileInfo.deleteStandardExtraFields()
-	return MarshalMerge((&serializableFileInfo{}).CopyFrom(fileInfo), fileInfo.Extra)
+func (fileInfo *FileInfo) MarshalJSONTo(enc *jsontext.Encoder) error {
+	return json.MarshalEncode(enc, (&serializableFileInfo{}).CopyFrom(fileInfo))
 }
 
 func numberToInt(val jsonv1.Number) int {

@@ -8,6 +8,7 @@ package event
 
 import (
 	"encoding/base64"
+	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"slices"
 
@@ -285,11 +286,11 @@ type BeeperDisappearingTimer struct {
 
 type marshalableBeeperDisappearingTimer BeeperDisappearingTimer
 
-func (bdt *BeeperDisappearingTimer) MarshalJSON() ([]byte, error) {
+func (bdt *BeeperDisappearingTimer) MarshalJSONTo(enc *jsontext.Encoder) error {
 	if bdt == nil || bdt.Type == DisappearingTypeNone {
-		return []byte("{}"), nil
+		return enc.WriteValue(jsontext.Value("{}"))
 	}
-	return json.Marshal((*marshalableBeeperDisappearingTimer)(bdt))
+	return json.MarshalEncode(enc, (*marshalableBeeperDisappearingTimer)(bdt))
 }
 
 type SpaceChildEventContent struct {

@@ -1,15 +1,12 @@
 package mautrix
 
 import (
-	"bytes"
+	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"maps"
-	"reflect"
 	"slices"
 	"strconv"
-	"strings"
 
-	"github.com/tidwall/gjson"
 	"go.mau.fi/util/exmaps"
 	"go.mau.fi/util/jsontime"
 	"go.mau.fi/util/ptr"
@@ -192,8 +189,8 @@ type RespUserProfile struct {
 
 type marshalableUserProfile RespUserProfile
 
-func (r *RespUserProfile) UnmarshalJSON(data []byte) error {
-	err := json.Unmarshal(data, &r.Extra)
+func (r *RespUserProfile) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	err := json.UnmarshalDecode(dec, &r.Extra)
 	if err != nil {
 		return err
 	}
@@ -207,9 +204,9 @@ func (r *RespUserProfile) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (r *RespUserProfile) MarshalJSON() ([]byte, error) {
+func (r *RespUserProfile) MarshalJSONTo(enc *jsontext.Encoder) error {
 	if len(r.Extra) == 0 {
-		return json.Marshal((*marshalableUserProfile)(r))
+		return json.MarshalEncode(enc, (*marshalableUserProfile)(r))
 	}
 	marshalMap := maps.Clone(r.Extra)
 	if r.DisplayName != "" {
@@ -222,7 +219,7 @@ func (r *RespUserProfile) MarshalJSON() ([]byte, error) {
 	} else {
 		delete(marshalMap, "avatar_url")
 	}
-	return json.Marshal(marshalMap)
+	return json.MarshalEncode(enc, marshalMap)
 }
 
 type RespSearchUserDirectory struct {
@@ -235,8 +232,8 @@ type UserDirectoryEntry struct {
 	UserID id.UserID `json:"user_id"`
 }
 
-func (r *UserDirectoryEntry) UnmarshalJSON(data []byte) error {
-	err := r.RespUserProfile.UnmarshalJSON(data)
+func (r *UserDirectoryEntry) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	err := r.RespUserProfile.UnmarshalJSONFrom(dec)
 	if err != nil {
 		return err
 	}
@@ -246,12 +243,12 @@ func (r *UserDirectoryEntry) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (r *UserDirectoryEntry) MarshalJSON() ([]byte, error) {
+func (r *UserDirectoryEntry) MarshalJSONTo(enc *jsontext.Encoder) error {
 	if r.Extra == nil {
 		r.Extra = make(map[string]any)
 	}
 	r.Extra["user_id"] = r.UserID.String()
-	return r.RespUserProfile.MarshalJSON()
+	return r.RespUserProfile.MarshalJSONTo(enc)
 }
 
 type RespMutualRooms struct {
@@ -601,62 +598,28 @@ type RespCapabilities struct {
 	WebPush                   *CapWebPush                   `json:"org.matrix.msc4174.webpush,omitzero"`
 	UnstableAccountModeration *CapUnstableAccountModeration `json:"uk.timedout.msc4323,omitzero"`
 
-	Custom map[string]any `json:"-"`
+	Custom map[string]any `json:",embed,unknown"`
 }
 
 type serializableRespCapabilities RespCapabilities
 
-func (rc *RespCapabilities) UnmarshalJSON(data []byte) error {
-	res := gjson.GetBytes(data, "capabilities")
-	if !res.Exists() || !res.IsObject() {
+func (rc *RespCapabilities) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	var wrapper struct {
+		Capabilities jsontext.Value `json:"capabilities"`
+	}
+	err := json.UnmarshalDecode(dec, &wrapper)
+	if err != nil {
+		return err
+	} else if wrapper.Capabilities.Kind() != '{' {
 		return nil
 	}
-	if res.Index > 0 {
-		data = data[res.Index : res.Index+len(res.Raw)]
-	} else {
-		data = []byte(res.Raw)
-	}
-	err := json.Unmarshal(data, (*serializableRespCapabilities)(rc))
-	if err != nil {
-		return err
-	}
-	err = json.Unmarshal(data, &rc.Custom)
-	if err != nil {
-		return err
-	}
-	// Remove non-custom capabilities from the custom map so that they don't get overridden when serializing back
-	for _, field := range reflect.VisibleFields(reflect.TypeOf(rc).Elem()) {
-		jsonTag, _, _ := strings.Cut(field.Tag.Get("json"), ",")
-		if jsonTag != "-" && jsonTag != "" {
-			delete(rc.Custom, jsonTag)
-		}
-	}
-	return nil
+	return json.Unmarshal(wrapper.Capabilities, (*serializableRespCapabilities)(rc))
 }
 
-func (rc *RespCapabilities) MarshalJSON() ([]byte, error) {
-	marshalableCopy := make(map[string]any, len(rc.Custom))
-	val := reflect.ValueOf(rc).Elem()
-	for _, field := range reflect.VisibleFields(val.Type()) {
-		jsonTag, _, _ := strings.Cut(field.Tag.Get("json"), ",")
-		if jsonTag != "-" && jsonTag != "" {
-			fieldVal := val.FieldByIndex(field.Index)
-			if !fieldVal.IsNil() {
-				marshalableCopy[jsonTag] = fieldVal.Interface()
-			}
-		}
-	}
-	if rc.Custom != nil {
-		maps.Copy(marshalableCopy, rc.Custom)
-	}
-	var buf bytes.Buffer
-	buf.WriteString(`{"capabilities":`)
-	err := json.MarshalWrite(&buf, marshalableCopy)
-	if err != nil {
-		return nil, err
-	}
-	buf.WriteByte('}')
-	return buf.Bytes(), nil
+func (rc *RespCapabilities) MarshalJSONTo(enc *jsontext.Encoder) error {
+	return json.MarshalEncode(enc, struct {
+		Capabilities *serializableRespCapabilities `json:"capabilities"`
+	}{(*serializableRespCapabilities)(rc)})
 }
 
 type CapBoolean struct {

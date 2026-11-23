@@ -2,6 +2,7 @@ package verificationhelper
 
 import (
 	"crypto/ecdh"
+	"encoding/json/jsontext"
 	"encoding/json/v2"
 )
 
@@ -9,12 +10,9 @@ type ECDHPrivateKey struct {
 	*ecdh.PrivateKey
 }
 
-func (e *ECDHPrivateKey) UnmarshalJSON(data []byte) (err error) {
-	if len(data) == 0 {
-		return nil
-	}
+func (e *ECDHPrivateKey) UnmarshalJSONFrom(dec *jsontext.Decoder) (err error) {
 	var raw []byte
-	err = json.Unmarshal(data, &raw)
+	err = json.UnmarshalDecode(dec, &raw)
 	if err != nil {
 		return
 	}
@@ -25,23 +23,20 @@ func (e *ECDHPrivateKey) UnmarshalJSON(data []byte) (err error) {
 	return err
 }
 
-func (e ECDHPrivateKey) MarshalJSON() ([]byte, error) {
+func (e ECDHPrivateKey) MarshalJSONTo(enc *jsontext.Encoder) error {
 	if e.PrivateKey == nil {
-		return json.Marshal(nil)
+		return enc.WriteToken(jsontext.Null)
 	}
-	return json.Marshal(e.Bytes())
+	return json.MarshalEncode(enc, e.Bytes())
 }
 
 type ECDHPublicKey struct {
 	*ecdh.PublicKey
 }
 
-func (e *ECDHPublicKey) UnmarshalJSON(data []byte) (err error) {
-	if len(data) == 0 {
-		return nil
-	}
+func (e *ECDHPublicKey) UnmarshalJSONFrom(dec *jsontext.Decoder) (err error) {
 	var raw []byte
-	err = json.Unmarshal(data, &raw)
+	err = json.UnmarshalDecode(dec, &raw)
 	if err != nil {
 		return
 	}
@@ -52,6 +47,6 @@ func (e *ECDHPublicKey) UnmarshalJSON(data []byte) (err error) {
 	return
 }
 
-func (e ECDHPublicKey) MarshalJSON() ([]byte, error) {
-	return json.Marshal(e.Bytes())
+func (e ECDHPublicKey) MarshalJSONTo(enc *jsontext.Encoder) error {
+	return json.MarshalEncode(enc, e.Bytes())
 }

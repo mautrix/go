@@ -7,6 +7,7 @@
 package pushrules
 
 import (
+	"encoding/json/jsontext"
 	"encoding/json/v2"
 
 	"maunium.net/go/mautrix/event"
@@ -28,7 +29,7 @@ type rawPushRuleset struct {
 	Underride PushRuleArray `json:"underride"`
 }
 
-// UnmarshalJSON parses JSON into this PushRuleset.
+// UnmarshalJSONFrom parses JSON into this PushRuleset.
 //
 // For override, sender and underride push rule arrays, the type is added
 // to each PushRule and the array is used as-is.
@@ -36,9 +37,9 @@ type rawPushRuleset struct {
 // For room and sender push rule arrays, the type is added to each PushRule
 // and the array is converted to a map with the rule ID as the key and the
 // PushRule as the value.
-func (rs *PushRuleset) UnmarshalJSON(raw []byte) (err error) {
+func (rs *PushRuleset) UnmarshalJSONFrom(dec *jsontext.Decoder) (err error) {
 	data := rawPushRuleset{}
-	err = json.Unmarshal(raw, &data)
+	err = json.UnmarshalDecode(dec, &data)
 	if err != nil {
 		return
 	}
@@ -51,8 +52,8 @@ func (rs *PushRuleset) UnmarshalJSON(raw []byte) (err error) {
 	return
 }
 
-// MarshalJSON is the reverse of UnmarshalJSON()
-func (rs *PushRuleset) MarshalJSON() ([]byte, error) {
+// MarshalJSONTo is the reverse of UnmarshalJSONFrom()
+func (rs *PushRuleset) MarshalJSONTo(enc *jsontext.Encoder) error {
 	data := rawPushRuleset{
 		Override:  rs.Override,
 		Content:   rs.Content,
@@ -60,7 +61,7 @@ func (rs *PushRuleset) MarshalJSON() ([]byte, error) {
 		Sender:    rs.Sender.Unmap(),
 		Underride: rs.Underride,
 	}
-	return json.Marshal(&data)
+	return json.MarshalEncode(enc, &data)
 }
 
 // DefaultPushActions is the value returned if none of the rule

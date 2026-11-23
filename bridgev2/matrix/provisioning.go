@@ -180,8 +180,8 @@ func (prov *ProvisioningAPI) Init() {
 	}
 
 	errorBodies := exhttp.ErrorBodies{
-		NotFound:         exerrors.Must(new(mautrix.MUnrecognized.WithMessage("Unrecognized endpoint")).MarshalJSON()),
-		MethodNotAllowed: exerrors.Must(new(mautrix.MUnrecognized.WithMessage("Invalid method for endpoint")).MarshalJSON()),
+		NotFound:         exerrors.Must(json.Marshal(new(mautrix.MUnrecognized.WithMessage("Unrecognized endpoint")))),
+		MethodNotAllowed: exerrors.Must(json.Marshal(new(mautrix.MUnrecognized.WithMessage("Invalid method for endpoint")))),
 	}
 	requestIDHeader := prov.br.Config.Provisioning.RequestIDHeader
 	if requestIDHeader == "" {

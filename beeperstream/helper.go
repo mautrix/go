@@ -329,11 +329,7 @@ func marshalContent(content *event.Content) (jsontext.Value, error) {
 	if content == nil {
 		return jsontext.Value(`{}`), nil
 	}
-	raw, err := content.MarshalJSON()
-	if err != nil {
-		return nil, err
-	}
-	return append(jsontext.Value(nil), raw...), nil
+	return json.Marshal(content)
 }
 
 func normalizeUpdateContent(roomID id.RoomID, eventID id.EventID, content map[string]any) (*event.Content, error) {

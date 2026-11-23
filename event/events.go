@@ -61,9 +61,9 @@ type eventForMarshaling struct {
 }
 
 // UnmarshalJSON unmarshals the event, including moving prev_content from the top level to inside unsigned.
-func (evt *Event) UnmarshalJSON(data []byte) error {
+func (evt *Event) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 	var efm eventForMarshaling
-	err := json.Unmarshal(data, &efm)
+	err := json.UnmarshalDecode(dec, &efm)
 	if err != nil {
 		return err
 	}
@@ -97,12 +97,12 @@ func (evt *Event) UnmarshalJSON(data []byte) error {
 // and encoding/json doesn't know how to check if a non-pointer struct is empty.
 //
 // TODO(tulir): maybe it makes more sense to make Unsigned a pointer and make an easy and safe way to access it?
-func (evt *Event) MarshalJSON() ([]byte, error) {
+func (evt *Event) MarshalJSONTo(enc *jsontext.Encoder) error {
 	unsigned := &evt.Unsigned
 	if unsigned.IsEmpty() {
 		unsigned = nil
 	}
-	return json.Marshal(&eventForMarshaling{
+	return json.MarshalEncode(enc, &eventForMarshaling{
 		StateKey:   evt.StateKey,
 		Sender:     evt.Sender,
 		Type:       evt.Type,

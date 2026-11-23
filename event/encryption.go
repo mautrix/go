@@ -61,8 +61,8 @@ type OlmCiphertexts map[id.Curve25519]struct {
 
 type serializableEncryptedEventContent EncryptedEventContent
 
-func (content *EncryptedEventContent) UnmarshalJSON(data []byte) error {
-	err := json.Unmarshal(data, (*serializableEncryptedEventContent)(content))
+func (content *EncryptedEventContent) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	err := json.UnmarshalDecode(dec, (*serializableEncryptedEventContent)(content))
 	if err != nil {
 		return err
 	}
@@ -81,7 +81,7 @@ func (content *EncryptedEventContent) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (content *EncryptedEventContent) MarshalJSON() ([]byte, error) {
+func (content *EncryptedEventContent) MarshalJSONTo(enc *jsontext.Encoder) error {
 	var err error
 	switch content.Algorithm {
 	case id.AlgorithmOlmV1:
@@ -95,9 +95,9 @@ func (content *EncryptedEventContent) MarshalJSON() ([]byte, error) {
 		content.Ciphertext, err = json.Marshal(content.BeeperStreamCiphertext)
 	}
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return json.Marshal((*serializableEncryptedEventContent)(content))
+	return json.MarshalEncode(enc, (*serializableEncryptedEventContent)(content))
 }
 
 // RoomKeyEventContent represents the content of a m.room_key to_device event.

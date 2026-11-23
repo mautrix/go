@@ -43,13 +43,13 @@ const (
 
 type Direction rune
 
-func (d Direction) MarshalJSON() ([]byte, error) {
-	return json.Marshal(string(d))
+func (d Direction) MarshalJSONTo(enc *jsontext.Encoder) error {
+	return enc.WriteToken(jsontext.String(string(d)))
 }
 
-func (d *Direction) UnmarshalJSON(data []byte) error {
+func (d *Direction) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 	var str string
-	if err := json.Unmarshal(data, &str); err != nil {
+	if err := json.UnmarshalDecode(dec, &str); err != nil {
 		return err
 	}
 	switch str {
@@ -269,26 +269,27 @@ type OneTimeKey struct {
 
 type serializableOTK OneTimeKey
 
-func (otk *OneTimeKey) UnmarshalJSON(data []byte) (err error) {
-	if len(data) > 0 && data[0] == '"' && data[len(data)-1] == '"' {
-		err = json.Unmarshal(data, &otk.Key)
+func (otk *OneTimeKey) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	if dec.PeekKind() == '"' {
 		otk.Signatures = nil
 		otk.Unsigned = nil
 		otk.IsSigned = false
-	} else {
-		err = json.Unmarshal(data, (*serializableOTK)(otk))
-		otk.RawData = data
-		otk.IsSigned = true
+		return json.UnmarshalDecode(dec, &otk.Key)
 	}
-	return err
+	data, err := dec.ReadValue()
+	if err != nil {
+		return err
+	}
+	otk.RawData = data.Clone()
+	otk.IsSigned = true
+	return json.Unmarshal(otk.RawData, (*serializableOTK)(otk))
 }
 
-func (otk *OneTimeKey) MarshalJSON() ([]byte, error) {
+func (otk *OneTimeKey) MarshalJSONTo(enc *jsontext.Encoder) error {
 	if !otk.IsSigned {
-		return json.Marshal(otk.Key)
-	} else {
-		return json.Marshal((*serializableOTK)(otk))
+		return json.MarshalEncode(enc, otk.Key)
 	}
+	return json.MarshalEncode(enc, (*serializableOTK)(otk))
 }
 
 type ReqUploadKeys struct {
@@ -315,38 +316,7 @@ type DeviceKeys struct {
 	Signatures signatures.Signatures `json:"signatures"`
 	Dehydrated bool                  `json:"dehydrated,omitzero"`
 	Unsigned   map[string]any        `json:"unsigned,omitempty"`
-	Extra      map[string]any        `json:"-"`
-}
-
-type serializableDeviceKeys DeviceKeys
-
-func (dk *DeviceKeys) deleteStandardExtraFields() {
-	if len(dk.Extra) == 0 {
-		return
-	}
-	delete(dk.Extra, "user_id")
-	delete(dk.Extra, "device_id")
-	delete(dk.Extra, "algorithms")
-	delete(dk.Extra, "keys")
-	delete(dk.Extra, "signatures")
-	delete(dk.Extra, "dehydrated")
-	delete(dk.Extra, "unsigned")
-}
-
-func (dk *DeviceKeys) MarshalJSON() ([]byte, error) {
-	dk.deleteStandardExtraFields()
-	return event.MarshalMerge((*serializableDeviceKeys)(dk), dk.Extra)
-}
-
-func (dk *DeviceKeys) UnmarshalJSON(data []byte) error {
-	if err := json.Unmarshal(data, (*serializableDeviceKeys)(dk)); err != nil {
-		return err
-	}
-	if err := json.Unmarshal(data, &dk.Extra); err != nil {
-		return err
-	}
-	dk.deleteStandardExtraFields()
-	return nil
+	Extra      map[string]any        `json:",embed,unknown"`
 }
 
 type CrossSigningKeys struct {

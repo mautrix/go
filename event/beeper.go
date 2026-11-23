@@ -152,10 +152,10 @@ type BeeperSendStateEventContent struct {
 
 type IntOrString int
 
-func (ios *IntOrString) UnmarshalJSON(data []byte) error {
-	if len(data) > 0 && data[0] == '"' {
+func (ios *IntOrString) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	if dec.PeekKind() == '"' {
 		var str string
-		err := json.Unmarshal(data, &str)
+		err := json.UnmarshalDecode(dec, &str)
 		if err != nil {
 			return err
 		}
@@ -166,7 +166,7 @@ func (ios *IntOrString) UnmarshalJSON(data []byte) error {
 		*ios = IntOrString(intVal)
 		return nil
 	}
-	return json.Unmarshal(data, (*int)(ios))
+	return json.UnmarshalDecode(dec, (*int)(ios))
 }
 
 type LinkPreview struct {
@@ -356,19 +356,20 @@ func (b *BeeperEncodedOrder) IsZero() bool {
 	return b == nil || (b.order == 0 && b.suborder == 0)
 }
 
-func (b *BeeperEncodedOrder) MarshalJSON() ([]byte, error) {
-	return []byte(`"` + b.String() + `"`), nil
+func (b *BeeperEncodedOrder) MarshalJSONTo(enc *jsontext.Encoder) error {
+	return enc.WriteToken(jsontext.String(b.String()))
 }
 
-func (b *BeeperEncodedOrder) UnmarshalJSON(data []byte) error {
+func (b *BeeperEncodedOrder) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 	if b == nil {
 		return fmt.Errorf("BeeperEncodedOrder: receiver is nil")
 	}
-	str := string(data)
-	if len(str) < 2 {
-		return fmt.Errorf("invalid encoded order string: %s", str)
+	var str string
+	err := json.UnmarshalDecode(dec, &str)
+	if err != nil {
+		return fmt.Errorf("invalid encoded order string: %w", err)
 	}
-	decoded, err := BeeperEncodedOrderFromString(str[1 : len(str)-1])
+	decoded, err := BeeperEncodedOrderFromString(str)
 	if err != nil {
 		return err
 	}

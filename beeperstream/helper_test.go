@@ -196,7 +196,7 @@ func newTestEncryptedUpdateEvent(t *testing.T, descriptor *event.BeeperStreamInf
 func rawifyEventContent(t *testing.T, evt *event.Event) *event.Event {
 	t.Helper()
 	require.NotNil(t, evt)
-	raw, err := evt.Content.MarshalJSON()
+	raw, err := json.Marshal(&evt.Content)
 	require.NoError(t, err)
 	return &event.Event{
 		Sender:     evt.Sender,
@@ -730,7 +730,7 @@ func TestHelperRejectsOldEncryptedRoutingShape(t *testing.T) {
 	_ = recorder.next(t)
 
 	evt := newTestEncryptedUpdateEvent(t, descriptor)
-	raw, err := evt.Content.MarshalJSON()
+	raw, err := json.Marshal(&evt.Content)
 	require.NoError(t, err)
 
 	var parsed map[string]any
