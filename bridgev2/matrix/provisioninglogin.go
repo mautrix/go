@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"runtime/debug"
+	"slices"
 	"sync"
 	"time"
 
@@ -73,6 +74,8 @@ type ProvLogin struct {
 	step     *stepManager
 	Override *bridgev2.UserLogin
 
+	ClientCapabilities bridgev2.ClientCapabilities
+
 	HTTPLock            sync.Mutex
 	fingerprint         string
 	streamsLock         sync.Mutex
@@ -100,6 +103,24 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 	if failed {
 		return
 	}
+	var req ReqLoginStart
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to decode request body")
+		mautrix.MNotJSON.WithMessage("Failed to decode request body").Write(w)
+		return
+	}
+	clientCaps := req.ClientCapabilities
+	if r.URL.Query().Get("client_http") == "1" && !slices.Contains(clientCaps, bridgev2.ClientCapabilityHTTP) {
+		clientCaps = append(clientCaps, bridgev2.ClientCapabilityHTTP)
+	}
+	if r.URL.Query().Get("client_websocket") == "2" && !slices.Contains(clientCaps, bridgev2.ClientCapabilityWebSocket) {
+		clientCaps = append(clientCaps, bridgev2.ClientCapabilityWebSocket)
+	}
+	if prov.br.Websocket {
+		clientCaps = slices.DeleteFunc(clientCaps, func(capability bridgev2.ClientCapability) bool {
+			return capability == bridgev2.ClientCapabilityWebSocket
+		})
+	}
 	user := prov.GetUser(r)
 	if overrideLogin == nil && user.HasTooManyLogins() {
 		ErrTooManyLogins.AppendMessage(" (%d)", user.Permissions.MaxLogins).Write(w)
@@ -118,12 +139,13 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 		Logger().WithContext(ctx)
 	ch := make(chan struct{})
 	provLogin := &ProvLogin{
-		ID:        loginID,
-		UserMXID:  user.MXID,
-		Process:   login,
-		Override:  overrideLogin,
-		Ctx:       ctx,
-		CancelCtx: cancel,
+		ID:                 loginID,
+		UserMXID:           user.MXID,
+		Process:            login,
+		Override:           overrideLogin,
+		ClientCapabilities: clientCaps,
+		Ctx:                ctx,
+		CancelCtx:          cancel,
 
 		// The HTTP over websocket proxy only allows JSON bodies, so the custom gzip format can't be used.
 		acceptsGzipResponse: !prov.br.Websocket,
@@ -138,21 +160,23 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 	prov.loginsLock.Unlock()
 	zerolog.Ctx(r.Context()).Info().
 		Str("login_id", loginID).
+		Any("client_capabilities", clientCaps).
 		Msg("Created login process, now starting")
 
 	var rt bridgev2.FingerprintingRoundTripper
 	var wsrt bridgev2.FingerprintingRoundTripper
-	if r.URL.Query().Get("client_http") == "1" {
+	if clientCaps.Has(bridgev2.ClientCapabilityHTTP) {
 		rt = provLogin
 	}
-	if r.URL.Query().Get("client_websocket") == "2" && !prov.br.Websocket {
+	if clientCaps.Has(bridgev2.ClientCapabilityWebSocket) {
 		provLogin.websocketEnabled = true
 		wsrt = provLogin
 	}
 	go prov.executeStep(provLogin, provLogin.Ctx, "start", nil, nil, &bridgev2.LoginStartParams{
-		Override:      overrideLogin,
-		HTTP:          rt,
-		WebSocketHTTP: wsrt,
+		Override:           overrideLogin,
+		HTTP:               rt,
+		WebSocketHTTP:      wsrt,
+		ClientCapabilities: clientCaps,
 	}, nil)
 	select {
 	case <-ch:
@@ -545,13 +569,8 @@ func (prov *ProvisioningAPI) executeStep(
 		case bridgev2.LoginStepTypeUserInput, bridgev2.LoginStepTypeCookies, bridgev2.LoginStepTypeDisplayAndWait, bridgev2.LoginStepTypeComplete:
 			// ok
 		case bridgev2.LoginStepTypeWebAuthn:
-			if prov.br.Config.Provisioning.FailOnWebAuthn {
+			if err = login.ClientCapabilities.CheckLoginStep(nextStep); err != nil {
 				zerolog.Ctx(login.Ctx).Warn().Msg("Got WebAuthn step, failing login")
-				err = bridgev2.RespError{
-					ErrCode:    "COM.BEEPER.WEBAUTHN_UNSUPPORTED",
-					Err:        "Logging in with a passkey is not yet supported",
-					StatusCode: http.StatusBadRequest,
-				}
 			}
 		default:
 			err = fmt.Errorf("invalid response step type %q from login process", nextStep.Type)
