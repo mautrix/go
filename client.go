@@ -363,6 +363,7 @@ const (
 	MaxAttemptsContextKey
 	SyncTokenContextKey
 	oauthReqContextKey
+	defaultMaxAttemptsContextKey
 )
 
 func (cli *Client) RequestStart(req *http.Request) {
@@ -370,10 +371,6 @@ func (cli *Client) RequestStart(req *http.Request) {
 		cli.RequestHook(req)
 	}
 }
-
-type internalContextKey int
-
-const defaultMaxAttemptsContextKey internalContextKey = 0
 
 // WithMaxRetries updates the context to set the maximum number of retries for any HTTP requests made with the context.
 //
