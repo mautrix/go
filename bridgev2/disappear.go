@@ -8,12 +8,14 @@ package bridgev2
 
 import (
 	"context"
+	"errors"
 	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog"
 	"golang.org/x/exp/slices"
 
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/id"
@@ -143,7 +145,9 @@ func (dl *DisappearLoop) sleepAndDisappear(ctx context.Context, dms ...*database
 		resp, err := dl.br.sendDisappearRedaction(ctx, msg.RoomID, msg.EventID, msg.Type == "view_limited")
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Stringer("target_event_id", msg.EventID).Msg("Failed to disappear message")
-			continue
+			if !errors.Is(err, mautrix.MForbidden) && !errors.Is(err, mautrix.MNotFound) {
+				continue
+			}
 		} else {
 			zerolog.Ctx(ctx).Debug().
 				Stringer("target_event_id", msg.EventID).
