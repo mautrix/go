@@ -660,14 +660,15 @@ func (cli *Client) doRetry(
 		Int("retry_in_seconds", int(backoff.Seconds())).
 		Msg("Request failed, retrying")
 
-	// if this was due to our RequestRetryTrigger then just retry immediately
+	// if this was due to our RequestRetryTrigger then just retry immediately without using up a retry,
 	// the req.Context() will still be live, otherwise do a normal backoff
-	if !errors.Is(cause, ErrContextCancelRetry) {
-		select {
-		case <-time.After(backoff):
-		case <-req.Context().Done():
-			return nil, nil, req.Context().Err()
-		}
+	if errors.Is(cause, ErrContextCancelRetry) {
+		return cli.executeCompiledRequest(origCtx, req, retries, backoff, responseJSON, handler, dontReadResponse, sizeLimit, client)
+	}
+	select {
+	case <-time.After(backoff):
+	case <-req.Context().Done():
+		return nil, nil, req.Context().Err()
 	}
 	return cli.executeCompiledRequest(origCtx, req, retries-1, backoff*2, responseJSON, handler, dontReadResponse, sizeLimit, client)
 }
@@ -902,9 +903,8 @@ func (cli *Client) executeCompiledRequest(
 		if errors.Is(attemptCause, ErrContextCancelRetry) {
 			retryCause = attemptCause
 		}
-		canRetry := !errors.Is(err, context.Canceled) ||
-			errors.Is(attemptCause, ErrContextCancelRetry)
-		if retries > 0 && canRetry {
+		retryTriggered := errors.Is(attemptCause, ErrContextCancelRetry)
+		if retryTriggered || (retries > 0 && !errors.Is(err, context.Canceled)) {
 			return cli.doRetry(
 				origCtx, req, retryCause, retries, backoff, responseJSON, handler, dontReadResponse, sizeLimit, client,
 			)

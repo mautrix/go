@@ -79,7 +79,7 @@ func TestRequestRetryTriggerRetriesActiveAttempt(t *testing.T) {
 	require.Less(t, time.Since(resetAt), 150*time.Millisecond)
 }
 
-func TestRequestRetryTriggerUsesNormalRetryBudget(t *testing.T) {
+func TestRequestRetryTriggerDoesNotUseRetryBudget(t *testing.T) {
 	requestStarted := make(chan struct{})
 	var attempts atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -88,7 +88,8 @@ func TestRequestRetryTriggerUsesNormalRetryBudget(t *testing.T) {
 			close(requestStarted)
 			<-r.Context().Done()
 		default:
-			t.Fatalf("unexpected extra request attempt %d", attempts.Load())
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{}`))
 		}
 	}))
 	t.Cleanup(server.Close)
@@ -112,12 +113,12 @@ func TestRequestRetryTriggerUsesNormalRetryBudget(t *testing.T) {
 
 	select {
 	case err := <-errCh:
-		require.Error(t, err)
+		require.NoError(t, err)
 	case <-time.After(5 * time.Second):
-		t.Fatal("timeout waiting for canceled request to finish")
+		t.Fatal("timeout waiting for retried request to finish")
 	}
 
-	require.EqualValues(t, 1, attempts.Load())
+	require.EqualValues(t, 2, attempts.Load())
 }
 
 func TestCallerCancellationDoesNotRetry(t *testing.T) {
