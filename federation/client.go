@@ -640,6 +640,9 @@ func (c *Client) compileRequest(ctx context.Context, params RequestParams) (*htt
 		}
 	}
 	req.Header.Set("User-Agent", c.UserAgent)
+	if params.RequestJSON != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	if params.Authenticate {
 		if c.ServerName == "" || c.Key == nil {
 			return nil, mautrix.HTTPError{WrappedError: ErrNotConfiguredForAuth}

@@ -115,11 +115,8 @@ func (s *loginClientStream) Close() error {
 }
 
 func (prov *ProvisioningAPI) GetLoginClientWebSocket(w http.ResponseWriter, r *http.Request) {
-	prov.loginsLock.RLock()
-	login := prov.logins[r.PathValue("loginProcessID")]
-	prov.loginsLock.RUnlock()
-	if login == nil || login.UserMXID != prov.GetUser(r).MXID {
-		mautrix.MNotFound.WithMessage("Login not found").Write(w)
+	login := prov.getLogin(w, r, false)
+	if login == nil {
 		return
 	}
 	login.streamsLock.Lock()

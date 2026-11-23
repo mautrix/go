@@ -116,7 +116,7 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 	helper.mach.DeleteKeysOnDeviceDelete = encryptionConfig.DeleteKeys.DeleteOnDeviceDelete
 	helper.mach.DisableDeviceChangeKeyRotation = encryptionConfig.Rotation.DisableDeviceChangeKeyRotation
 	if encryptionConfig.DeleteKeys.PeriodicallyDeleteExpired {
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(helper.bridge.Bridge.BackgroundCtx)
 		helper.cancelPeriodicDeleteLoop = cancel
 		go helper.mach.ExpiredKeyDeleteLoop(ctx)
 	}
@@ -404,7 +404,7 @@ func (helper *CryptoHelper) Start() {
 	defer helper.syncDone.Done()
 	helper.log.Debug().Msg("Starting syncer for receiving to-device messages")
 	var ctx context.Context
-	ctx, helper.cancelSync = context.WithCancel(context.Background())
+	ctx, helper.cancelSync = context.WithCancel(helper.bridge.Bridge.BackgroundCtx)
 	err := helper.client.SyncWithContext(ctx)
 	if err != nil && !errors.Is(err, context.Canceled) {
 		helper.log.WithLevel(zerolog.FatalLevel).Err(err).Msg("Fatal error syncing")

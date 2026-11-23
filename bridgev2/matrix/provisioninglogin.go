@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"runtime/debug"
+	"slices"
 	"sync"
 	"time"
 
@@ -73,6 +74,8 @@ type ProvLogin struct {
 	step     *stepManager
 	Override *bridgev2.UserLogin
 
+	ClientCapabilities bridgev2.ClientCapabilities
+
 	HTTPLock            sync.Mutex
 	fingerprint         string
 	streamsLock         sync.Mutex
@@ -84,6 +87,11 @@ type ProvLogin struct {
 	CancelCtx context.CancelFunc
 }
 
+const (
+	completedLoginGeneration     = 10 * time.Minute
+	completedLoginGenerationSize = 128
+)
+
 var ErrNilStep = errors.New("bridge returned nil step with no error")
 var ErrTooManyLogins = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.TOO_MANY_LOGINS", Err: "Maximum number of logins exceeded", StatusCode: http.StatusForbidden}
 var ErrLoginCancelled = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.LOGIN_CANCELLED", Err: "Login process was cancelled", StatusCode: http.StatusGone}
@@ -94,6 +102,24 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 	overrideLogin, failed := prov.GetExplicitLoginForRequest(w, r)
 	if failed {
 		return
+	}
+	var req ReqLoginStart
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to decode request body")
+		mautrix.MNotJSON.WithMessage("Failed to decode request body").Write(w)
+		return
+	}
+	clientCaps := req.ClientCapabilities
+	if r.URL.Query().Get("client_http") == "1" && !slices.Contains(clientCaps, bridgev2.ClientCapabilityHTTP) {
+		clientCaps = append(clientCaps, bridgev2.ClientCapabilityHTTP)
+	}
+	if r.URL.Query().Get("client_websocket") == "2" && !slices.Contains(clientCaps, bridgev2.ClientCapabilityWebSocket) {
+		clientCaps = append(clientCaps, bridgev2.ClientCapabilityWebSocket)
+	}
+	if prov.br.Websocket {
+		clientCaps = slices.DeleteFunc(clientCaps, func(capability bridgev2.ClientCapability) bool {
+			return capability == bridgev2.ClientCapabilityWebSocket
+		})
 	}
 	user := prov.GetUser(r)
 	if overrideLogin == nil && user.HasTooManyLogins() {
@@ -113,12 +139,13 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 		Logger().WithContext(ctx)
 	ch := make(chan struct{})
 	provLogin := &ProvLogin{
-		ID:        loginID,
-		UserMXID:  user.MXID,
-		Process:   login,
-		Override:  overrideLogin,
-		Ctx:       ctx,
-		CancelCtx: cancel,
+		ID:                 loginID,
+		UserMXID:           user.MXID,
+		Process:            login,
+		Override:           overrideLogin,
+		ClientCapabilities: clientCaps,
+		Ctx:                ctx,
+		CancelCtx:          cancel,
 
 		// The HTTP over websocket proxy only allows JSON bodies, so the custom gzip format can't be used.
 		acceptsGzipResponse: !prov.br.Websocket,
@@ -133,26 +160,28 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 	prov.loginsLock.Unlock()
 	zerolog.Ctx(r.Context()).Info().
 		Str("login_id", loginID).
+		Any("client_capabilities", clientCaps).
 		Msg("Created login process, now starting")
 
 	var rt bridgev2.FingerprintingRoundTripper
 	var wsrt bridgev2.FingerprintingRoundTripper
-	if r.URL.Query().Get("client_http") == "1" {
+	if clientCaps.Has(bridgev2.ClientCapabilityHTTP) {
 		rt = provLogin
 	}
-	if r.URL.Query().Get("client_websocket") == "2" && !prov.br.Websocket {
+	if clientCaps.Has(bridgev2.ClientCapabilityWebSocket) {
 		provLogin.websocketEnabled = true
 		wsrt = provLogin
 	}
 	go prov.executeStep(provLogin, provLogin.Ctx, "start", nil, nil, &bridgev2.LoginStartParams{
-		Override:      overrideLogin,
-		HTTP:          rt,
-		WebSocketHTTP: wsrt,
+		Override:           overrideLogin,
+		HTTP:               rt,
+		WebSocketHTTP:      wsrt,
+		ClientCapabilities: clientCaps,
 	}, nil)
 	select {
 	case <-ch:
 	case <-r.Context().Done():
-		prov.deleteLogin(provLogin, true, ErrLoginCancelled)
+		prov.deleteLogin(provLogin, nil, true, ErrLoginCancelled)
 		return
 	}
 	firstStep, err := provLogin.step.GetNext()
@@ -168,14 +197,40 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 	writeLoginStep(w, r, loginID, firstStep)
 }
 
-func (prov *ProvisioningAPI) PostLoginStep(w http.ResponseWriter, r *http.Request) {
+func (prov *ProvisioningAPI) getLogin(w http.ResponseWriter, r *http.Request, allowCompleted bool) *ProvLogin {
 	loginID := r.PathValue("loginProcessID")
 	prov.loginsLock.RLock()
-	login, ok := prov.logins[loginID]
+	login := prov.logins[loginID]
+	completedLogin := prov.completedLogins[loginID]
+	if completedLogin == nil {
+		completedLogin = prov.prevCompletedLogins[loginID]
+	}
 	prov.loginsLock.RUnlock()
-	if !ok || login.UserMXID != prov.GetUser(r).MXID {
-		zerolog.Ctx(r.Context()).Warn().Str("login_id", loginID).Msg("Login not found")
-		mautrix.MNotFound.WithMessage("Login not found").Write(w)
+	if login != nil && login.UserMXID == prov.GetUser(r).MXID {
+		return login
+	} else if allowCompleted && login == nil && completedLogin != nil && completedLogin.userID == prov.GetUser(r).MXID {
+		if completedLogin.err != nil {
+			RespondWithError(w, completedLogin.err, "Internal error in login step")
+			return nil
+		}
+		writeLoginStep(w, r, loginID, &bridgev2.LoginStep{
+			Type:         bridgev2.LoginStepTypeComplete,
+			StepID:       "fi.mau.bridgev2.already_completed",
+			Instructions: completedLogin.instructions,
+			CompleteParams: &bridgev2.LoginCompleteParams{
+				UserLoginID: completedLogin.userLoginID,
+			},
+		})
+		return nil
+	}
+	zerolog.Ctx(r.Context()).Warn().Str("login_id", loginID).Msg("Login not found")
+	mautrix.MNotFound.WithMessage("Login not found").Write(w)
+	return nil
+}
+
+func (prov *ProvisioningAPI) PostLoginStep(w http.ResponseWriter, r *http.Request) {
+	login := prov.getLogin(w, r, true)
+	if login == nil {
 		return
 	}
 	txnID := r.URL.Query().Get("txn_id")
@@ -221,26 +276,17 @@ func (prov *ProvisioningAPI) PostLoginStep(w http.ResponseWriter, r *http.Reques
 }
 
 func (prov *ProvisioningAPI) PostLoginCancel(w http.ResponseWriter, r *http.Request) {
-	loginID := r.PathValue("loginProcessID")
-	prov.loginsLock.RLock()
-	login, ok := prov.logins[loginID]
-	prov.loginsLock.RUnlock()
-	if !ok || login.UserMXID != prov.GetUser(r).MXID {
-		zerolog.Ctx(r.Context()).Warn().Str("login_id", loginID).Msg("Login not found")
-		mautrix.MNotFound.WithMessage("Login not found").Write(w)
+	login := prov.getLogin(w, r, false)
+	if login == nil {
 		return
 	}
-	prov.deleteLogin(login, true, ErrLoginCancelled)
+	prov.deleteLogin(login, nil, true, ErrLoginCancelled)
 	exhttp.WriteEmptyJSONResponse(w, http.StatusOK)
 }
 
 func (prov *ProvisioningAPI) PostLoginStepCancel(w http.ResponseWriter, r *http.Request) {
-	loginID := r.PathValue("loginProcessID")
-	prov.loginsLock.RLock()
-	login, ok := prov.logins[loginID]
-	prov.loginsLock.RUnlock()
-	if !ok || login.UserMXID != prov.GetUser(r).MXID {
-		mautrix.MNotFound.WithMessage("Login not found").Write(w)
+	login := prov.getLogin(w, r, false)
+	if login == nil {
 		return
 	}
 	nextStep, err := prov.cancelLoginStep(r.Context(), login, r.PathValue("stepID"), r.URL.Query().Get("txn_id"))
@@ -369,7 +415,7 @@ func (prov *ProvisioningAPI) doLoginStep(
 ) (*bridgev2.LoginStep, error) {
 	log := zerolog.Ctx(ctx).With().Str("login_id", login.ID).Logger()
 	if login.Ctx.Err() != nil {
-		prov.deleteLogin(login, true, nil)
+		prov.deleteLogin(login, nil, true, nil)
 		if nextStep, err := login.step.GetNext(); nextStep != nil && nextStep.Type == bridgev2.LoginStepTypeComplete {
 			return nextStep, nil
 		} else if err != nil {
@@ -524,23 +570,18 @@ func (prov *ProvisioningAPI) executeStep(
 		case bridgev2.LoginStepTypeUserInput, bridgev2.LoginStepTypeCookies, bridgev2.LoginStepTypeDisplayAndWait, bridgev2.LoginStepTypeComplete:
 			// ok
 		case bridgev2.LoginStepTypeWebAuthn:
-			if prov.br.Config.Provisioning.FailOnWebAuthn {
+			if err = login.ClientCapabilities.CheckLoginStep(nextStep); err != nil {
 				zerolog.Ctx(login.Ctx).Warn().Msg("Got WebAuthn step, failing login")
-				err = bridgev2.RespError{
-					ErrCode:    "COM.BEEPER.WEBAUTHN_UNSUPPORTED",
-					Err:        "Logging in with a passkey is not yet supported",
-					StatusCode: http.StatusBadRequest,
-				}
 			}
 		default:
 			err = fmt.Errorf("invalid response step type %q from login process", nextStep.Type)
 		}
 	}
+	if err == nil && nextStep == nil {
+		err = ErrNilStep
+	}
 	if err != nil {
-		prov.deleteLogin(login, true, err)
-		return
-	} else if nextStep == nil {
-		prov.deleteLogin(login, true, ErrNilStep)
+		prov.deleteLogin(login, &completedLoginData{userID: login.UserMXID, err: err}, true, err)
 		return
 	}
 	nextStep.TxnID = LoginStepTxnIDPrefix + xid.New().String()
@@ -575,7 +616,11 @@ func (prov *ProvisioningAPI) handleCompleteStep(login *ProvLogin, step *bridgev2
 		Str("user_login_id", string(step.CompleteParams.UserLoginID)).
 		Msg("Login completed successfully")
 	defer login.CancelCtx()
-	prov.deleteLogin(login, false, nil)
+	prov.deleteLogin(login, &completedLoginData{
+		userLoginID:  step.CompleteParams.UserLoginID,
+		userID:       login.UserMXID,
+		instructions: step.Instructions,
+	}, false, nil)
 	if login.Override == nil || login.Override.ID == step.CompleteParams.UserLoginID {
 		return
 	}
@@ -600,7 +645,7 @@ func (prov *ProvisioningAPI) handleLoginTimeout(login *ProvLogin) {
 	}
 }
 
-func (prov *ProvisioningAPI) deleteLogin(login *ProvLogin, cancel bool, err error) {
+func (prov *ProvisioningAPI) deleteLogin(login *ProvLogin, completed *completedLoginData, cancel bool, err error) {
 	if cancel {
 		login.Process.Cancel()
 		login.CancelCtx()
@@ -615,6 +660,14 @@ func (prov *ProvisioningAPI) deleteLogin(login *ProvLogin, cancel bool, err erro
 		})
 	}
 	prov.loginsLock.Lock()
+	if _, ok := prov.logins[login.ID]; ok && completed != nil {
+		if len(prov.completedLogins) >= completedLoginGenerationSize || time.Since(prov.completedLoginsRotatedAt) > completedLoginGeneration {
+			prov.prevCompletedLogins = prov.completedLogins
+			prov.completedLogins = make(map[string]*completedLoginData)
+			prov.completedLoginsRotatedAt = time.Now()
+		}
+		prov.completedLogins[login.ID] = completed
+	}
 	delete(prov.logins, login.ID)
 	prov.loginsLock.Unlock()
 }

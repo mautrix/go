@@ -434,6 +434,7 @@ func (br *Bridge) StartLoginsForUsers(ctx context.Context, users []*User) {
 		br.SendGlobalBridgeState(ctx, status.BridgeState{StateEvent: status.StateUnconfigured})
 	}
 	if !br.Background {
+		br.stopBackfillQueue.Clear()
 		go br.RunBackfillQueue()
 	}
 

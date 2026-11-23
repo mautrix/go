@@ -191,6 +191,10 @@ func (mach *OlmMachine) DecryptMegolmEvent(ctx context.Context, evt *event.Event
 	} else if megolmEvt.RoomID != encryptionRoomID {
 		return nil, ErrWrongRoom
 	}
+	// Redactions are special, don't allow encrypting them at all for now.
+	if megolmEvt.Type.Type == event.EventRedaction.Type {
+		return nil, fmt.Errorf("illegal encrypted redaction event")
+	}
 	if evt.StateKey != nil && megolmEvt.StateKey != nil && mach.AllowEncryptedState {
 		megolmEvt.Type.Class = event.StateEventType
 	} else {

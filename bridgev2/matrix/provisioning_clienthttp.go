@@ -51,15 +51,10 @@ func decodeGzippedClientHTTPResponse(body io.Reader, resp *bridgev2.LoginClientH
 
 func (prov *ProvisioningAPI) PostLoginClientHTTP(w http.ResponseWriter, r *http.Request) {
 	log := zerolog.Ctx(r.Context())
-	loginID := r.PathValue("loginProcessID")
 	txnID := r.PathValue("txnID")
 	reqID := r.PathValue("reqID")
-	prov.loginsLock.RLock()
-	login, ok := prov.logins[loginID]
-	prov.loginsLock.RUnlock()
-	if !ok || login.UserMXID != prov.GetUser(r).MXID {
-		log.Warn().Str("login_id", loginID).Msg("Login not found")
-		mautrix.MNotFound.WithMessage("Login not found").Write(w)
+	login := prov.getLogin(w, r, true)
+	if login == nil {
 		return
 	}
 	// Bypass the size limit set in auth middleware, because the client HTTP response may be large.

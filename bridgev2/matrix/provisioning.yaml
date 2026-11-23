@@ -128,7 +128,11 @@ paths:
            * If step type `complete` is returned, the login finished successfully.
            * Otherwise, go to step 3 with the new data.
 
-        Note: `client_http` steps will only ever be returned if the client explicitly opts into it via the query parameter.
+        Note: `client_http` steps will only ever be returned if the client explicitly opts into it,
+        either with the `client_http` capability or the query parameter.
+
+        If a login needs a client capability that the client didn't declare, the bridge returns
+        a `FI.MAU.BRIDGE.MISSING_CLIENT_CAPABILITY` error, either here or from a later step.
       operationId: startLogin
       parameters:
       - name: login_id
@@ -142,6 +146,7 @@ paths:
         description: |
           Whether the client supports client HTTP proxying.
           If set, `client_http` steps may be returned during the login flow.
+          Alias for the `client_http` client capability.
         required: false
         schema:
           type: number
@@ -152,6 +157,7 @@ paths:
           Whether the client supports client websocket proxying.
           If set, `client_http` steps may include a `stream_id` to indicate the response needs a full duplex tunnel.
           See the `/client_websocket` endpoint for details.
+          Alias for the `client_websocket` client capability.
         required: false
         schema:
           type: number
@@ -163,6 +169,15 @@ paths:
         schema:
           type: string
           examples: [ qr ]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                client_capabilities:
+                  $ref: '#/components/schemas/ClientCapabilities'
       responses:
         200:
           description: Login successfully started
@@ -1408,6 +1423,30 @@ components:
           description: An internal ID that is passed to the /login/start call to start a login with this flow.
           examples:
           - qr
+        required_client_capabilities:
+          type: array
+          description: |
+            Client capabilities that this flow needs. Clients should hide flows
+            that need a capability they don't have.
+          items:
+            $ref: '#/components/schemas/ClientCapability'
+    ClientCapability:
+      type: string
+      description: |
+        A feature that the client supports during login.
+        `webauthn` means it can complete `webauthn` steps,
+        `client_http` means it can execute `client_http` steps, and
+        `client_websocket` means it can open full duplex tunnels for `client_http` steps.
+      enum: [ webauthn, client_http, client_websocket ]
+    ClientCapabilities:
+      type: array
+      description: |
+        The capabilities the client supports. Capabilities that aren't listed
+        (including when the list isn't sent at all) are assumed to be unsupported.
+      items:
+        $ref: '#/components/schemas/ClientCapability'
+      examples:
+      - [ webauthn ]
     BridgeName:
       type: object
       description: Info about the network that the bridge is bridging to.

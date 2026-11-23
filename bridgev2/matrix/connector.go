@@ -534,7 +534,7 @@ func (br *Connector) SendBridgeStatus(ctx context.Context, state *status.BridgeS
 		if state.StateEvent == status.StateConnecting {
 			return nil
 		}
-		return state.SendHTTP(ctx, br.Config.Homeserver.StatusEndpoint, br.Config.AppService.ASToken)
+		return state.SendHTTP(ctx, br.AS.HTTPClient, br.Config.Homeserver.StatusEndpoint, br.Config.AppService.ASToken)
 	} else {
 		return nil
 	}

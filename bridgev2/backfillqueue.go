@@ -83,8 +83,7 @@ func (br *Bridge) RunBackfillQueue() {
 		log.Warn().Msg("Backfill queue is enabled in config, but Matrix server doesn't support batch sending")
 		return
 	}
-	ctx, cancel := context.WithCancel(log.WithContext(context.Background()))
-	br.stopBackfillQueue.Clear()
+	ctx, cancel := context.WithCancel(log.WithContext(br.BackgroundCtx))
 	stopChan := br.stopBackfillQueue.GetChan()
 	go func() {
 		<-stopChan

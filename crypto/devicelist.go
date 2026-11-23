@@ -23,13 +23,14 @@ import (
 )
 
 var (
-	ErrMismatchingDeviceID   = errors.New("mismatching device ID in parameter and keys object")
-	ErrMismatchingUserID     = errors.New("mismatching user ID in parameter and keys object")
-	ErrMismatchingSigningKey = errors.New("received update for device with different signing key")
-	ErrNoSigningKeyFound     = errors.New("didn't find ed25519 signing key")
-	ErrNoIdentityKeyFound    = errors.New("didn't find curve25519 identity key")
-	ErrInvalidKeySignature   = errors.New("invalid signature on device keys")
-	ErrUserNotTracked        = errors.New("user is not tracked")
+	ErrMismatchingDeviceID    = errors.New("mismatching device ID in parameter and keys object")
+	ErrMismatchingUserID      = errors.New("mismatching user ID in parameter and keys object")
+	ErrMismatchingSigningKey  = errors.New("received update for device with different signing key")
+	ErrMismatchingIdentityKey = errors.New("received update for device with different identity key")
+	ErrNoSigningKeyFound      = errors.New("didn't find ed25519 signing key")
+	ErrNoIdentityKeyFound     = errors.New("didn't find curve25519 identity key")
+	ErrInvalidKeySignature    = errors.New("invalid signature on device keys")
+	ErrUserNotTracked         = errors.New("user is not tracked")
 )
 
 // Deprecated: use variables prefixed with Err
@@ -360,13 +361,8 @@ func (mach *OlmMachine) validateDevice(userID id.UserID, deviceID id.DeviceID, d
 		existing.Trust = id.TrustStateDeviceKeyMismatch
 		return existing, fmt.Errorf("%w (expected %s, got %s)", ErrMismatchingSigningKey, existing.SigningKey, signingKey)
 	} else if existing != nil && existing.IdentityKey != identityKey {
-		mach.Log.Warn().
-			Stringer("user_id", userID).
-			Stringer("device_id", deviceID).
-			Stringer("signing_key", signingKey).
-			Stringer("old_identity_key", existing.IdentityKey).
-			Stringer("new_identity_key", identityKey).
-			Msg("Identity key change detected. This will likely be forbidden in the future")
+		existing.Trust = id.TrustStateDeviceKeyMismatch
+		return existing, fmt.Errorf("%w (expected %s, got %s)", ErrMismatchingIdentityKey, existing.IdentityKey, identityKey)
 	}
 
 	ok, err := signatures.VerifySignatureJSON(deviceKeys, userID, deviceID.String(), signingKey)

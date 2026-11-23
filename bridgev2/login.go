@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/rs/zerolog"
@@ -28,6 +29,47 @@ var ErrLoginStepCancelled = RespError{
 	ErrCode:    "FI.MAU.LOGIN_STEP_CANCELLED",
 	Err:        "Login step was cancelled",
 	StatusCode: http.StatusConflict,
+}
+
+var ErrMissingClientCapability = RespError{
+	ErrCode:    "FI.MAU.BRIDGE.MISSING_CLIENT_CAPABILITY",
+	Err:        "This login requires a capability that the client doesn't support",
+	StatusCode: http.StatusBadRequest,
+}
+
+func MissingClientCapabilityError(capability ClientCapability) RespError {
+	return ErrMissingClientCapability.WithMessage("This login requires the %s capability, which the client doesn't support", capability)
+}
+
+type ClientCapability string
+
+const (
+	ClientCapabilityWebAuthn  ClientCapability = "webauthn"
+	ClientCapabilityHTTP      ClientCapability = "client_http"
+	ClientCapabilityWebSocket ClientCapability = "client_websocket"
+)
+
+type ClientCapabilities []ClientCapability
+
+func (cc ClientCapabilities) Has(capability ClientCapability) bool {
+	return slices.Contains(cc, capability)
+}
+
+// CheckLoginStep returns a missing capability error if the step can't be completed by a client with these capabilities.
+func (cc ClientCapabilities) CheckLoginStep(step *LoginStep) error {
+	if step != nil && step.Type == LoginStepTypeWebAuthn && !cc.Has(ClientCapabilityWebAuthn) {
+		return MissingClientCapabilityError(ClientCapabilityWebAuthn)
+	}
+	return nil
+}
+
+func (cc ClientCapabilities) HasAll(capabilities ...ClientCapability) bool {
+	for _, capability := range capabilities {
+		if !cc.Has(capability) {
+			return false
+		}
+	}
+	return true
 }
 
 // LoginProcess represents a single occurrence of a user logging into the remote network.
@@ -66,6 +108,9 @@ type LoginStartParams struct {
 	Override      *UserLogin
 	HTTP          FingerprintingRoundTripper
 	WebSocketHTTP FingerprintingRoundTripper
+	// ClientCapabilities lists the login features the client supports.
+	// Use [ClientCapabilities.Has] to check it, and store it in the login process if later steps need it.
+	ClientCapabilities ClientCapabilities
 }
 
 type LoginProcessWithParams interface {
@@ -110,6 +155,8 @@ type LoginFlow struct {
 	Name        l10n.Message `json:"name"`
 	Description l10n.Message `json:"description"`
 	ID          string       `json:"id"`
+
+	RequiredClientCapabilities []ClientCapability `json:"required_client_capabilities,omitempty"`
 }
 
 type LoginStepType string

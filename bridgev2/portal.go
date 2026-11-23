@@ -1663,6 +1663,8 @@ func (portal *Portal) handleMatrixEdit(
 	} else if editTarget == nil {
 		log.Warn().Msg("Edit target message not found in database")
 		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("edit %w", ErrTargetMessageNotFound))
+	} else if origSender != nil && origSender.UserID != editTarget.SenderMXID {
+		return EventHandlingResultFailed.WithMSSError(ErrEditFromNonSender)
 	} else if caps.EditMaxAge != nil && caps.EditMaxAge.Duration > 0 && time.Since(editTarget.Timestamp) > caps.EditMaxAge.Duration {
 		return EventHandlingResultFailed.WithMSSError(ErrEditTargetTooOld)
 	} else if caps.EditMaxCount > 0 && editTarget.EditCount >= caps.EditMaxCount {

@@ -26,6 +26,7 @@ import (
 	"go.mau.fi/util/exhttp"
 	"go.mau.fi/util/exstrings"
 	"go.mau.fi/util/jsontime"
+	"go.mau.fi/util/l10n"
 	"go.mau.fi/util/requestlog"
 
 	"maunium.net/go/mautrix"
@@ -45,6 +46,13 @@ type matrixAuthCacheEntry struct {
 	UserID  id.UserID
 }
 
+type completedLoginData struct {
+	userLoginID  networkid.UserLoginID
+	userID       id.UserID
+	instructions l10n.Message
+	err          error
+}
+
 type ProvisioningAPI struct {
 	Router *http.ServeMux
 
@@ -54,8 +62,12 @@ type ProvisioningAPI struct {
 
 	fedClient *federation.Client
 
-	logins     map[string]*ProvLogin
-	loginsLock sync.RWMutex
+	logins map[string]*ProvLogin
+	// Two generations, so each finished login is kept until two rotations have passed.
+	completedLogins          map[string]*completedLoginData
+	prevCompletedLogins      map[string]*completedLoginData
+	completedLoginsRotatedAt time.Time
+	loginsLock               sync.RWMutex
 
 	matrixAuthCache     map[string]matrixAuthCacheEntry
 	matrixAuthCacheLock sync.Mutex
@@ -116,6 +128,8 @@ func inputRequestIDMiddleware(header string) exhttp.Middleware {
 func (prov *ProvisioningAPI) Init() {
 	prov.matrixAuthCache = make(map[string]matrixAuthCacheEntry)
 	prov.logins = make(map[string]*ProvLogin)
+	prov.completedLogins = make(map[string]*completedLoginData)
+	prov.completedLoginsRotatedAt = time.Now()
 	prov.net = prov.br.Bridge.Network
 	prov.log = prov.br.Log.With().Str("component", "provisioning").Logger()
 	prov.fedClient = federation.NewClient("", nil, nil, exhttp.SensibleClientSettings.WithGlobalTimeout(20*time.Second))
@@ -387,6 +401,10 @@ func (prov *ProvisioningAPI) GetWhoami(w http.ResponseWriter, r *http.Request) {
 
 type RespLoginFlows struct {
 	Flows []bridgev2.LoginFlow `json:"flows"`
+}
+
+type ReqLoginStart struct {
+	ClientCapabilities bridgev2.ClientCapabilities `json:"client_capabilities,omitempty"`
 }
 
 type RespSubmitLogin struct {
