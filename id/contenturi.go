@@ -88,17 +88,15 @@ func ParseContentURIBytes(uri []byte) (parsed ContentURI, err error) {
 }
 
 func (uri *ContentURI) UnmarshalJSONFrom(dec *jsontext.Decoder) (err error) {
-	switch dec.PeekKind() {
+	tok, err := dec.ReadToken()
+	if err != nil {
+		return err
+	}
+	switch tok.Kind() {
 	case jsontext.KindNull:
 		*uri = ContentURI{}
 		return nil
 	case jsontext.KindString:
-		tok, err := dec.ReadToken()
-		if err != nil {
-			return err
-		} else if tok.Kind() != jsontext.KindString {
-			return fmt.Errorf("ContentURI: %w (after peeking)", ErrInputNotJSONString)
-		}
 		parsed, err := ParseContentURI(tok.String())
 		if err != nil {
 			return err
