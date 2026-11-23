@@ -121,6 +121,47 @@ func TestRequestRetryTriggerDoesNotUseRetryBudget(t *testing.T) {
 	require.EqualValues(t, 2, attempts.Load())
 }
 
+func TestRequestRetryTriggerRespectsExplicitSingleAttempt(t *testing.T) {
+	requestStarted := make(chan struct{})
+	var attempts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch attempts.Add(1) {
+		case 1:
+			close(requestStarted)
+			<-r.Context().Done()
+		default:
+			t.Errorf("unexpected extra request attempt %d", attempts.Load())
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	client := newTestClient(t, server.URL)
+	client.DefaultHTTPRetries = 0
+
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := client.MakeRequest(WithMaxRetries(context.Background(), 0), http.MethodGet, server.URL, nil, nil)
+		errCh <- err
+	}()
+
+	select {
+	case <-requestStarted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for request start")
+	}
+
+	client.RequestRetryTrigger.Notify()
+
+	select {
+	case err := <-errCh:
+		require.Error(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for canceled request to finish")
+	}
+
+	require.EqualValues(t, 1, attempts.Load())
+}
+
 func TestCallerCancellationDoesNotRetry(t *testing.T) {
 	requestStarted := make(chan struct{})
 	var attempts atomic.Int32
