@@ -15,8 +15,6 @@ import (
 	"strconv"
 	"strings"
 
-	"golang.org/x/exp/maps"
-
 	"maunium.net/go/mautrix/crypto/attachment"
 	"maunium.net/go/mautrix/id"
 )
@@ -394,7 +392,7 @@ func (sfi *serializableFileInfo) CopyFrom(fileInfo *FileInfo) *serializableFileI
 
 		BridgedSticker: fileInfo.BridgedSticker,
 
-		Extra: withoutStandardFileInfoFields(fileInfo.Extra),
+		Extra: fileInfo.Extra,
 	}
 	if fileInfo.Width > 0 {
 		sfi.Width = jsonv1.Number(strconv.Itoa(fileInfo.Width))
@@ -433,24 +431,6 @@ func (sfi *serializableFileInfo) CopyTo(fileInfo *FileInfo) {
 		fileInfo.ThumbnailInfo = &FileInfo{}
 		sfi.ThumbnailInfo.CopyTo(fileInfo.ThumbnailInfo)
 	}
-}
-
-var standardFileInfoFields = []string{
-	"mimetype", "thumbnail_info", "thumbnail_url", "thumbnail_file", "blurhash", "xyz.amorgan.blurhash",
-	"fi.mau.gif", "is_animated", "w", "h", "duration", "size", "fi.mau.bridged_sticker",
-}
-
-func withoutStandardFileInfoFields(extra map[string]any) map[string]any {
-	for _, field := range standardFileInfoFields {
-		if _, found := extra[field]; found {
-			extra = maps.Clone(extra)
-			for _, field = range standardFileInfoFields {
-				delete(extra, field)
-			}
-			break
-		}
-	}
-	return extra
 }
 
 func (fileInfo *FileInfo) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
