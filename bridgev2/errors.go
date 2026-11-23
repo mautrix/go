@@ -45,6 +45,7 @@ var ErrDirectMediaNotEnabled = errors.New("direct media is not enabled")
 var ErrPortalIsDeleted = errors.New("portal is deleted")
 var ErrPortalNotFoundInEventHandler = errors.New("portal not found to handle remote event")
 var ErrSplitPortalMigrationFailed = errors.New("failed to migrate to split portals")
+var ErrProxyNotSupported = errors.New("proxy is configured, but the network connector doesn't support proxies")
 var ErrCannotDisableSplitPortals = errors.New("split portals are disabled in the config, but the database has already been migrated to split portals")
 
 // Common message status errors

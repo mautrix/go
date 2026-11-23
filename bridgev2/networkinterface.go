@@ -311,6 +311,16 @@ type ConfigValidatingNetwork interface {
 	ValidateConfig() error
 }
 
+// ProxyingNetwork is an optional interface that network connectors implement if they route remote
+// network connections through the proxy returned by [Bridge.GetProxy].
+//
+// The bridge refuses to start if a proxy is configured and the network connector doesn't implement this,
+// so that traffic isn't silently sent without the proxy.
+type ProxyingNetwork interface {
+	NetworkConnector
+	SupportsProxy()
+}
+
 // MaxFileSizeingNetwork is an optional interface that network connectors can implement
 // to find out the maximum file size that can be uploaded to Matrix.
 //

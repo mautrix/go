@@ -417,6 +417,17 @@ backfill:
         # Interpretation of this field depends on the network connector.
         max_batches_override: {}
 
+# Proxy for connections to the remote network. Only supported by some network connectors:
+# the bridge will refuse to start if a proxy is set and the connector doesn't support it.
+# Note that the exact connections that use the proxy depend on the network connector.
+proxy:
+    # Static proxy URL, e.g. socks5://user:pass@host:1080 or http://host:8080.
+    url: null
+    # Alternative to url: an HTTP endpoint that returns the proxy URL to use.
+    # The bridge sends a GET request with a `reason` query parameter (e.g. login or connect),
+    # and the endpoint must return a JSON object with a non-empty `proxy_url` string field.
+    lookup_url: null
+
 # Settings for enabling double puppeting
 double_puppet:
     # Servers to always allow double puppeting from.

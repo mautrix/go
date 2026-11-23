@@ -203,6 +203,11 @@ func (br *Bridge) StartConnectors(ctx context.Context) error {
 			defer postMigrate()
 		}
 	}
+	if br.Config.Proxy.IsConfigured() {
+		if _, ok := br.Network.(ProxyingNetwork); !ok {
+			return ErrProxyNotSupported
+		}
+	}
 	br.Log.Info().Msg("Starting Matrix connector")
 	err := br.Matrix.Start(ctx)
 	if err != nil {

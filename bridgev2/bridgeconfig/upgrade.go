@@ -173,6 +173,9 @@ func doUpgrade(helper up.Helper) {
 	helper.Copy(up.Int, "backfill", "queue", "max_batches")
 	helper.Copy(up.Map, "backfill", "queue", "max_batches_override")
 
+	helper.Copy(up.Str|up.Null, "proxy", "url")
+	helper.Copy(up.Str|up.Null, "proxy", "lookup_url")
+
 	helper.Copy(up.Map, "double_puppet", "servers")
 	helper.Copy(up.Bool, "double_puppet", "allow_discovery")
 	helper.Copy(up.Map, "double_puppet", "secrets")
@@ -239,6 +242,7 @@ var SpacedBlocks = [][]string{
 	{"public_media"},
 	{"direct_media"},
 	{"backfill"},
+	{"proxy"},
 	{"double_puppet"},
 	{"encryption"},
 	{"env_config_prefix"},
