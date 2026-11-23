@@ -282,7 +282,7 @@ func (otk *OneTimeKey) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 	}
 	otk.RawData = data.Clone()
 	otk.IsSigned = true
-	return json.Unmarshal(otk.RawData, (*serializableOTK)(otk))
+	return json.Unmarshal(otk.RawData, (*serializableOTK)(otk), dec.Options())
 }
 
 func (otk *OneTimeKey) MarshalJSONTo(enc *jsontext.Encoder) error {

@@ -61,6 +61,9 @@ func (cv *CallVersion) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 }
 
 func (cv *CallVersion) MarshalJSONTo(enc *jsontext.Encoder) error {
+	if len(*cv) == 0 {
+		return enc.WriteToken(jsontext.String(""))
+	}
 	for _, char := range *cv {
 		if char < '0' || char > '9' {
 			// The version contains weird characters, return as string.
@@ -78,7 +81,7 @@ func (cv *CallVersion) Int() (int, error) {
 type BaseCallEventContent struct {
 	CallID  string      `json:"call_id"`
 	PartyID string      `json:"party_id"`
-	Version CallVersion `json:"version,omitempty"`
+	Version CallVersion `json:"version,omitzero"`
 }
 
 type CallInviteEventContent struct {

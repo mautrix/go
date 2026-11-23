@@ -613,7 +613,7 @@ func (rc *RespCapabilities) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 	} else if wrapper.Capabilities.Kind() != '{' {
 		return nil
 	}
-	return json.Unmarshal(wrapper.Capabilities, (*serializableRespCapabilities)(rc))
+	return json.Unmarshal(wrapper.Capabilities, (*serializableRespCapabilities)(rc), dec.Options())
 }
 
 func (rc *RespCapabilities) MarshalJSONTo(enc *jsontext.Encoder) error {

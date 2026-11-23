@@ -90,7 +90,7 @@ func (rr *ReadReceipt) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 		if err != nil {
 			return err
 		}
-		err = json.Unmarshal([]byte(strData), &parsed)
+		err = json.Unmarshal([]byte(strData), &parsed, dec.Options())
 		if err != nil {
 			return err
 		}

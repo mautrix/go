@@ -162,7 +162,7 @@ func (content *Content) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 		return err
 	}
 	content.VeryRaw = data.Clone()
-	return json.Unmarshal(content.VeryRaw, &content.Raw)
+	return json.Unmarshal(content.VeryRaw, &content.Raw, dec.Options())
 }
 
 func (content *Content) MarshalJSONTo(enc *jsontext.Encoder) error {
