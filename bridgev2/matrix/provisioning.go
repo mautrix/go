@@ -49,6 +49,7 @@ type completedLoginData struct {
 	userLoginID  networkid.UserLoginID
 	userID       id.UserID
 	instructions string
+	err          error
 }
 
 type ProvisioningAPI struct {
