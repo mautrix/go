@@ -382,8 +382,6 @@ func (br *BridgeMain) LoadConfig() {
 			os.Exit(10)
 		}
 	}
-	cfg.Bridge.Backfill = cfg.Backfill
-	cfg.Bridge.Proxy = cfg.Proxy
 	if cfg.EnvConfigPrefix != "" {
 		err = UpdateConfigFromEnv(&cfg, networkData, cfg.EnvConfigPrefix)
 		if err != nil {
@@ -391,6 +389,8 @@ func (br *BridgeMain) LoadConfig() {
 			os.Exit(10)
 		}
 	}
+	cfg.Bridge.Backfill = cfg.Backfill
+	cfg.Bridge.Proxy = cfg.Proxy
 	br.Config = &cfg
 }
 
