@@ -569,8 +569,7 @@ type RespBeeperBatchSend struct {
 	EventIDs []id.EventID `json:"event_ids"`
 }
 
-// RespCapabilities is the JSON response for https://spec.matrix.org/v1.3/client-server-api/#get_matrixclientv3capabilities
-type RespCapabilities struct {
+type Capabilities struct {
 	RoomVersions              *CapRoomVersions              `json:"m.room_versions,omitzero"`
 	ChangePassword            *CapBooleanTrue               `json:"m.change_password,omitzero"`
 	SetDisplayname            *CapBooleanTrue               `json:"m.set_displayname,omitzero"`
@@ -583,25 +582,9 @@ type RespCapabilities struct {
 	Custom map[string]any `json:",embed,unknown"`
 }
 
-type serializableRespCapabilities RespCapabilities
-
-func (rc *RespCapabilities) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
-	var wrapper struct {
-		Capabilities jsontext.Value `json:"capabilities"`
-	}
-	err := json.UnmarshalDecode(dec, &wrapper)
-	if err != nil {
-		return err
-	} else if wrapper.Capabilities.Kind() != jsontext.KindBeginObject {
-		return nil
-	}
-	return json.Unmarshal(wrapper.Capabilities, (*serializableRespCapabilities)(rc), dec.Options())
-}
-
-func (rc *RespCapabilities) MarshalJSONTo(enc *jsontext.Encoder) error {
-	return json.MarshalEncode(enc, struct {
-		Capabilities *serializableRespCapabilities `json:"capabilities"`
-	}{(*serializableRespCapabilities)(rc)})
+// RespCapabilities is the JSON response for https://spec.matrix.org/v1.3/client-server-api/#get_matrixclientv3capabilities
+type RespCapabilities struct {
+	Capabilities *Capabilities `json:"capabilities"`
 }
 
 type CapBoolean struct {
