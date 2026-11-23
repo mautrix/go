@@ -371,6 +371,10 @@ func (cli *Client) RequestStart(req *http.Request) {
 	}
 }
 
+type internalContextKey int
+
+const defaultMaxAttemptsContextKey internalContextKey = 0
+
 // WithMaxRetries updates the context to set the maximum number of retries for any HTTP requests made with the context.
 //
 // 0 means the request will only be attempted once and will not be retried.
@@ -561,6 +565,7 @@ func (cli *Client) MakeFullRequestWithResp(ctx context.Context, params FullReque
 			params.MaxAttempts = maxAttempts
 		} else {
 			params.MaxAttempts = 1 + cli.DefaultHTTPRetries
+			ctx = context.WithValue(ctx, defaultMaxAttemptsContextKey, true)
 		}
 	}
 	if params.BackoffDuration == 0 {
@@ -660,14 +665,15 @@ func (cli *Client) doRetry(
 		Int("retry_in_seconds", int(backoff.Seconds())).
 		Msg("Request failed, retrying")
 
-	// if this was due to our RequestRetryTrigger then just retry immediately
+	// if this was due to our RequestRetryTrigger then just retry immediately without using up a retry,
 	// the req.Context() will still be live, otherwise do a normal backoff
-	if !errors.Is(cause, ErrContextCancelRetry) {
-		select {
-		case <-time.After(backoff):
-		case <-req.Context().Done():
-			return nil, nil, req.Context().Err()
-		}
+	if errors.Is(cause, ErrContextCancelRetry) {
+		return cli.executeCompiledRequest(origCtx, req, retries, backoff, responseJSON, handler, dontReadResponse, sizeLimit, client)
+	}
+	select {
+	case <-time.After(backoff):
+	case <-req.Context().Done():
+		return nil, nil, req.Context().Err()
 	}
 	return cli.executeCompiledRequest(origCtx, req, retries-1, backoff*2, responseJSON, handler, dontReadResponse, sizeLimit, client)
 }
@@ -902,9 +908,10 @@ func (cli *Client) executeCompiledRequest(
 		if errors.Is(attemptCause, ErrContextCancelRetry) {
 			retryCause = attemptCause
 		}
-		canRetry := !errors.Is(err, context.Canceled) ||
-			errors.Is(attemptCause, ErrContextCancelRetry)
-		if retries > 0 && canRetry {
+		// Requests that explicitly asked for a single attempt aren't replayed on a retry trigger either.
+		retryTriggered := errors.Is(attemptCause, ErrContextCancelRetry) &&
+			(retries > 0 || origCtx.Value(defaultMaxAttemptsContextKey) != nil)
+		if retryTriggered || (retries > 0 && !errors.Is(err, context.Canceled)) {
 			return cli.doRetry(
 				origCtx, req, retryCause, retries, backoff, responseJSON, handler, dontReadResponse, sizeLimit, client,
 			)
