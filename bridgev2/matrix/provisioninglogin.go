@@ -7,7 +7,6 @@
 package matrix
 
 import (
-	"bytes"
 	"context"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
@@ -106,14 +105,12 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	var req ReqLoginStart
-	if body, err := io.ReadAll(r.Body); err != nil {
-		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to read request body")
-		mautrix.MNotJSON.WithMessage("Failed to read request body").Write(w)
-		return
-	} else if err = json.Unmarshal(body, &req); err != nil && len(bytes.TrimSpace(body)) > 0 {
-		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to decode request body")
-		mautrix.MNotJSON.WithMessage("Failed to decode request body").Write(w)
-		return
+	if r.ContentLength != 0 {
+		if err := json.UnmarshalRead(r.Body, &req); err != nil {
+			zerolog.Ctx(r.Context()).Err(err).Msg("Failed to decode request body")
+			mautrix.MNotJSON.WithMessage("Failed to decode request body").Write(w)
+			return
+		}
 	}
 	clientCaps := req.ClientCapabilities
 	if r.URL.Query().Get("client_http") == "1" && !slices.Contains(clientCaps, bridgev2.ClientCapabilityHTTP) {
