@@ -112,6 +112,8 @@ func (skr *ServerKeyResponse) VerifySelfSignature() error {
 
 type ServerVerifyKey struct {
 	Key id.SigningKey `json:"key"`
+
+	Unknown jsontext.Value `json:",embed,unknown"`
 }
 
 func (svk *ServerVerifyKey) Decode() (ed25519.PublicKey, error) {
@@ -121,6 +123,8 @@ func (svk *ServerVerifyKey) Decode() (ed25519.PublicKey, error) {
 type OldVerifyKey struct {
 	Key       id.SigningKey      `json:"key"`
 	ExpiredTS jsontime.UnixMilli `json:"expired_ts"`
+
+	Unknown jsontext.Value `json:",embed,unknown"`
 }
 
 func (sk *SigningKey) SignJSON(data any) (string, error) {
