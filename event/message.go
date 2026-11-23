@@ -7,12 +7,10 @@
 package event
 
 import (
-	jsonv1 "encoding/json"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"html"
 	"slices"
-	"strconv"
 	"strings"
 
 	"maunium.net/go/mautrix/crypto/attachment"
@@ -347,10 +345,10 @@ type serializableFileInfo struct {
 	MauGIF     bool `json:"fi.mau.gif,omitzero"`
 	IsAnimated bool `json:"is_animated,omitzero"`
 
-	Width    jsonv1.Number `json:"w,omitempty,omitzero"`
-	Height   jsonv1.Number `json:"h,omitempty,omitzero"`
-	Duration jsonv1.Number `json:"duration,omitempty,omitzero"`
-	Size     jsonv1.Number `json:"size,omitempty,omitzero"`
+	Width    IntOrString `json:"w,omitzero"`
+	Height   IntOrString `json:"h,omitzero"`
+	Duration IntOrString `json:"duration,omitzero"`
+	Size     IntOrString `json:"size,omitzero"`
 
 	BridgedSticker *BridgedSticker `json:"fi.mau.bridged_sticker,omitzero"`
 
@@ -395,27 +393,26 @@ func (sfi *serializableFileInfo) CopyFrom(fileInfo *FileInfo) *serializableFileI
 		Extra: fileInfo.Extra,
 	}
 	if fileInfo.Width > 0 {
-		sfi.Width = jsonv1.Number(strconv.Itoa(fileInfo.Width))
+		sfi.Width = IntOrString(fileInfo.Width)
 	}
 	if fileInfo.Height > 0 {
-		sfi.Height = jsonv1.Number(strconv.Itoa(fileInfo.Height))
+		sfi.Height = IntOrString(fileInfo.Height)
 	}
 	if fileInfo.Size > 0 {
-		sfi.Size = jsonv1.Number(strconv.Itoa(fileInfo.Size))
-
+		sfi.Size = IntOrString(fileInfo.Size)
 	}
 	if fileInfo.Duration > 0 {
-		sfi.Duration = jsonv1.Number(strconv.Itoa(int(fileInfo.Duration)))
+		sfi.Duration = IntOrString(fileInfo.Duration)
 	}
 	return sfi
 }
 
 func (sfi *serializableFileInfo) CopyTo(fileInfo *FileInfo) {
 	*fileInfo = FileInfo{
-		Width:          numberToInt(sfi.Width),
-		Height:         numberToInt(sfi.Height),
-		Size:           numberToInt(sfi.Size),
-		Duration:       numberToInt(sfi.Duration),
+		Width:          int(sfi.Width),
+		Height:         int(sfi.Height),
+		Size:           int(sfi.Size),
+		Duration:       int(sfi.Duration),
 		MimeType:       sfi.MimeType,
 		ThumbnailURL:   sfi.ThumbnailURL,
 		ThumbnailFile:  sfi.ThumbnailFile,
@@ -444,14 +441,6 @@ func (fileInfo *FileInfo) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 
 func (fileInfo *FileInfo) MarshalJSONTo(enc *jsontext.Encoder) error {
 	return json.MarshalEncode(enc, (&serializableFileInfo{}).CopyFrom(fileInfo))
-}
-
-func numberToInt(val jsonv1.Number) int {
-	f64, _ := val.Float64()
-	if f64 > 0 {
-		return int(f64)
-	}
-	return 0
 }
 
 func (fileInfo *FileInfo) GetThumbnailInfo() *FileInfo {
