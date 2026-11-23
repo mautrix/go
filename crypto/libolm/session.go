@@ -212,7 +212,7 @@ func (s *Session) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 	tok, err := dec.ReadToken()
 	if err != nil {
 		return err
-	} else if tok.Kind() != '"' {
+	} else if tok.Kind() != jsontext.KindString {
 		return olm.ErrInputNotJSONString
 	}
 	if s == nil || s.int == nil {

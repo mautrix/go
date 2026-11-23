@@ -270,7 +270,7 @@ type OneTimeKey struct {
 type serializableOTK OneTimeKey
 
 func (otk *OneTimeKey) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
-	if dec.PeekKind() == '"' {
+	if dec.PeekKind() == jsontext.KindString {
 		otk.Signatures = nil
 		otk.Unsigned = nil
 		otk.IsSigned = false

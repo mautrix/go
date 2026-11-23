@@ -153,7 +153,7 @@ type BeeperSendStateEventContent struct {
 type IntOrString int
 
 func (ios *IntOrString) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
-	if dec.PeekKind() == '"' {
+	if dec.PeekKind() == jsontext.KindString {
 		var str string
 		err := json.UnmarshalDecode(dec, &str)
 		if err != nil {

@@ -114,7 +114,7 @@ func (riv *RoomIDValue) IsValid() bool {
 type RoomIDOrString string
 
 func (ros *RoomIDOrString) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
-	if dec.PeekKind() == '"' {
+	if dec.PeekKind() == jsontext.KindString {
 		var str string
 		if err := json.UnmarshalDecode(dec, &str); err != nil {
 			return err

@@ -610,7 +610,7 @@ func (rc *RespCapabilities) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 	err := json.UnmarshalDecode(dec, &wrapper)
 	if err != nil {
 		return err
-	} else if wrapper.Capabilities.Kind() != '{' {
+	} else if wrapper.Capabilities.Kind() != jsontext.KindBeginObject {
 		return nil
 	}
 	return json.Unmarshal(wrapper.Capabilities, (*serializableRespCapabilities)(rc), dec.Options())

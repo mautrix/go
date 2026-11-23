@@ -45,7 +45,7 @@ type CallVersion string
 
 func (cv *CallVersion) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 	var err error
-	if dec.PeekKind() == '0' {
+	if dec.PeekKind() == jsontext.KindNumber {
 		var numberVersion int
 		err = json.UnmarshalDecode(dec, &numberVersion)
 		*cv = CallVersion(strconv.Itoa(numberVersion))

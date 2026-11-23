@@ -1916,11 +1916,11 @@ func parseRoomStateArray(req *http.Request, res *http.Response, responseJSON any
 	arrayStart, err := dec.ReadToken()
 	if err != nil {
 		return nil, err
-	} else if arrayStart.Kind() != '[' {
+	} else if arrayStart.Kind() != jsontext.KindBeginArray {
 		return nil, fmt.Errorf("expected array start, got %s", arrayStart.Kind())
 	}
 
-	for i := 1; dec.PeekKind() != ']'; i++ {
+	for i := 1; dec.PeekKind() != jsontext.KindEndArray; i++ {
 		var evt *event.Event
 		err = json.UnmarshalDecode(dec, &evt)
 		if err != nil {
@@ -1939,7 +1939,7 @@ func parseRoomStateArray(req *http.Request, res *http.Response, responseJSON any
 	arrayEnd, err := dec.ReadToken()
 	if err != nil {
 		return nil, err
-	} else if arrayEnd.Kind() != ']' {
+	} else if arrayEnd.Kind() != jsontext.KindEndArray {
 		return nil, fmt.Errorf("expected array end, got %s", arrayEnd.Kind())
 	}
 	return nil, nil
