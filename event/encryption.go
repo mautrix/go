@@ -69,14 +69,14 @@ func (content *EncryptedEventContent) UnmarshalJSONFrom(dec *jsontext.Decoder) e
 	switch content.Algorithm {
 	case id.AlgorithmOlmV1:
 		content.OlmCiphertext = make(OlmCiphertexts)
-		return json.Unmarshal(content.Ciphertext, &content.OlmCiphertext)
+		return json.Unmarshal(content.Ciphertext, &content.OlmCiphertext, dec.Options())
 	case id.AlgorithmMegolmV1:
 		if len(content.Ciphertext) == 0 || content.Ciphertext[0] != '"' || content.Ciphertext[len(content.Ciphertext)-1] != '"' {
 			return fmt.Errorf("ciphertext %w", id.ErrInputNotJSONString)
 		}
 		content.MegolmCiphertext = content.Ciphertext[1 : len(content.Ciphertext)-1]
 	case id.AlgorithmBeeperStreamV1:
-		return json.Unmarshal(content.Ciphertext, &content.BeeperStreamCiphertext)
+		return json.Unmarshal(content.Ciphertext, &content.BeeperStreamCiphertext, dec.Options())
 	}
 	return nil
 }
