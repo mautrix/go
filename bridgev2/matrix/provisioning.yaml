@@ -1388,11 +1388,13 @@ components:
           description: |
             The values substituted into the template's `{name}` placeholders to
             produce `text`. For plural templates, the catalog names the
-            parameter that holds the count.
+            parameter that holds the count. A value can be a nested message,
+            which clients should render before substituting it.
           additionalProperties:
             oneOf:
             - type: string
             - type: integer
+            - $ref: '#/components/schemas/LocalizableMessage'
           examples:
           - phone: "+15550100"
     LoginInputOption:
