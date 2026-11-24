@@ -3136,10 +3136,21 @@ func (portal *Portal) cutOffLongMessage(ctx context.Context, content *event.Cont
 			textContent.Body = cutOffMessageText(textContent.Body, excess, "\n\n[long message cut off]", false)
 		}
 	}
-	zerolog.Ctx(ctx).Warn().
+	newSize := messageContentSize(content, msg)
+	evt := zerolog.Ctx(ctx).Warn().
 		Int("original_size", origSize).
-		Int("new_size", messageContentSize(content, msg)).
-		Msg("Cut off message content that was too large for a Matrix event")
+		Int("new_size", newSize)
+	if newSize > limit {
+		evt = evt.
+			Int("limit", limit).
+			Int("body_size", len(textContent.Body)).
+			Int("formatted_body_size", len(textContent.FormattedBody)).
+			Int("link_previews_size", jsonSize(msg.BeeperLinkPreviews)).
+			Int("mentions_size", jsonSize(msg.Mentions)).
+			Int("extra_size", jsonSize(content.Raw)).
+			Bool("is_edit", msg.NewContent != nil)
+	}
+	evt.Msg("Cut off message content that was too large for a Matrix event")
 }
 
 func (portal *Portal) sendConvertedMessage(
