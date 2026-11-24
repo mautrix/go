@@ -66,6 +66,12 @@ type portalEvent interface {
 	isPortalEvent()
 }
 
+type outgoingMessageRedaction struct {
+	sender     *UserLogin
+	origSender *OrigSender
+	evt        *event.Event
+}
+
 type outgoingMessage struct {
 	db        *database.Message
 	evt       *event.Event
@@ -73,6 +79,7 @@ type outgoingMessage struct {
 	handle    func(RemoteMessage, *database.Message) (bool, error)
 	ackedAt   time.Time
 	timeouted bool
+	redaction atomic.Pointer[outgoingMessageRedaction]
 
 	disappearSetting database.DisappearingSetting
 }
@@ -91,8 +98,9 @@ type Portal struct {
 	typingUpdaterRunning  bool
 	lastMatrixTyping      time.Time
 
-	outgoingMessages     map[networkid.TransactionID]*outgoingMessage
-	outgoingMessagesLock sync.Mutex
+	outgoingMessages       map[networkid.TransactionID]*outgoingMessage
+	outgoingMessagesByMXID map[id.EventID]*outgoingMessage
+	outgoingMessagesLock   sync.Mutex
 
 	roomCreateLock   sync.Mutex
 	cancelRoomCreate atomic.Pointer[context.CancelFunc]
@@ -139,9 +147,10 @@ func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, que
 		Portal: dbPortal,
 		Bridge: br,
 
-		currentlyTypingLogins: make(map[id.UserID]*UserLogin),
-		currentlyTypingGhosts: exsync.NewSet[id.UserID](),
-		outgoingMessages:      make(map[networkid.TransactionID]*outgoingMessage),
+		currentlyTypingLogins:  make(map[id.UserID]*UserLogin),
+		currentlyTypingGhosts:  exsync.NewSet[id.UserID](),
+		outgoingMessages:       make(map[networkid.TransactionID]*outgoingMessage),
+		outgoingMessagesByMXID: make(map[id.EventID]*outgoingMessage),
 
 		RoomCreated: exsync.NewEvent(),
 	}
@@ -1457,9 +1466,7 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 				resp.PostSave(ctx, message)
 			}
 			if resp.RemovePending != "" {
-				portal.outgoingMessagesLock.Lock()
-				delete(portal.outgoingMessages, resp.RemovePending)
-				portal.outgoingMessagesLock.Unlock()
+				wrappedMsgEvt.RemovePending(resp.RemovePending)
 			}
 		}
 		portal.sendSuccessStatus(ctx, evt, resp.StreamOrder, message.MXID, resp.Disappear)
@@ -1530,16 +1537,19 @@ func (evt *MatrixMessage) AddPendingToSave(message *database.Message, txnID netw
 	}
 	evt.Portal.outgoingMessagesLock.Lock()
 	evt.Portal.outgoingMessages[txnID] = pending
+	evt.Portal.outgoingMessagesByMXID[evt.Event.ID] = pending
 	evt.pendingSaves = append(evt.pendingSaves, pending)
 	evt.Portal.outgoingMessagesLock.Unlock()
 }
 
 // RemovePending removes a transaction ID from the list of pending messages.
-// This should only be called if sending the message fails.
 func (evt *MatrixMessage) RemovePending(txnID networkid.TransactionID) {
 	evt.Portal.outgoingMessagesLock.Lock()
 	pendingSave := evt.Portal.outgoingMessages[txnID]
 	if pendingSave != nil {
+		if pendingSave.evt != nil {
+			delete(evt.Portal.outgoingMessagesByMXID, pendingSave.evt.ID)
+		}
 		evt.pendingSaves = slices.DeleteFunc(evt.pendingSaves, func(save *outgoingMessage) bool {
 			return save == pendingSave
 		})
@@ -2670,6 +2680,14 @@ func (portal *Portal) handleMatrixRedaction(
 		log.Debug().Msg("Ignoring redaction without checking target as network connector doesn't implement RedactionHandlingNetworkAPI nor ReactionHandlingNetworkAPI")
 		return EventHandlingResultIgnored.WithMSSError(ErrRedactionsNotSupported)
 	}
+	if deleteOK && portal.checkPendingMessageForRedaction(content.Redacts, &outgoingMessageRedaction{
+		sender:     sender,
+		origSender: origSender,
+		evt:        evt,
+	}) {
+		log.Debug().Msg("Redaction target message is still pending")
+		return EventHandlingResultIgnored
+	}
 	var redactionTargetReaction *database.Reaction
 	redactionTargetMsg, err := portal.Bridge.DB.Message.GetPartByMXID(ctx, content.Redacts)
 	if err != nil {
@@ -3240,6 +3258,17 @@ func (portal *Portal) sendConvertedMessage(
 	return output, EventHandlingResultSuccess
 }
 
+func (portal *Portal) checkPendingMessageForRedaction(eventID id.EventID, omr *outgoingMessageRedaction) bool {
+	portal.outgoingMessagesLock.Lock()
+	defer portal.outgoingMessagesLock.Unlock()
+	msg, ok := portal.outgoingMessagesByMXID[eventID]
+	if !ok {
+		return false
+	}
+	msg.redaction.Store(omr)
+	return true
+}
+
 func (portal *Portal) checkPendingMessage(ctx context.Context, evt RemoteMessage) (bool, *database.Message) {
 	evtWithTxn, ok := evt.(RemoteMessageWithTransactionID)
 	if !ok {
@@ -3258,6 +3287,7 @@ func (portal *Portal) checkPendingMessage(ctx context.Context, evt RemoteMessage
 		return true, nil
 	}
 	delete(portal.outgoingMessages, txnID)
+	delete(portal.outgoingMessagesByMXID, pending.evt.ID)
 	pending.db.ID = evt.GetID()
 	if pending.db.SenderID == "" {
 		pending.db.SenderID = evt.GetSender().Sender
@@ -3296,6 +3326,11 @@ func (portal *Portal) checkPendingMessage(ctx context.Context, evt RemoteMessage
 		}
 	}
 	zerolog.Ctx(ctx).Debug().Stringer("event_id", pending.evt.ID).Msg("Received remote echo for message")
+	if redact := pending.redaction.Load(); redact != nil {
+		zerolog.Ctx(ctx).Debug().
+			Msg("Handling pending redaction for message after receiving remote echo")
+		portal.handleMatrixRedaction(ctx, redact.sender, redact.origSender, redact.evt)
+	}
 	return true, pending.db
 }
 
