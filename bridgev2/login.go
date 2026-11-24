@@ -9,6 +9,7 @@ package bridgev2
 import (
 	"context"
 	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -439,18 +440,18 @@ type LoginInputOption struct {
 	Label l10n.Message `json:"label"`
 }
 
-// UnmarshalJSON also accepts the bare string used by provisioning v3.
-func (opt *LoginInputOption) UnmarshalJSON(data []byte) error {
-	if len(data) > 0 && data[0] == '"' {
+// UnmarshalJSONFrom also accepts the bare string used by provisioning v3.
+func (opt *LoginInputOption) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	if dec.PeekKind() == jsontext.KindString {
 		var val string
-		if err := json.Unmarshal(data, &val); err != nil {
+		if err := json.UnmarshalDecode(dec, &val); err != nil {
 			return err
 		}
 		*opt = LoginInputOption{Value: val, Label: l10n.Unlocalized(val)}
 		return nil
 	}
 	type plain LoginInputOption
-	return json.Unmarshal(data, (*plain)(opt))
+	return json.UnmarshalDecode(dec, (*plain)(opt))
 }
 
 // UnlocalizedOptions makes options whose labels are their values.
