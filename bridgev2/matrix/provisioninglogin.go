@@ -96,8 +96,13 @@ const loginTimeout = 30 * time.Minute
 
 var ErrNilStep = errors.New("bridge returned nil step with no error")
 var ErrTooManyLogins = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.TOO_MANY_LOGINS", Err: "Maximum number of logins exceeded", StatusCode: http.StatusForbidden}
-var ErrLoginCancelled = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.LOGIN_CANCELLED", Err: "Login process was cancelled", StatusCode: http.StatusGone}
-var ErrLoginTimedOut = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.LOGIN_TIMED_OUT", Err: "Login process timed out", StatusCode: http.StatusGone}
+
+// Deprecated: kept for backward compatibility, use bridgev2.ErrLoginCancelled.
+var ErrLoginCancelled = bridgev2.ErrLoginCancelled
+
+// Deprecated: kept for backward compatibility, use bridgev2.ErrLoginTimedOut.
+var ErrLoginTimedOut = bridgev2.ErrLoginTimedOut
+
 var ErrLoginLost = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.LOGIN_LOST", Err: "Login process may have been lost because the bridge restarted", StatusCode: http.StatusGone}
 var ErrLoginAlreadyFinished = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.LOGIN_ALREADY_FINISHED", Err: "Login process was already finished", StatusCode: http.StatusGone}
 
@@ -184,7 +189,7 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 	select {
 	case <-ch:
 	case <-r.Context().Done():
-		prov.deleteLogin(provLogin, nil, true, ErrLoginCancelled)
+		prov.deleteLogin(provLogin, nil, true, bridgev2.ErrLoginCancelled)
 		return
 	}
 	firstStep, err := provLogin.step.GetNext()
@@ -290,7 +295,7 @@ func (prov *ProvisioningAPI) PostLoginCancel(w http.ResponseWriter, r *http.Requ
 	if login == nil {
 		return
 	}
-	prov.deleteLogin(login, nil, true, ErrLoginCancelled)
+	prov.deleteLogin(login, nil, true, bridgev2.ErrLoginCancelled)
 	exhttp.WriteEmptyJSONResponse(w, http.StatusOK)
 }
 
@@ -431,9 +436,9 @@ func (prov *ProvisioningAPI) doLoginStep(
 		} else if err != nil {
 			return nil, err
 		} else if errors.Is(login.Ctx.Err(), context.DeadlineExceeded) {
-			return nil, ErrLoginTimedOut
+			return nil, bridgev2.ErrLoginTimedOut
 		}
-		return nil, ErrLoginCancelled
+		return nil, bridgev2.ErrLoginCancelled
 	}
 
 	var currentStep *bridgev2.LoginStep

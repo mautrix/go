@@ -136,9 +136,9 @@ func (prov *ProvisioningAPI) PostLoginClientHTTP(w http.ResponseWriter, r *http.
 		RespondWithError(w, err, "Internal error in login step")
 	} else if login.Ctx.Err() != nil && nextStep != nil && nextStep.Type != bridgev2.LoginStepTypeComplete {
 		if errors.Is(login.Ctx.Err(), context.DeadlineExceeded) {
-			ErrLoginTimedOut.Write(w)
+			bridgev2.ErrLoginTimedOut.Write(w)
 		} else {
-			ErrLoginCancelled.Write(w)
+			bridgev2.ErrLoginCancelled.Write(w)
 		}
 	} else {
 		log.Debug().
