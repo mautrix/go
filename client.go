@@ -2920,14 +2920,22 @@ func (cli *Client) SetDeviceInfo(ctx context.Context, deviceID id.DeviceID, req 
 }
 
 func (cli *Client) DeleteDevice(ctx context.Context, deviceID id.DeviceID, req *ReqDeleteDevice[any]) error {
-	urlPath := cli.BuildClientURL("v3", "devices", deviceID)
-	_, err := cli.MakeRequest(ctx, http.MethodDelete, urlPath, req, nil)
+	_, err := cli.MakeFullRequest(ctx, FullRequest{
+		Method:           http.MethodDelete,
+		URL:              cli.BuildClientURL("v3", "devices", deviceID),
+		RequestJSON:      req,
+		SensitiveContent: req.Auth != nil,
+	})
 	return err
 }
 
 func (cli *Client) DeleteDevices(ctx context.Context, req *ReqDeleteDevices[any]) error {
-	urlPath := cli.BuildClientURL("v3", "delete_devices")
-	_, err := cli.MakeRequest(ctx, http.MethodPost, urlPath, req, nil)
+	_, err := cli.MakeFullRequest(ctx, FullRequest{
+		Method:           http.MethodPost,
+		URL:              cli.BuildClientURL("v3", "delete_devices"),
+		RequestJSON:      req,
+		SensitiveContent: req.Auth != nil,
+	})
 	return err
 }
 

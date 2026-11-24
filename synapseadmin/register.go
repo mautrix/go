@@ -93,7 +93,13 @@ func (cli *Client) SharedSecretRegister(ctx context.Context, sharedSecret string
 	}
 	req.SHA1Checksum = req.Sign(sharedSecret)
 	var resp mautrix.RespRegister
-	_, err = cli.Client.MakeRequest(ctx, http.MethodPost, cli.BuildAdminURL("v1", "register"), &req, &resp)
+	_, err = cli.Client.MakeFullRequest(ctx, mautrix.FullRequest{
+		Method:           http.MethodPost,
+		URL:              cli.BuildAdminURL("v1", "register"),
+		RequestJSON:      &req,
+		ResponseJSON:     &resp,
+		SensitiveContent: true,
+	})
 	if err != nil {
 		return nil, err
 	}

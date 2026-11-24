@@ -31,8 +31,12 @@ type ReqResetPassword struct {
 //
 // https://matrix-org.github.io/synapse/latest/admin_api/user_admin_api.html#reset-password
 func (cli *Client) ResetPassword(ctx context.Context, req ReqResetPassword) error {
-	reqURL := cli.BuildAdminURL("v1", "reset_password", req.UserID)
-	_, err := cli.Client.MakeRequest(ctx, http.MethodPost, reqURL, &req, nil)
+	_, err := cli.Client.MakeFullRequest(ctx, mautrix.FullRequest{
+		Method:           http.MethodPost,
+		URL:              cli.BuildAdminURL("v1", "reset_password", req.UserID),
+		RequestJSON:      &req,
+		SensitiveContent: true,
+	})
 	return err
 }
 
@@ -136,8 +140,12 @@ type ReqCreateOrModifyAccount struct {
 //
 // https://matrix-org.github.io/synapse/latest/admin_api/user_admin_api.html#create-or-modify-account
 func (cli *Client) CreateOrModifyAccount(ctx context.Context, userID id.UserID, req ReqCreateOrModifyAccount) error {
-	reqURL := cli.BuildAdminURL("v2", "users", userID)
-	_, err := cli.Client.MakeRequest(ctx, http.MethodPut, reqURL, &req, nil)
+	_, err := cli.Client.MakeFullRequest(ctx, mautrix.FullRequest{
+		Method:           http.MethodPut,
+		URL:              cli.BuildAdminURL("v2", "users", userID),
+		RequestJSON:      &req,
+		SensitiveContent: req.Password != "",
+	})
 	return err
 }
 
