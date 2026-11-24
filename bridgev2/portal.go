@@ -32,6 +32,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/bridgev2/status"
@@ -5782,13 +5783,15 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 		return err
 	}
 	if source != nil && source.ID == portal.Receiver && portal.Bridge.GetCachedUserLoginByID(source.ID) == nil && source.deletedCleanupRooms {
-		log.Warn().Msg("Receiver login was deleted during room creation, applying logout cleanup")
-		source.kickUserFromPortals(
-			log.WithContext(portal.Bridge.BackgroundCtx),
-			[]*database.UserPortal{{UserMXID: source.UserMXID, LoginID: source.ID, Portal: portal.PortalKey}},
-			source.deletedBadCredentials, false,
-		)
-		return ErrNotLoggedIn
+		up := &database.UserPortal{UserMXID: source.UserMXID, LoginID: source.ID, Portal: portal.PortalKey}
+		_, action, _, err := source.getLogoutAction(ctx, up, source.deletedBadCredentials)
+		if err != nil {
+			log.Err(err).Msg("Failed to get logout action for portal created after login was deleted")
+		} else if action != bridgeconfig.CleanupActionNull && action != bridgeconfig.CleanupActionNothing {
+			log.Warn().Str("logout_action", string(action)).Msg("Receiver login was deleted during room creation, applying logout cleanup")
+			source.kickUserFromPortals(log.WithContext(portal.Bridge.BackgroundCtx), []*database.UserPortal{up}, source.deletedBadCredentials, false)
+			return ErrNotLoggedIn
+		}
 	}
 	if info.CanBackfill && portal.RoomType != database.RoomTypeSpace {
 		err = portal.Bridge.DB.BackfillTask.Upsert(ctx, &database.BackfillTask{
