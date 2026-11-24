@@ -197,7 +197,7 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 		Str("login_id", loginID).
 		Object("first_step", firstStep).
 		Msg("Started login process")
-	exhttp.WriteJSONResponse(w, http.StatusOK, &RespSubmitLogin{LoginID: loginID, LoginStep: firstStep})
+	writeLoginStep(w, r, loginID, firstStep)
 }
 
 func (prov *ProvisioningAPI) getLogin(w http.ResponseWriter, r *http.Request, allowCompleted bool) *ProvLogin {
@@ -216,15 +216,12 @@ func (prov *ProvisioningAPI) getLogin(w http.ResponseWriter, r *http.Request, al
 			RespondWithError(w, completedLogin.err, "Internal error in login step")
 			return nil
 		}
-		exhttp.WriteJSONResponse(w, http.StatusOK, &RespSubmitLogin{
-			LoginID: loginID,
-			LoginStep: &bridgev2.LoginStep{
-				Type:         bridgev2.LoginStepTypeComplete,
-				StepID:       "fi.mau.bridgev2.already_completed",
-				Instructions: completedLogin.instructions,
-				CompleteParams: &bridgev2.LoginCompleteParams{
-					UserLoginID: completedLogin.userLoginID,
-				},
+		writeLoginStep(w, r, loginID, &bridgev2.LoginStep{
+			Type:         bridgev2.LoginStepTypeComplete,
+			StepID:       "fi.mau.bridgev2.already_completed",
+			Instructions: completedLogin.instructions,
+			CompleteParams: &bridgev2.LoginCompleteParams{
+				UserLoginID: completedLogin.userLoginID,
 			},
 		})
 		return nil
@@ -284,7 +281,7 @@ func (prov *ProvisioningAPI) PostLoginStep(w http.ResponseWriter, r *http.Reques
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to complete login step")
 		RespondWithError(w, err, "Internal error in login step")
 	} else {
-		exhttp.WriteJSONResponse(w, http.StatusOK, &RespSubmitLogin{LoginID: login.ID, LoginStep: resp})
+		writeLoginStep(w, r, login.ID, resp)
 	}
 }
 
@@ -307,7 +304,7 @@ func (prov *ProvisioningAPI) PostLoginStepCancel(w http.ResponseWriter, r *http.
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to cancel login step")
 		RespondWithError(w, err, "Internal error cancelling login step")
 	} else {
-		exhttp.WriteJSONResponse(w, http.StatusOK, &RespSubmitLogin{LoginID: login.ID, LoginStep: nextStep})
+		writeLoginStep(w, r, login.ID, nextStep)
 	}
 }
 

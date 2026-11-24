@@ -1,0 +1,54 @@
+{
+	"login_id": "login-id",
+	"type": "user_input",
+	"step_id": "fi.mau.test.password",
+	"txn_id": "",
+	"instructions": {
+		"key": "provisioning-test:step.password.instructions",
+		"text": "Enter the credentials for Example",
+		"params": {
+			"service": "Example"
+		}
+	},
+	"user_input": {
+		"fields": [
+			{
+				"type": "username",
+				"id": "username",
+				"name": {
+					"key": "provisioning-test:field.username.name",
+					"text": "Username"
+				},
+				"placeholder": {
+					"key": "provisioning-test:field.username.placeholder",
+					"text": "alice"
+				}
+			},
+			{
+				"type": "select",
+				"id": "method",
+				"name": {
+					"key": "provisioning-test:field.method.name",
+					"text": "Verification method"
+				},
+				"options": [
+					{
+						"value": "sms",
+						"label": {
+							"key": "provisioning-test:field.method.option.sms",
+							"text": "Text message"
+						}
+					},
+					{
+						"value": "Authenticator app",
+						"label": {
+							"text": "Authenticator app"
+						}
+					}
+				]
+			}
+		],
+		"attachments": null,
+		"can_cancel": true
+	}
+}

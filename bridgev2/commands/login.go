@@ -222,11 +222,19 @@ type userInputLoginCommandState struct {
 func (uilcs *userInputLoginCommandState) promptNext(ce *Event) {
 	field := uilcs.RemainingFields[0]
 	parts := []string{fmt.Sprintf("Please enter your %s", field.Name)}
-	if field.Description != "" {
-		parts = append(parts, field.Description)
+	if field.Description.Text != "" {
+		parts = append(parts, field.Description.Text)
 	}
 	if len(field.Options) > 0 {
-		parts = append(parts, fmt.Sprintf("Options: `%s`", strings.Join(field.Options, "`, `")))
+		opts := make([]string, len(field.Options))
+		for i, opt := range field.Options {
+			if opt.Label.Text == "" || opt.Label.Text == opt.Value {
+				opts[i] = fmt.Sprintf("`%s`", opt.Value)
+			} else {
+				opts[i] = fmt.Sprintf("`%s` (%s)", opt.Value, opt.Label.Text)
+			}
+		}
+		parts = append(parts, fmt.Sprintf("Options: %s", strings.Join(opts, ", ")))
 	}
 	if field.Optional {
 		parts = append(parts, "Enter `skip` to skip this field")
@@ -569,8 +577,8 @@ func (wlcs *webauthnLoginCommandState) submit(ce *Event) {
 
 func doLoginStep(ce *Event, login bridgev2.LoginProcess, step *bridgev2.LoginStep, override *bridgev2.UserLogin) {
 	ce.Log.Debug().Object("next_step", step).Msg("Got next login step")
-	if step.Instructions != "" {
-		ce.Reply(step.Instructions)
+	if step.Instructions.Text != "" {
+		ce.Reply(step.Instructions.Text)
 	}
 
 	switch step.Type {
