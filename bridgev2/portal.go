@@ -5781,6 +5781,18 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 		log.Err(err).Msg("Failed to save portal to database after creating Matrix room")
 		return err
 	}
+	if portal.Receiver != "" && portal.Bridge.GetCachedUserLoginByID(portal.Receiver) == nil {
+		log.Warn().Msg("Receiver login was deleted during room creation, deleting portal")
+		err = portal.Delete(ctx)
+		if err != nil {
+			log.Err(err).Msg("Failed to delete portal from database")
+		}
+		err = portal.Bridge.Bot.DeleteRoom(log.WithContext(portal.Bridge.BackgroundCtx), roomID, false)
+		if err != nil {
+			log.Err(err).Msg("Failed to delete Matrix room")
+		}
+		return ErrNotLoggedIn
+	}
 	if info.CanBackfill && portal.RoomType != database.RoomTypeSpace {
 		err = portal.Bridge.DB.BackfillTask.Upsert(ctx, &database.BackfillTask{
 			PortalKey:         portal.PortalKey,
