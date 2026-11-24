@@ -94,12 +94,14 @@ type Portal struct {
 	outgoingMessages     map[networkid.TransactionID]*outgoingMessage
 	outgoingMessagesLock sync.Mutex
 
-	roomCreateLock   sync.Mutex
-	cancelRoomCreate atomic.Pointer[context.CancelFunc]
-	backgroundCtx    context.Context
-	cancelBackground context.CancelFunc
-	deleted          <-chan struct{}
-	RoomCreated      *exsync.Event
+	roomCreateLock     sync.Mutex
+	cancelRoomCreate   atomic.Pointer[context.CancelFunc]
+	roomCreateFailures int
+	roomCreateRetryAt  time.Time
+	backgroundCtx      context.Context
+	cancelBackground   context.CancelFunc
+	deleted            <-chan struct{}
+	RoomCreated        *exsync.Event
 
 	functionalMembersLock  sync.Mutex
 	functionalMembersCache *event.ElementFunctionalMembersContent
@@ -117,6 +119,12 @@ type Portal struct {
 
 var PanicOnStuckEvent = false
 var EventHandlingTimeoutTicks = 10
+
+var (
+	RoomCreateTimeout    = 5 * time.Minute
+	RoomCreateMinBackoff = 1 * time.Minute
+	RoomCreateMaxBackoff = 1 * time.Hour
+)
 
 func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, queryErr error, key *networkid.PortalKey) (*Portal, error) {
 	if queryErr != nil {
@@ -5615,6 +5623,9 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 	if cancellableCtx.Err() != nil {
 		return cancellableCtx.Err()
 	}
+	if wait := time.Until(portal.roomCreateRetryAt); wait > 0 {
+		return fmt.Errorf("%w, retrying in %s", ErrRoomCreateBackoff, wait.Round(time.Second))
+	}
 	log := zerolog.Ctx(ctx).With().
 		Str("action", "create matrix room").
 		Logger()
@@ -5761,11 +5772,21 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 	if cancellableCtx.Err() != nil {
 		return cancellableCtx.Err()
 	}
-	roomID, err := portal.Bridge.Bot.CreateRoom(ctx, &req)
+	createCtx, cancelCreate := context.WithTimeout(ctx, RoomCreateTimeout)
+	roomID, err := portal.Bridge.Bot.CreateRoom(createCtx, &req)
+	cancelCreate()
 	if err != nil {
-		log.Err(err).Msg("Failed to create Matrix room")
+		portal.roomCreateFailures++
+		backoff := min(RoomCreateMinBackoff<<min(portal.roomCreateFailures-1, 6), RoomCreateMaxBackoff)
+		portal.roomCreateRetryAt = time.Now().Add(backoff)
+		log.Err(err).
+			Int("failures", portal.roomCreateFailures).
+			Stringer("retry_in", backoff).
+			Msg("Failed to create Matrix room")
 		return err
 	}
+	portal.roomCreateFailures = 0
+	portal.roomCreateRetryAt = time.Time{}
 	log.Info().Stringer("room_id", roomID).Msg("Matrix room created")
 	portal.AvatarSet = true
 	portal.TopicSet = true

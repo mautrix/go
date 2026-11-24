@@ -43,6 +43,7 @@ var ErrLoginChangedConcurrently = errors.New("login was changed concurrently, pl
 var ErrDirectMediaNotEnabled = errors.New("direct media is not enabled")
 
 var ErrPortalIsDeleted = errors.New("portal is deleted")
+var ErrRoomCreateBackoff = errors.New("matrix room creation failed recently")
 var ErrPortalNotFoundInEventHandler = errors.New("portal not found to handle remote event")
 var ErrSplitPortalMigrationFailed = errors.New("failed to migrate to split portals")
 var ErrCannotDisableSplitPortals = errors.New("split portals are disabled in the config, but the database has already been migrated to split portals")
