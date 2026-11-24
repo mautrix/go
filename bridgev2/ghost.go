@@ -16,6 +16,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -30,12 +31,16 @@ import (
 )
 
 type Ghost struct {
-	*database.Ghost
+	ID     networkid.UserID
+	Meta   atomic.Pointer[database.Ghost]
 	Bridge *Bridge
 	Intent MatrixAPI
 
 	syncLock sync.Mutex
 	lastSync time.Time
+
+	// Deprecated: use Meta instead
+	*database.Ghost
 }
 
 func (br *Bridge) loadGhost(ctx context.Context, dbGhost *database.Ghost, queryErr error, id *networkid.UserID) (*Ghost, error) {
@@ -57,9 +62,11 @@ func (br *Bridge) loadGhost(ctx context.Context, dbGhost *database.Ghost, queryE
 	}
 	ghost := &Ghost{
 		Ghost:  dbGhost,
+		ID:     dbGhost.ID,
 		Bridge: br,
 		Intent: br.Matrix.GhostIntent(dbGhost.ID),
 	}
+	ghost.Meta.Store(dbGhost)
 	br.ghostsByID[ghost.ID] = ghost
 	return ghost, nil
 }
@@ -151,7 +158,7 @@ type UserInfo struct {
 	ExtraUpdates ExtraUpdater[*Ghost]
 }
 
-func (ghost *Ghost) prepareName(name string) bool {
+func prepareName(ghost *database.Ghost, name string) bool {
 	if ghost.Name == name && ghost.NameSet {
 		return false
 	}
@@ -161,24 +168,27 @@ func (ghost *Ghost) prepareName(name string) bool {
 }
 
 func (ghost *Ghost) UpdateName(ctx context.Context, name string) bool {
-	if !ghost.prepareName(name) {
+	oldPtr := ghost.Meta.Load()
+	meta := *oldPtr
+	if !prepareName(&meta, name) {
 		return false
 	}
 	if err := ghost.Intent.SetDisplayName(ctx, name); err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to set display name")
 	} else {
-		ghost.NameSet = true
+		meta.NameSet = true
 	}
+	ghost.compareAndSwapMeta(ctx, oldPtr, meta)
 	return true
 }
 
-func (ghost *Ghost) prepareAvatar(ctx context.Context, avatar *Avatar) (changed, mxcChanged bool) {
+func prepareAvatar(ctx context.Context, ghost *database.Ghost, intent MatrixAPI, avatar *Avatar) (changed, mxcChanged bool) {
 	if ghost.AvatarID == avatar.ID && (avatar.Remove || ghost.AvatarMXC != "") && ghost.AvatarSet {
 		return false, false
 	}
 	ghost.AvatarID = avatar.ID
 	if !avatar.Remove {
-		newMXC, newHash, err := avatar.Reupload(ctx, ghost.Intent, ghost.AvatarHash, ghost.AvatarMXC)
+		newMXC, newHash, err := avatar.Reupload(ctx, intent, ghost.AvatarHash, ghost.AvatarMXC)
 		if err != nil {
 			ghost.AvatarSet = false
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to reupload avatar")
@@ -195,66 +205,86 @@ func (ghost *Ghost) prepareAvatar(ctx context.Context, avatar *Avatar) (changed,
 	return true, true
 }
 
+func (ghost *Ghost) compareAndSwapMeta(ctx context.Context, oldPtr *database.Ghost, newMeta database.Ghost) {
+	newPtr := &newMeta
+	if !ghost.Meta.CompareAndSwap(oldPtr, newPtr) {
+		inBetween := ghost.Meta.Swap(newPtr)
+		zerolog.Ctx(ctx).Warn().
+			Any("old_meta", oldPtr).
+			Any("in_between_meta", inBetween).
+			Any("new_meta", newPtr).
+			Msg("Concurrent modification of ghost metadata")
+	}
+	ghost.Ghost = newPtr
+}
+
 func (ghost *Ghost) UpdateAvatar(ctx context.Context, avatar *Avatar) bool {
-	changed, mxcChanged := ghost.prepareAvatar(ctx, avatar)
+	oldPtr := ghost.Meta.Load()
+	meta := *oldPtr
+	changed, mxcChanged := prepareAvatar(ctx, &meta, ghost.Intent, avatar)
 	if !changed {
 		return false
 	}
 	if mxcChanged {
-		if err := ghost.Intent.SetAvatarURL(ctx, ghost.AvatarMXC); err != nil {
+		if err := ghost.Intent.SetAvatarURL(ctx, meta.AvatarMXC); err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to set avatar URL")
 		} else {
-			ghost.AvatarSet = true
+			meta.AvatarSet = true
 		}
 	}
+	ghost.compareAndSwapMeta(ctx, oldPtr, meta)
 	return true
 }
 
-func (ghost *Ghost) getExtraProfileMeta() any {
+func (ghost *Ghost) getExtraProfileMeta(meta *database.Ghost) any {
 	bridgeName := ghost.Bridge.Network.GetName()
 	baseExtra := &event.BeeperProfileExtra{
-		RemoteID:     string(ghost.ID),
-		Identifiers:  ghost.Identifiers,
+		RemoteID:     string(meta.ID),
+		Identifiers:  meta.Identifiers,
 		Service:      bridgeName.BeeperBridgeType,
 		Network:      bridgeName.NetworkID,
 		IsBridgeBot:  false,
-		IsNetworkBot: ghost.IsBot,
+		IsNetworkBot: meta.IsBot,
 	}
-	if len(ghost.ExtraProfile) == 0 {
+	if len(meta.ExtraProfile) == 0 {
 		return baseExtra
 	}
-	mergedExtra := maps.Clone(ghost.ExtraProfile)
+	mergedExtra := maps.Clone(meta.ExtraProfile)
 	baseExtraMarshaled := exerrors.Must(json.Marshal(baseExtra))
 	exerrors.PanicIfNotNil(json.Unmarshal(baseExtraMarshaled, &mergedExtra))
 	return mergedExtra
 }
 
-func (ghost *Ghost) getFullProfile() json.RawMessage {
-	marshaled := exerrors.Must(json.Marshal(ghost.getExtraProfileMeta()))
-	if ghost.Name != "" {
-		marshaled = exerrors.Must(sjson.SetBytes(marshaled, "displayname", ghost.Name))
+func (ghost *Ghost) getFullProfile(meta *database.Ghost) json.RawMessage {
+	marshaled := exerrors.Must(json.Marshal(ghost.getExtraProfileMeta(meta)))
+	if meta.Name != "" {
+		marshaled = exerrors.Must(sjson.SetBytes(marshaled, "displayname", meta.Name))
 	}
-	if ghost.AvatarMXC != "" {
-		marshaled = exerrors.Must(sjson.SetBytes(marshaled, "avatar_url", ghost.AvatarMXC))
+	if meta.AvatarMXC != "" {
+		marshaled = exerrors.Must(sjson.SetBytes(marshaled, "avatar_url", meta.AvatarMXC))
 	}
 	return marshaled
 }
 
-func (ghost *Ghost) prepareContactInfo(identifiers []string, isBot *bool, extraProfile database.ExtraProfile) bool {
-	caps := ghost.Bridge.Matrix.GetCapabilities()
+func prepareContactInfo(br *Bridge, ghost *database.Ghost, identifiers []string, isBot *bool, extraProfile database.ExtraProfile) bool {
+	caps := br.Matrix.GetCapabilities()
 	if !caps.ExtraProfileMeta && !caps.ReplaceEntireProfile {
 		ghost.ContactInfoSet = false
 		return false
 	}
 	if identifiers != nil {
 		slices.Sort(identifiers)
-		if !ghost.Bridge.Config.PhoneNumbersInProfile {
+		if !br.Config.PhoneNumbersInProfile {
 			identifiers = slices.DeleteFunc(identifiers, func(id string) bool {
 				return strings.HasPrefix(id, "tel:")
 			})
 		}
 	}
-	changed := extraProfile.CopyTo(&ghost.ExtraProfile)
+	var changed bool
+	if newExtra := extraProfile.MergeInto(ghost.ExtraProfile); newExtra != nil {
+		changed = true
+		ghost.ExtraProfile = newExtra
+	}
 	if identifiers != nil {
 		changed = changed || !slices.Equal(identifiers, ghost.Identifiers)
 		ghost.Identifiers = identifiers
@@ -271,14 +301,17 @@ func (ghost *Ghost) prepareContactInfo(identifiers []string, isBot *bool, extraP
 }
 
 func (ghost *Ghost) UpdateContactInfo(ctx context.Context, identifiers []string, isBot *bool, extraProfile database.ExtraProfile) bool {
-	if !ghost.prepareContactInfo(identifiers, isBot, extraProfile) {
+	oldPtr := ghost.Meta.Load()
+	meta := *oldPtr
+	if !prepareContactInfo(ghost.Bridge, &meta, identifiers, isBot, extraProfile) {
 		return false
 	}
-	if err := ghost.Intent.SetExtraProfileMeta(ctx, ghost.getExtraProfileMeta()); err != nil {
+	if err := ghost.Intent.SetExtraProfileMeta(ctx, ghost.getExtraProfileMeta(&meta)); err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to set extra profile metadata")
 	} else {
-		ghost.ContactInfoSet = true
+		meta.ContactInfoSet = true
 	}
+	ghost.compareAndSwapMeta(ctx, oldPtr, meta)
 	return true
 }
 
@@ -295,7 +328,8 @@ func (br *Bridge) allowAggressiveUpdateForType(evtType RemoteEventType) bool {
 }
 
 func (ghost *Ghost) UpdateInfoIfNecessary(ctx context.Context, source *UserLogin, evtType RemoteEventType) {
-	if ghost.Name != "" && ghost.NameSet && ghost.AvatarSet && !ghost.Bridge.allowAggressiveUpdateForType(evtType) {
+	meta := ghost.Meta.Load()
+	if meta.Name != "" && meta.NameSet && meta.AvatarSet && !ghost.Bridge.allowAggressiveUpdateForType(evtType) {
 		return
 	}
 	info, err := source.Client.GetUserInfo(ctx, ghost)
@@ -303,18 +337,18 @@ func (ghost *Ghost) UpdateInfoIfNecessary(ctx context.Context, source *UserLogin
 		zerolog.Ctx(ctx).Err(err).Str("ghost_id", string(ghost.ID)).Msg("Failed to get info to update ghost")
 	} else if info != nil {
 		zerolog.Ctx(ctx).Debug().
-			Bool("has_name", ghost.Name != "").
-			Bool("name_set", ghost.NameSet).
-			Bool("has_avatar", ghost.AvatarMXC != "").
-			Bool("avatar_set", ghost.AvatarSet).
+			Bool("has_name", meta.Name != "").
+			Bool("name_set", meta.NameSet).
+			Bool("has_avatar", meta.AvatarMXC != "").
+			Bool("avatar_set", meta.AvatarSet).
 			Msg("Updating ghost info in IfNecessary call")
 		ghost.UpdateInfo(ctx, info)
 	} else {
 		zerolog.Ctx(ctx).Trace().
-			Bool("has_name", ghost.Name != "").
-			Bool("name_set", ghost.NameSet).
-			Bool("has_avatar", ghost.AvatarMXC != "").
-			Bool("avatar_set", ghost.AvatarSet).
+			Bool("has_name", meta.Name != "").
+			Bool("name_set", meta.NameSet).
+			Bool("has_avatar", meta.AvatarMXC != "").
+			Bool("avatar_set", meta.AvatarSet).
 			Msg("No ghost info received in IfNecessary call")
 	}
 }
@@ -337,74 +371,83 @@ func (ghost *Ghost) updateDMPortals(ctx context.Context) {
 func (ghost *Ghost) UpdateInfo(ctx context.Context, info *UserInfo) {
 	ghost.syncLock.Lock()
 	defer ghost.syncLock.Unlock()
-	oldName := ghost.Name
-	oldAvatar := ghost.AvatarMXC
+	oldPtr := ghost.Meta.Load()
+	meta := *oldPtr
+	oldName := meta.Name
+	oldAvatar := meta.AvatarMXC
 
-	nameChanged := info.Name != nil && ghost.prepareName(*info.Name)
+	nameChanged := info.Name != nil && prepareName(&meta, *info.Name)
 
 	var avatarChanged, avatarMXCChanged bool
 	if info.Avatar != nil {
-		avatarChanged, avatarMXCChanged = ghost.prepareAvatar(ctx, info.Avatar)
-	} else if oldAvatar == "" && !ghost.AvatarSet {
+		avatarChanged, avatarMXCChanged = prepareAvatar(ctx, &meta, ghost.Intent, info.Avatar)
+	} else if oldAvatar == "" && !meta.AvatarSet {
 		// Special case: nil avatar means we're not expecting one ever, if we don't currently have
 		// one we flag it as set to avoid constantly refetching in UpdateInfoIfNecessary.
-		ghost.AvatarSet = true
+		meta.AvatarSet = true
 		avatarChanged = true
 	}
 
 	var contactInfoChanged bool
 	if info.Identifiers != nil || info.IsBot != nil || info.ExtraProfile != nil {
-		contactInfoChanged = ghost.prepareContactInfo(info.Identifiers, info.IsBot, info.ExtraProfile)
+		contactInfoChanged = prepareContactInfo(ghost.Bridge, &meta, info.Identifiers, info.IsBot, info.ExtraProfile)
 	}
 
 	update := nameChanged || avatarChanged || contactInfoChanged
 	if info.ExtraUpdates != nil {
+		// ExtraUpdates may call UpdateAvatar or otherwise mutate Meta, so store the current state and reload afterwards
+		ghost.compareAndSwapMeta(ctx, oldPtr, meta)
+
 		update = info.ExtraUpdates(ctx, ghost) || update
+
+		oldPtr = ghost.Meta.Load()
+		meta = *oldPtr
 	}
-	ghost.pushProfileChanges(ctx, nameChanged, avatarMXCChanged, contactInfoChanged)
-	if oldName != ghost.Name || oldAvatar != ghost.AvatarMXC {
+	ghost.pushProfileChanges(ctx, &meta, nameChanged, avatarMXCChanged, contactInfoChanged)
+	ghost.compareAndSwapMeta(ctx, oldPtr, meta)
+	if oldName != meta.Name || oldAvatar != meta.AvatarMXC {
 		ghost.updateDMPortals(ctx)
 	}
 	if update {
-		err := ghost.Bridge.DB.Ghost.Update(ctx, ghost.Ghost)
+		err := ghost.Bridge.DB.Ghost.Update(ctx, &meta)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to update ghost in database after updating info")
 		}
 	}
 }
 
-func (ghost *Ghost) pushProfileChanges(ctx context.Context, nameChanged, avatarChanged, contactInfoChanged bool) {
+func (ghost *Ghost) pushProfileChanges(ctx context.Context, meta *database.Ghost, nameChanged, avatarChanged, contactInfoChanged bool) {
 	if !nameChanged && !avatarChanged && !contactInfoChanged {
 		return
 	}
 	if ghost.Bridge.Matrix.GetCapabilities().ReplaceEntireProfile {
-		if err := ghost.Intent.SetProfile(ctx, ghost.getFullProfile()); err != nil {
+		if err := ghost.Intent.SetProfile(ctx, ghost.getFullProfile(meta)); err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to set profile")
 		} else {
-			ghost.NameSet = true
-			ghost.AvatarSet = true
-			ghost.ContactInfoSet = true
+			meta.NameSet = true
+			meta.AvatarSet = true
+			meta.ContactInfoSet = true
 		}
 	} else {
 		if nameChanged {
-			if err := ghost.Intent.SetDisplayName(ctx, ghost.Name); err != nil {
+			if err := ghost.Intent.SetDisplayName(ctx, meta.Name); err != nil {
 				zerolog.Ctx(ctx).Err(err).Msg("Failed to set display name")
 			} else {
-				ghost.NameSet = true
+				meta.NameSet = true
 			}
 		}
 		if avatarChanged {
-			if err := ghost.Intent.SetAvatarURL(ctx, ghost.AvatarMXC); err != nil {
+			if err := ghost.Intent.SetAvatarURL(ctx, meta.AvatarMXC); err != nil {
 				zerolog.Ctx(ctx).Err(err).Msg("Failed to set avatar URL")
 			} else {
-				ghost.AvatarSet = true
+				meta.AvatarSet = true
 			}
 		}
 		if contactInfoChanged {
-			if err := ghost.Intent.SetExtraProfileMeta(ctx, ghost.getExtraProfileMeta()); err != nil {
+			if err := ghost.Intent.SetExtraProfileMeta(ctx, ghost.getExtraProfileMeta(meta)); err != nil {
 				zerolog.Ctx(ctx).Err(err).Msg("Failed to set extra profile metadata")
 			} else {
-				ghost.ContactInfoSet = true
+				meta.ContactInfoSet = true
 			}
 		}
 	}
@@ -416,14 +459,15 @@ func (ghost *Ghost) reconcileProfile(ctx context.Context, current *event.MemberE
 		return
 	}
 	defer ghost.syncLock.Unlock()
+	oldMeta := ghost.Meta.Load()
 	// Re-set the profile on the server if:
 	// * the bridge database thinks the profile field is set
 	// * the member event has a different value than the bridge database
 	// * the value isn't being updated right after this call
-	nameDrift := ghost.NameSet && ghost.Name != "" && current.Displayname != ghost.Name &&
-		(updatedProfile == nil || updatedProfile.Name == nil || *updatedProfile.Name == ghost.Name)
-	avatarDrift := ghost.AvatarSet && ghost.AvatarMXC != "" && current.AvatarURL != ghost.AvatarMXC &&
-		(updatedProfile == nil || updatedProfile.Avatar == nil || updatedProfile.Avatar.ID == ghost.AvatarID)
+	nameDrift := oldMeta.NameSet && oldMeta.Name != "" && current.Displayname != oldMeta.Name &&
+		(updatedProfile == nil || updatedProfile.Name == nil || *updatedProfile.Name == oldMeta.Name)
+	avatarDrift := oldMeta.AvatarSet && oldMeta.AvatarMXC != "" && current.AvatarURL != oldMeta.AvatarMXC &&
+		(updatedProfile == nil || updatedProfile.Avatar == nil || updatedProfile.Avatar.ID == oldMeta.AvatarID)
 	// Also don't allow re-setting too often, because there might be multiple in-flight room syncs
 	// that all call this method in a short period.
 	if (!nameDrift && !avatarDrift) || time.Since(ghost.lastSync) < 5*time.Minute {
@@ -433,17 +477,19 @@ func (ghost *Ghost) reconcileProfile(ctx context.Context, current *event.MemberE
 		Str("ghost_id", string(ghost.ID)).
 		Bool("name_drift", nameDrift).
 		Bool("avatar_drift", avatarDrift).
-		Str("expected_name", ghost.Name).
+		Str("expected_name", oldMeta.Name).
 		Str("actual_name", current.Displayname).
 		Msg("Ghost profile drifted from the server copy, re-pushing")
+	newMeta := *oldMeta
 	if nameDrift {
-		ghost.NameSet = false
+		newMeta.NameSet = false
 	}
 	if avatarDrift {
-		ghost.AvatarSet = false
+		newMeta.AvatarSet = false
 	}
-	ghost.pushProfileChanges(ctx, nameDrift, avatarDrift, false)
-	if err := ghost.Bridge.DB.Ghost.Update(ctx, ghost.Ghost); err != nil {
+	ghost.pushProfileChanges(ctx, &newMeta, nameDrift, avatarDrift, false)
+	ghost.compareAndSwapMeta(ctx, oldMeta, newMeta)
+	if err := ghost.Bridge.DB.Ghost.Update(ctx, &newMeta); err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to save ghost after profile reconcile")
 	}
 }

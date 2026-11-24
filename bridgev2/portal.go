@@ -2819,7 +2819,7 @@ func (portal *Portal) handleRemoteEvent(ctx context.Context, source *UserLogin, 
 }
 
 func (portal *Portal) ensureFunctionalMember(ctx context.Context, ghost *Ghost) {
-	if !ghost.IsBot || portal.RoomType != database.RoomTypeDM || portal.OtherUserID == ghost.ID || portal.MXID == "" {
+	if !ghost.Meta.Load().IsBot || portal.RoomType != database.RoomTypeDM || portal.OtherUserID == ghost.ID || portal.MXID == "" {
 		return
 	}
 	ars, ok := portal.Bridge.Matrix.(MatrixConnectorWithArbitraryRoomState)
@@ -5426,14 +5426,15 @@ func (portal *Portal) UpdateInfoFromGhost(ctx context.Context, ghost *Ghost) (ch
 			return
 		}
 	}
-	changed = portal.updateName(ctx, ghost.Name, nil, time.Time{}, false) || changed
+	meta := ghost.Meta.Load()
+	changed = portal.updateName(ctx, meta.Name, nil, time.Time{}, false) || changed
 	// Don't change avatar if the ghost avatar upload failed (has ID, but no MXC and AvatarSet is false)
-	if ghost.AvatarMXC != "" || ghost.AvatarSet || ghost.AvatarID == "" {
+	if meta.AvatarMXC != "" || meta.AvatarSet || meta.AvatarID == "" {
 		changed = portal.updateAvatar(ctx, &Avatar{
-			ID:     ghost.AvatarID,
-			MXC:    ghost.AvatarMXC,
-			Hash:   ghost.AvatarHash,
-			Remove: ghost.AvatarID == "" || ghost.AvatarMXC == "",
+			ID:     meta.AvatarID,
+			MXC:    meta.AvatarMXC,
+			Hash:   meta.AvatarHash,
+			Remove: meta.AvatarID == "" || meta.AvatarMXC == "",
 		}, nil, time.Time{}, false) || changed
 	}
 	return

@@ -66,10 +66,10 @@ func ResolveIdentifier(
 				zerolog.Ctx(ctx).Err(err).Msg("Failed to create chat")
 				return nil, err
 			}
-		} else if createChat || ghost.Name == "" {
+		} else if hasName := ghost.Meta.Load().Name != ""; createChat || !hasName {
 			zerolog.Ctx(ctx).Debug().
 				Bool("create_chat", createChat).
-				Bool("has_name", ghost.Name != "").
+				Bool("has_name", hasName).
 				Msg("Falling back to resolving identifier")
 			resp = nil
 			identifier = string(parsedUserID)
@@ -93,9 +93,10 @@ func ResolveIdentifier(
 		if resp.UserInfo != nil {
 			resp.Ghost.UpdateInfo(zerolog.Ctx(ctx).WithContext(login.Bridge.BackgroundCtx), resp.UserInfo)
 		}
-		apiResp.Name = resp.Ghost.Name
-		apiResp.AvatarURL = resp.Ghost.AvatarMXC
-		apiResp.Identifiers = resp.Ghost.Identifiers
+		meta := resp.Ghost.Meta.Load()
+		apiResp.Name = meta.Name
+		apiResp.AvatarURL = meta.AvatarMXC
+		apiResp.Identifiers = meta.Identifiers
 		apiResp.MXID = resp.Ghost.Intent.GetMXID()
 	} else if resp.UserInfo != nil && resp.UserInfo.Name != nil {
 		apiResp.Name = *resp.UserInfo.Name

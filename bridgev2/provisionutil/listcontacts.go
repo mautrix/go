@@ -89,13 +89,14 @@ func processResolveIdentifiers(ctx context.Context, br *bridgev2.Bridge, resp []
 			if syncInfo && contact.UserInfo != nil {
 				contact.Ghost.UpdateInfo(zerolog.Ctx(ctx).WithContext(br.BackgroundCtx), contact.UserInfo)
 			}
-			if contact.Ghost.Name != "" {
-				apiContact.Name = contact.Ghost.Name
+			meta := contact.Ghost.Meta.Load()
+			if meta.Name != "" {
+				apiContact.Name = meta.Name
 			}
-			if len(contact.Ghost.Identifiers) >= len(apiContact.Identifiers) {
-				apiContact.Identifiers = contact.Ghost.Identifiers
+			if len(meta.Identifiers) >= len(apiContact.Identifiers) {
+				apiContact.Identifiers = meta.Identifiers
 			}
-			apiContact.AvatarURL = contact.Ghost.AvatarMXC
+			apiContact.AvatarURL = meta.AvatarMXC
 			apiContact.MXID = contact.Ghost.Intent.GetMXID()
 		}
 		if contact.Chat != nil {
