@@ -365,6 +365,7 @@ const (
 	MaxAttemptsContextKey
 	SyncTokenContextKey
 	oauthReqContextKey
+	defaultMaxAttemptsContextKey
 )
 
 func (cli *Client) RequestStart(req *http.Request) {
@@ -498,7 +499,9 @@ func (params *FullRequest) compileRequest(ctx context.Context) (*http.Request, e
 		reqBody = bytes.NewReader(jsonStr)
 		reqLen = int64(len(jsonStr))
 	} else if params.RequestBytes != nil {
-		if params.Headers.Get("Content-Type") == "application/x-www-form-urlencoded" && len(params.RequestBytes) < 4196 {
+		if params.SensitiveContent && !logSensitiveContent {
+			logBody = "<sensitive content omitted>"
+		} else if params.Headers.Get("Content-Type") == "application/x-www-form-urlencoded" && len(params.RequestBytes) < 4196 {
 			logBody = string(params.RequestBytes)
 		} else {
 			logBody = fmt.Sprintf("<%d bytes>", len(params.RequestBytes))
@@ -563,6 +566,7 @@ func (cli *Client) MakeFullRequestWithResp(ctx context.Context, params FullReque
 			params.MaxAttempts = maxAttempts
 		} else {
 			params.MaxAttempts = 1 + cli.DefaultHTTPRetries
+			ctx = context.WithValue(ctx, defaultMaxAttemptsContextKey, true)
 		}
 	}
 	if params.BackoffDuration == 0 {
@@ -662,14 +666,15 @@ func (cli *Client) doRetry(
 		Int("retry_in_seconds", int(backoff.Seconds())).
 		Msg("Request failed, retrying")
 
-	// if this was due to our RequestRetryTrigger then just retry immediately
+	// if this was due to our RequestRetryTrigger then just retry immediately without using up a retry,
 	// the req.Context() will still be live, otherwise do a normal backoff
-	if !errors.Is(cause, ErrContextCancelRetry) {
-		select {
-		case <-time.After(backoff):
-		case <-req.Context().Done():
-			return nil, nil, req.Context().Err()
-		}
+	if errors.Is(cause, ErrContextCancelRetry) {
+		return cli.executeCompiledRequest(origCtx, req, retries, backoff, responseJSON, handler, dontReadResponse, sizeLimit, client)
+	}
+	select {
+	case <-time.After(backoff):
+	case <-req.Context().Done():
+		return nil, nil, req.Context().Err()
 	}
 	return cli.executeCompiledRequest(origCtx, req, retries-1, backoff*2, responseJSON, handler, dontReadResponse, sizeLimit, client)
 }
@@ -904,9 +909,10 @@ func (cli *Client) executeCompiledRequest(
 		if errors.Is(attemptCause, ErrContextCancelRetry) {
 			retryCause = attemptCause
 		}
-		canRetry := !errors.Is(err, context.Canceled) ||
-			errors.Is(attemptCause, ErrContextCancelRetry)
-		if retries > 0 && canRetry {
+		// Requests that explicitly asked for a single attempt aren't replayed on a retry trigger either.
+		retryTriggered := errors.Is(attemptCause, ErrContextCancelRetry) &&
+			(retries > 0 || origCtx.Value(defaultMaxAttemptsContextKey) != nil)
+		if retryTriggered || (retries > 0 && !errors.Is(err, context.Canceled)) {
 			return cli.doRetry(
 				origCtx, req, retryCause, retries, backoff, responseJSON, handler, dontReadResponse, sizeLimit, client,
 			)
@@ -2916,14 +2922,22 @@ func (cli *Client) SetDeviceInfo(ctx context.Context, deviceID id.DeviceID, req 
 }
 
 func (cli *Client) DeleteDevice(ctx context.Context, deviceID id.DeviceID, req *ReqDeleteDevice[any]) error {
-	urlPath := cli.BuildClientURL("v3", "devices", deviceID)
-	_, err := cli.MakeRequest(ctx, http.MethodDelete, urlPath, req, nil)
+	_, err := cli.MakeFullRequest(ctx, FullRequest{
+		Method:           http.MethodDelete,
+		URL:              cli.BuildClientURL("v3", "devices", deviceID),
+		RequestJSON:      req,
+		SensitiveContent: req.Auth != nil,
+	})
 	return err
 }
 
 func (cli *Client) DeleteDevices(ctx context.Context, req *ReqDeleteDevices[any]) error {
-	urlPath := cli.BuildClientURL("v3", "delete_devices")
-	_, err := cli.MakeRequest(ctx, http.MethodPost, urlPath, req, nil)
+	_, err := cli.MakeFullRequest(ctx, FullRequest{
+		Method:           http.MethodPost,
+		URL:              cli.BuildClientURL("v3", "delete_devices"),
+		RequestJSON:      req,
+		SensitiveContent: req.Auth != nil,
+	})
 	return err
 }
 

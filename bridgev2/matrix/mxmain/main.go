@@ -350,7 +350,11 @@ func (br *BridgeMain) getConfigUpgrader() (configupgrade.BaseUpgrader, any) {
 		networkUpgrader = configupgrade.NoopUpgrader
 	}
 	networkUpgraderProxied := &configupgrade.ProxyUpgrader{Target: networkUpgrader, Prefix: []string{"network"}}
-	upgrader := configupgrade.MergeUpgraders(baseConfig, networkUpgraderProxied, bridgeconfig.Upgrader)
+	upgraders := []configupgrade.Upgrader{networkUpgraderProxied, bridgeconfig.Upgrader}
+	if _, ok := br.Connector.(bridgev2.ProxyingNetwork); ok {
+		upgraders = append(upgraders, configupgrade.SimpleUpgrader(bridgeconfig.MigrateNetworkProxyConfig))
+	}
+	upgrader := configupgrade.MergeUpgraders(baseConfig, upgraders...)
 	return upgrader, networkData
 }
 
@@ -379,7 +383,6 @@ func (br *BridgeMain) LoadConfig() {
 			os.Exit(10)
 		}
 	}
-	cfg.Bridge.Backfill = cfg.Backfill
 	if cfg.EnvConfigPrefix != "" {
 		err = UpdateConfigFromEnv(&cfg, networkData, cfg.EnvConfigPrefix)
 		if err != nil {
@@ -387,6 +390,8 @@ func (br *BridgeMain) LoadConfig() {
 			os.Exit(10)
 		}
 	}
+	cfg.Bridge.Backfill = cfg.Backfill
+	cfg.Bridge.Proxy = cfg.Proxy
 	br.Config = &cfg
 }
 

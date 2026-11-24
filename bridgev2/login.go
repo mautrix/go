@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/l10n"
 
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
@@ -28,6 +29,18 @@ var ErrLoginStepCancelled = RespError{
 	ErrCode:    "FI.MAU.LOGIN_STEP_CANCELLED",
 	Err:        "Login step was cancelled",
 	StatusCode: http.StatusConflict,
+}
+
+var ErrLoginCancelled = RespError{
+	ErrCode:    "FI.MAU.BRIDGE.LOGIN_CANCELLED",
+	Err:        "Login process was cancelled",
+	StatusCode: http.StatusGone,
+}
+
+var ErrLoginTimedOut = RespError{
+	ErrCode:    "FI.MAU.BRIDGE.LOGIN_TIMED_OUT",
+	Err:        "Login process timed out",
+	StatusCode: http.StatusGone,
 }
 
 var ErrMissingClientCapability = RespError{
@@ -151,9 +164,9 @@ type LoginProcessWebAuthn interface {
 }
 
 type LoginFlow struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	ID          string `json:"id"`
+	Name        l10n.Message `json:"name"`
+	Description l10n.Message `json:"description"`
+	ID          string       `json:"id"`
 
 	RequiredClientCapabilities []ClientCapability `json:"required_client_capabilities,omitempty"`
 }
@@ -191,7 +204,7 @@ type LoginStep struct {
 	// It's used to allow safely retrying requests.
 	TxnID string `json:"txn_id"`
 	// Instructions contains human-readable instructions for completing the login step.
-	Instructions string `json:"instructions"`
+	Instructions l10n.Message `json:"instructions"`
 
 	// Exactly one of the following structs must be filled depending on the step type.
 
@@ -207,7 +220,7 @@ func (ls *LoginStep) MarshalZerologObject(e *zerolog.Event) {
 	e.Str("type", string(ls.Type)).
 		Str("step_id", ls.StepID).
 		Str("txn_id", ls.TxnID).
-		Str("instructions", ls.Instructions)
+		Str("instructions", ls.Instructions.Text)
 	if ls.DisplayAndWaitParams != nil {
 		e.Any("display_and_wait", ls.DisplayAndWaitParams)
 	}
@@ -395,14 +408,14 @@ type LoginInputDataField struct {
 	// The ID of the field to be used as the key in the map that is submitted to the connector.
 	ID string `json:"id"`
 	// The name of the field shown to the user.
-	Name string `json:"name"`
+	Name l10n.Message `json:"name"`
 	// The description of the field shown to the user.
-	Description string `json:"description"`
+	Description l10n.Message `json:"description,omitzero"`
 	// A default value that the client can pre-fill the field with.
 	DefaultValue string `json:"default_value,omitempty"`
 	// Placeholder text that the client can show in the field when it's empty.
 	// If not set, clients may use a default placeholder based on the field type.
-	Placeholder string `json:"placeholder,omitempty"`
+	Placeholder l10n.Message `json:"placeholder,omitzero"`
 	// For username, email, phone number and password fields, the web domain (e.g. instagram.com)
 	// that the client should associate the field with for password manager autofill.
 	AutofillDomain string `json:"autofill_domain,omitempty"`
@@ -415,9 +428,38 @@ type LoginInputDataField struct {
 	MaxLength int `json:"max_length,omitzero"`
 	// For fields of type select, the valid options.
 	// Pattern may also be filled with a regex that matches the same options.
-	Options []string `json:"options,omitempty"`
+	Options []LoginInputOption `json:"options,omitempty"`
 	// A function that validates the input and optionally cleans it up before it's submitted to the connector.
 	Validate func(string) (string, error) `json:"-"`
+}
+
+// LoginInputOption is a select field option. Value is submitted, Label is shown.
+type LoginInputOption struct {
+	Value string       `json:"value"`
+	Label l10n.Message `json:"label"`
+}
+
+// UnmarshalJSON also accepts the bare string used by provisioning v3.
+func (opt *LoginInputOption) UnmarshalJSON(data []byte) error {
+	if len(data) > 0 && data[0] == '"' {
+		var val string
+		if err := json.Unmarshal(data, &val); err != nil {
+			return err
+		}
+		*opt = LoginInputOption{Value: val, Label: l10n.Unlocalized(val)}
+		return nil
+	}
+	type plain LoginInputOption
+	return json.Unmarshal(data, (*plain)(opt))
+}
+
+// UnlocalizedOptions makes options whose labels are their values.
+func UnlocalizedOptions(values ...string) []LoginInputOption {
+	opts := make([]LoginInputOption, len(values))
+	for i, val := range values {
+		opts[i] = LoginInputOption{Value: val, Label: l10n.Unlocalized(val)}
+	}
+	return opts
 }
 
 var numberCleaner = strings.NewReplacer("-", "", " ", "", "(", "", ")", "")

@@ -171,6 +171,8 @@ func RequestWellKnown(ctx context.Context, cli *http.Client, hostname string) (*
 	if err != nil {
 		return nil, time.Time{}, fmt.Errorf("failed to prepare request: %w", err)
 	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", mautrix.DefaultUserAgent+" (.well-known fetcher)")
 	resp, err := cli.Do(req)
 	if err != nil {
 		return nil, time.Time{}, fmt.Errorf("failed to send request: %w", err)

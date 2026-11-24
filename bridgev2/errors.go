@@ -45,6 +45,7 @@ var ErrDirectMediaNotEnabled = errors.New("direct media is not enabled")
 var ErrPortalIsDeleted = errors.New("portal is deleted")
 var ErrPortalNotFoundInEventHandler = errors.New("portal not found to handle remote event")
 var ErrSplitPortalMigrationFailed = errors.New("failed to migrate to split portals")
+var ErrProxyNotSupported = errors.New("proxy is configured, but the network connector doesn't support proxies")
 var ErrCannotDisableSplitPortals = errors.New("split portals are disabled in the config, but the database has already been migrated to split portals")
 
 // Common message status errors
@@ -105,6 +106,13 @@ var (
 // Common login interface errors
 var (
 	ErrInvalidLoginFlowID error = RespError(mautrix.MNotFound.WithMessage("Invalid login flow ID"))
+)
+
+// Common start chat errors
+var (
+	// ErrCannotMessageUser can be returned by ResolveIdentifier or CreateChatWithGhost when the remote network
+	// doesn't allow the user to message the target user.
+	ErrCannotMessageUser = RespError{ErrCode: "FI.MAU.BRIDGE.CANNOT_MESSAGE_USER", Err: "You can't message this user", StatusCode: http.StatusForbidden}
 )
 
 // RespError is a class of error that certain network interface methods can return to ensure that the error

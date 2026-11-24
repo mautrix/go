@@ -1,0 +1,11 @@
+{
+	"login_id": "login-id",
+	"type": "display_and_wait",
+	"step_id": "fi.mau.test.qr",
+	"txn_id": "",
+	"display_and_wait": {
+		"type": "qr",
+		"data": "qr-data"
+	},
+	"instructions": "Scan the QR code"
+}

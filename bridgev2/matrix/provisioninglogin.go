@@ -93,10 +93,18 @@ const (
 	completedLoginGenerationSize = 128
 )
 
+const loginTimeout = 30 * time.Minute
+
 var ErrNilStep = errors.New("bridge returned nil step with no error")
 var ErrTooManyLogins = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.TOO_MANY_LOGINS", Err: "Maximum number of logins exceeded", StatusCode: http.StatusForbidden}
-var ErrLoginCancelled = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.LOGIN_CANCELLED", Err: "Login process was cancelled", StatusCode: http.StatusGone}
-var ErrLoginTimedOut = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.LOGIN_TIMED_OUT", Err: "Login process timed out", StatusCode: http.StatusGone}
+
+// Deprecated: kept for backward compatibility, use bridgev2.ErrLoginCancelled.
+var ErrLoginCancelled = bridgev2.ErrLoginCancelled
+
+// Deprecated: kept for backward compatibility, use bridgev2.ErrLoginTimedOut.
+var ErrLoginTimedOut = bridgev2.ErrLoginTimedOut
+
+var ErrLoginLost = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.LOGIN_LOST", Err: "Login process may have been lost because the bridge restarted", StatusCode: http.StatusGone}
 var ErrLoginAlreadyFinished = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.LOGIN_ALREADY_FINISHED", Err: "Login process was already finished", StatusCode: http.StatusGone}
 
 func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Request) {
@@ -136,7 +144,7 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	loginID := xid.New().String()
-	ctx, cancel := context.WithTimeout(prov.br.Bridge.BackgroundCtx, 30*time.Minute)
+	ctx, cancel := context.WithTimeout(prov.br.Bridge.BackgroundCtx, loginTimeout)
 	ctx = user.Log.With().
 		Str("login_id", loginID).
 		Logger().WithContext(ctx)
@@ -184,7 +192,7 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 	select {
 	case <-ch:
 	case <-r.Context().Done():
-		prov.deleteLogin(provLogin, nil, true, ErrLoginCancelled)
+		prov.deleteLogin(provLogin, nil, true, bridgev2.ErrLoginCancelled)
 		return
 	}
 	firstStep, err := provLogin.step.GetNext()
@@ -197,7 +205,7 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 		Str("login_id", loginID).
 		Object("first_step", firstStep).
 		Msg("Started login process")
-	exhttp.WriteJSONResponse(w, http.StatusOK, &RespSubmitLogin{LoginID: loginID, LoginStep: firstStep})
+	writeLoginStep(w, r, loginID, firstStep)
 }
 
 func (prov *ProvisioningAPI) getLogin(w http.ResponseWriter, r *http.Request, allowCompleted bool) *ProvLogin {
@@ -216,17 +224,21 @@ func (prov *ProvisioningAPI) getLogin(w http.ResponseWriter, r *http.Request, al
 			RespondWithError(w, completedLogin.err, "Internal error in login step")
 			return nil
 		}
-		exhttp.WriteJSONResponse(w, http.StatusOK, &RespSubmitLogin{
-			LoginID: loginID,
-			LoginStep: &bridgev2.LoginStep{
-				Type:         bridgev2.LoginStepTypeComplete,
-				StepID:       "fi.mau.bridgev2.already_completed",
-				Instructions: completedLogin.instructions,
-				CompleteParams: &bridgev2.LoginCompleteParams{
-					UserLoginID: completedLogin.userLoginID,
-				},
+		writeLoginStep(w, r, loginID, &bridgev2.LoginStep{
+			Type:         bridgev2.LoginStepTypeComplete,
+			StepID:       "fi.mau.bridgev2.already_completed",
+			Instructions: completedLogin.instructions,
+			CompleteParams: &bridgev2.LoginCompleteParams{
+				UserLoginID: completedLogin.userLoginID,
 			},
 		})
+		return nil
+	}
+	// Logins time out after 30 minutes, so an ID from before the restart but newer than that was still running.
+	if parsedID, err := xid.FromString(loginID); login == nil && err == nil &&
+		parsedID.Time().Before(prov.startedAt) && parsedID.Time().After(prov.startedAt.Add(-loginTimeout)) {
+		zerolog.Ctx(r.Context()).Warn().Str("login_id", loginID).Msg("Login was started before the bridge restarted")
+		ErrLoginLost.Write(w)
 		return nil
 	}
 	zerolog.Ctx(r.Context()).Warn().Str("login_id", loginID).Msg("Login not found")
@@ -277,7 +289,7 @@ func (prov *ProvisioningAPI) PostLoginStep(w http.ResponseWriter, r *http.Reques
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to complete login step")
 		RespondWithError(w, err, "Internal error in login step")
 	} else {
-		exhttp.WriteJSONResponse(w, http.StatusOK, &RespSubmitLogin{LoginID: login.ID, LoginStep: resp})
+		writeLoginStep(w, r, login.ID, resp)
 	}
 }
 
@@ -286,7 +298,7 @@ func (prov *ProvisioningAPI) PostLoginCancel(w http.ResponseWriter, r *http.Requ
 	if login == nil {
 		return
 	}
-	prov.deleteLogin(login, nil, true, ErrLoginCancelled)
+	prov.deleteLogin(login, nil, true, bridgev2.ErrLoginCancelled)
 	exhttp.WriteEmptyJSONResponse(w, http.StatusOK)
 }
 
@@ -300,7 +312,7 @@ func (prov *ProvisioningAPI) PostLoginStepCancel(w http.ResponseWriter, r *http.
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to cancel login step")
 		RespondWithError(w, err, "Internal error cancelling login step")
 	} else {
-		exhttp.WriteJSONResponse(w, http.StatusOK, &RespSubmitLogin{LoginID: login.ID, LoginStep: nextStep})
+		writeLoginStep(w, r, login.ID, nextStep)
 	}
 }
 
@@ -427,9 +439,9 @@ func (prov *ProvisioningAPI) doLoginStep(
 		} else if err != nil {
 			return nil, err
 		} else if errors.Is(login.Ctx.Err(), context.DeadlineExceeded) {
-			return nil, ErrLoginTimedOut
+			return nil, bridgev2.ErrLoginTimedOut
 		}
-		return nil, ErrLoginCancelled
+		return nil, bridgev2.ErrLoginCancelled
 	}
 
 	var currentStep *bridgev2.LoginStep

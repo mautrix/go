@@ -32,6 +32,7 @@ type Config struct {
 	PublicMedia  PublicMediaConfig  `yaml:"public_media"`
 	DirectMedia  DirectMediaConfig  `yaml:"direct_media"`
 	Backfill     BackfillConfig     `yaml:"backfill"`
+	Proxy        ProxyConfig        `yaml:"proxy"`
 	DoublePuppet DoublePuppetConfig `yaml:"double_puppet"`
 	Encryption   EncryptionConfig   `yaml:"encryption"`
 	Logging      zeroconfig.Config  `yaml:"logging"`
@@ -98,6 +99,7 @@ type BridgeConfig struct {
 	PortalCreateFilter            PortalCreateFilter `yaml:"portal_create_filter"`
 	Permissions                   PermissionConfig   `yaml:"permissions"`
 	Backfill                      BackfillConfig     `yaml:"backfill"`
+	Proxy                         ProxyConfig        `yaml:"proxy"`
 }
 
 type MatrixConfig struct {
