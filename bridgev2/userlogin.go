@@ -39,6 +39,9 @@ type UserLogin struct {
 	spaceCreateLock sync.Mutex
 	deleteLock      sync.Mutex
 	disconnectOnce  sync.Once
+
+	deletedCleanupRooms   bool
+	deletedBadCredentials bool
 }
 
 var ErrorOnUserLoginLoadFail = false
@@ -345,6 +348,8 @@ func (ul *UserLogin) Delete(ctx context.Context, state status.BridgeState, opts 
 	if err != nil {
 		ul.Log.Err(err).Msg("Failed to delete user login")
 	}
+	ul.deletedCleanupRooms = cleanupRooms
+	ul.deletedBadCredentials = state.StateEvent == status.StateBadCredentials
 	if !opts.unlocked {
 		ul.Bridge.cacheLock.Lock()
 	}

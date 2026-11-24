@@ -5781,15 +5781,13 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 		log.Err(err).Msg("Failed to save portal to database after creating Matrix room")
 		return err
 	}
-	if source != nil && source.ID == portal.Receiver && portal.Bridge.GetCachedUserLoginByID(source.ID) == nil {
+	if source != nil && source.ID == portal.Receiver && portal.Bridge.GetCachedUserLoginByID(source.ID) == nil && source.deletedCleanupRooms {
 		log.Warn().Msg("Receiver login was deleted during room creation, applying logout cleanup")
-		if portal.Bridge.Config.CleanupOnLogout.Enabled {
-			source.kickUserFromPortals(
-				log.WithContext(portal.Bridge.BackgroundCtx),
-				[]*database.UserPortal{{UserMXID: source.UserMXID, LoginID: source.ID, Portal: portal.PortalKey}},
-				false, false,
-			)
-		}
+		source.kickUserFromPortals(
+			log.WithContext(portal.Bridge.BackgroundCtx),
+			[]*database.UserPortal{{UserMXID: source.UserMXID, LoginID: source.ID, Portal: portal.PortalKey}},
+			source.deletedBadCredentials, false,
+		)
 		return ErrNotLoggedIn
 	}
 	if info.CanBackfill && portal.RoomType != database.RoomTypeSpace {
