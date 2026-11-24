@@ -33,13 +33,14 @@ const (
 	oauthRequestTypeRevoke         = "revoke"
 )
 
-func (cli *Client) makeOAuthRequest(ctx context.Context, reqType, url string, payload url.Values, resp any) (err error) {
+func (cli *Client) makeOAuthRequest(ctx context.Context, reqType, url string, payload url.Values, resp any, sensitive bool) (err error) {
 	reqParams := FullRequest{
-		Method:       http.MethodPost,
-		URL:          url,
-		RequestBytes: []byte(payload.Encode()),
-		Headers:      http.Header{},
-		ResponseJSON: resp,
+		Method:           http.MethodPost,
+		URL:              url,
+		RequestBytes:     []byte(payload.Encode()),
+		Headers:          http.Header{},
+		ResponseJSON:     resp,
+		SensitiveContent: sensitive,
 	}
 	if payload != nil {
 		reqParams.RequestBytes = []byte(payload.Encode())
@@ -141,7 +142,7 @@ func (cli *Client) OAuthGenerateDeviceCode(ctx context.Context, params oauth.Gen
 	if params.UserIDHint != "" {
 		q.Set("login_hint", fmt.Sprintf("mxid:%s", params.UserIDHint))
 	}
-	err = cli.makeOAuthRequest(ctx, oauthRequestTypeGetDeviceCode, authMeta.DeviceAuthorizationEndpoint, q, &resp)
+	err = cli.makeOAuthRequest(ctx, oauthRequestTypeGetDeviceCode, authMeta.DeviceAuthorizationEndpoint, q, &resp, false)
 	return
 }
 
@@ -166,7 +167,7 @@ func (cli *Client) OAuthExchangeToken(ctx context.Context, params oauth.Exchange
 		"redirect_uri":  []string{params.RedirectURI},
 		"client_id":     []string{clientID},
 		"code_verifier": []string{params.CodeVerifier},
-	}, &resp)
+	}, &resp, true)
 	if err == nil && params.StoreCredentials {
 		err = cli.saveAndSetTokens(ctx, start, resp, false)
 	}
@@ -192,7 +193,7 @@ func (cli *Client) OAuthPollDeviceCode(ctx context.Context, params oauth.PollDev
 		"grant_type":  []string{string(oauth.GrantTypeDeviceCode)},
 		"device_code": []string{params.DeviceCode},
 		"client_id":   []string{clientID},
-	}, &resp)
+	}, &resp, true)
 	if err == nil && params.StoreCredentials {
 		err = cli.saveAndSetTokens(ctx, start, resp, false)
 	}
@@ -300,7 +301,7 @@ func (cli *Client) OAuthRefreshToken(ctx context.Context, buffer time.Duration) 
 		"grant_type":    []string{string(oauth.GrantTypeRefreshToken)},
 		"refresh_token": []string{cli.refreshToken},
 		"client_id":     []string{cli.oauthClientID},
-	}, &resp)
+	}, &resp, true)
 	if err == nil {
 		err = cli.saveAndSetTokens(ctx, start, resp, true)
 	}
@@ -327,7 +328,7 @@ func (cli *Client) OAuthRevokeToken(ctx context.Context) (err error) {
 	if clientID := cli.oauthClientID; clientID != "" {
 		values.Set("client_id", clientID)
 	}
-	err = cli.makeOAuthRequest(ctx, oauthRequestTypeRevoke, authMeta.RevocationEndpoint, values, nil)
+	err = cli.makeOAuthRequest(ctx, oauthRequestTypeRevoke, authMeta.RevocationEndpoint, values, nil, true)
 	if httpErr := (HTTPError{}); errors.As(err, &httpErr) && httpErr.IsStatus(http.StatusUnauthorized) {
 		err = nil
 	}

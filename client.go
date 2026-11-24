@@ -497,7 +497,9 @@ func (params *FullRequest) compileRequest(ctx context.Context) (*http.Request, e
 		reqBody = bytes.NewReader(jsonStr)
 		reqLen = int64(len(jsonStr))
 	} else if params.RequestBytes != nil {
-		if params.Headers.Get("Content-Type") == "application/x-www-form-urlencoded" && len(params.RequestBytes) < 4196 {
+		if params.SensitiveContent && !logSensitiveContent {
+			logBody = "<sensitive content omitted>"
+		} else if params.Headers.Get("Content-Type") == "application/x-www-form-urlencoded" && len(params.RequestBytes) < 4196 {
 			logBody = string(params.RequestBytes)
 		} else {
 			logBody = fmt.Sprintf("<%d bytes>", len(params.RequestBytes))
