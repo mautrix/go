@@ -2686,7 +2686,7 @@ func (portal *Portal) handleMatrixRedaction(
 		evt:        evt,
 	}) {
 		log.Debug().Msg("Redaction target message is still pending")
-		return EventHandlingResultIgnored
+		return EventHandlingResultQueued
 	}
 	var redactionTargetReaction *database.Reaction
 	redactionTargetMsg, err := portal.Bridge.DB.Message.GetPartByMXID(ctx, content.Redacts)
