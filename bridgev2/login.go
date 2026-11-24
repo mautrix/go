@@ -31,6 +31,18 @@ var ErrLoginStepCancelled = RespError{
 	StatusCode: http.StatusConflict,
 }
 
+var ErrLoginCancelled = RespError{
+	ErrCode:    "FI.MAU.BRIDGE.LOGIN_CANCELLED",
+	Err:        "Login process was cancelled",
+	StatusCode: http.StatusGone,
+}
+
+var ErrLoginTimedOut = RespError{
+	ErrCode:    "FI.MAU.BRIDGE.LOGIN_TIMED_OUT",
+	Err:        "Login process timed out",
+	StatusCode: http.StatusGone,
+}
+
 var ErrMissingClientCapability = RespError{
 	ErrCode:    "FI.MAU.BRIDGE.MISSING_CLIENT_CAPABILITY",
 	Err:        "This login requires a capability that the client doesn't support",
