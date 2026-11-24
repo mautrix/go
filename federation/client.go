@@ -45,9 +45,10 @@ type Client struct {
 
 func NewClient(serverName string, key *SigningKey, cache ResolutionCache, httpSettings exhttp.ClientSettings) *Client {
 	dialer := &net.Dialer{Timeout: httpSettings.DialTimeout}
+	srt := NewServerResolvingTransport(cache, dialer.DialContext, httpSettings)
 	c := &Client{
 		HTTP: &http.Client{
-			Transport: NewServerResolvingTransport(cache, dialer.DialContext, httpSettings),
+			Transport: srt,
 			Timeout:   httpSettings.GlobalTimeout,
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				// Federation requests do not allow redirects.
@@ -72,6 +73,7 @@ func NewClient(serverName string, key *SigningKey, cache ResolutionCache, httpSe
 		return nil
 	}
 	dialer.ControlContext = c.controlConn
+	srt.ResolveOpts = &ResolveServerNameOpts{HTTPClient: c.ExtHTTP}
 	return c
 }
 
