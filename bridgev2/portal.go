@@ -3149,6 +3149,13 @@ func (portal *Portal) cutOffLongMessage(ctx context.Context, content *event.Cont
 			Int("mentions_size", jsonSize(msg.Mentions)).
 			Int("extra_size", jsonSize(content.Raw)).
 			Bool("is_edit", msg.NewContent != nil)
+		if msg.NewContent != nil {
+			evt = evt.
+				Int("outer_body_size", len(msg.Body)).
+				Int("outer_formatted_body_size", len(msg.FormattedBody)).
+				Int("new_content_link_previews_size", jsonSize(msg.NewContent.BeeperLinkPreviews)).
+				Int("new_content_mentions_size", jsonSize(msg.NewContent.Mentions))
+		}
 	}
 	evt.Msg("Cut off message content that was too large for a Matrix event")
 }
