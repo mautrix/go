@@ -361,11 +361,20 @@ const (
 	BrowserEngineWebKit   BrowserEngine = "webkit"
 )
 
+type UserAgentHint string
+
+const (
+	// The site needs a desktop browser user agent, e.g. it redirects mobile browsers to an app download page.
+	UserAgentHintDesktop UserAgentHint = "desktop"
+)
+
 type LoginCookiesParams struct {
 	URL       string `json:"url"`
 	UserAgent string `json:"user_agent,omitempty"`
 	// If set, clients whose webview uses a different browser engine should ignore UserAgent.
 	UserAgentEngine BrowserEngine `json:"user_agent_engine,omitempty"`
+	// Hints for clients choosing their own user agent when UserAgent isn't used.
+	UserAgentHints []UserAgentHint `json:"user_agent_hints,omitempty"`
 
 	// Cookies the client should set in the webview before loading the URL, used to continue a login
 	// session that was partially completed elsewhere (e.g. a captcha or checkpoint challenge).
@@ -396,6 +405,7 @@ func (lcp *LoginCookiesParams) MarshalZerologObject(e *zerolog.Event) {
 	e.Str("url", lcp.URL).
 		Str("user_agent", lcp.UserAgent).
 		Str("user_agent_engine", string(lcp.UserAgentEngine)).
+		Any("user_agent_hints", lcp.UserAgentHints).
 		Int("initial_cookie_count", len(lcp.InitialCookies)).
 		Any("fields", lcp.Fields).
 		Str("extract_js", lcp.ExtractJS).

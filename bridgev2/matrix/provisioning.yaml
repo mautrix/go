@@ -1224,6 +1224,14 @@ components:
                 enum: [ chromium, webkit ]
                 description: |
                   If set, clients whose webview uses a different browser engine should ignore `user_agent`.
+              user_agent_hints:
+                type: array
+                description: |
+                  Hints for clients choosing their own user agent when `user_agent` isn't used.
+                  `desktop` means the site needs a desktop browser user agent.
+                items:
+                  type: string
+                  enum: [ desktop ]
               wait_for_url_pattern:
                 type: string
                 description: |
