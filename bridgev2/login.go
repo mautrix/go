@@ -47,6 +47,8 @@ const (
 	ClientCapabilityWebAuthn  ClientCapability = "webauthn"
 	ClientCapabilityHTTP      ClientCapability = "client_http"
 	ClientCapabilityWebSocket ClientCapability = "client_websocket"
+	// The client's cookie login webview allows third-party cookies.
+	ClientCapabilityWebviewThirdPartyCookies ClientCapability = "webview_third_party_cookies"
 )
 
 type ClientCapabilities []ClientCapability
@@ -352,7 +354,11 @@ type LoginCookiesParams struct {
 	// A JavaScript snippet that can extract some or all of the fields.
 	// The snippet will evaluate to a promise that resolves when the relevant fields are found.
 	// Fields that are not present in the promise result must be extracted another way.
+	// Clients run it once in every main-frame document after DOMContentLoaded.
 	ExtractJS string `json:"extract_js,omitempty"`
+	// A JavaScript snippet that clients run at document start in every main-frame document,
+	// before the page's own scripts. Its result is ignored.
+	InitJS string `json:"init_js,omitempty"`
 	// A regex pattern that the URL should match before the client closes the webview.
 	//
 	// The client may submit the login if the user closes the webview after all cookies are collected
@@ -371,6 +377,7 @@ func (lcp *LoginCookiesParams) MarshalZerologObject(e *zerolog.Event) {
 		Int("initial_cookie_count", len(lcp.InitialCookies)).
 		Any("fields", lcp.Fields).
 		Str("extract_js", lcp.ExtractJS).
+		Str("init_js", lcp.InitJS).
 		Str("wait_for_url_pattern", lcp.WaitForURLPattern).
 		Bool("hidden", lcp.Hidden)
 }
