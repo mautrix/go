@@ -108,6 +108,13 @@ var (
 	ErrInvalidLoginFlowID error = RespError(mautrix.MNotFound.WithMessage("Invalid login flow ID"))
 )
 
+// Common start chat errors
+var (
+	// ErrCannotMessageUser can be returned by ResolveIdentifier or CreateChatWithGhost when the remote network
+	// doesn't allow the user to message the target user.
+	ErrCannotMessageUser = RespError{ErrCode: "FI.MAU.BRIDGE.CANNOT_MESSAGE_USER", Err: "You can't message this user", StatusCode: http.StatusForbidden}
+)
+
 // RespError is a class of error that certain network interface methods can return to ensure that the error
 // is properly translated into an HTTP error when the method is called via the provisioning API.
 //
