@@ -342,9 +342,18 @@ type LoginCookie struct {
 	HTTPOnly bool   `json:"http_only,omitzero"`
 }
 
+type BrowserEngine string
+
+const (
+	BrowserEngineChromium BrowserEngine = "chromium"
+	BrowserEngineWebKit   BrowserEngine = "webkit"
+)
+
 type LoginCookiesParams struct {
 	URL       string `json:"url"`
 	UserAgent string `json:"user_agent,omitempty"`
+	// If set, clients whose webview uses a different browser engine should ignore UserAgent.
+	UserAgentEngine BrowserEngine `json:"user_agent_engine,omitempty"`
 
 	// Cookies the client should set in the webview before loading the URL, used to continue a login
 	// session that was partially completed elsewhere (e.g. a captcha or checkpoint challenge).
@@ -374,6 +383,7 @@ type LoginCookiesParams struct {
 func (lcp *LoginCookiesParams) MarshalZerologObject(e *zerolog.Event) {
 	e.Str("url", lcp.URL).
 		Str("user_agent", lcp.UserAgent).
+		Str("user_agent_engine", string(lcp.UserAgentEngine)).
 		Int("initial_cookie_count", len(lcp.InitialCookies)).
 		Any("fields", lcp.Fields).
 		Str("extract_js", lcp.ExtractJS).

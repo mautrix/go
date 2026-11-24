@@ -1219,6 +1219,11 @@ components:
               user_agent:
                 type: string
                 description: An optional user agent that the webview should use.
+              user_agent_engine:
+                type: string
+                enum: [ chromium, webkit ]
+                description: |
+                  If set, clients whose webview uses a different browser engine should ignore `user_agent`.
               wait_for_url_pattern:
                 type: string
                 description: |
