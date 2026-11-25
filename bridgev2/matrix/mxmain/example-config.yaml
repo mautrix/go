@@ -71,7 +71,7 @@ bridge:
     # not logged into an account that's in the remote chat?
     kick_matrix_users: true
     # Should the bridge listen to com.beeper.state_request events?
-    # This is not necessary for anything outside of Beeper.
+    # This is not necessary for anything outside of Beeper and should not be enabled.
     enable_send_state_requests: false
     # Should the com.beeper.bridge.identifiers list in global ghost profiles include phone numbers?
     phone_numbers_in_profile: false
