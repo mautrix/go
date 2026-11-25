@@ -4423,6 +4423,8 @@ func (portal *Portal) ProcessChatInfoChange(ctx context.Context, sender EventSen
 	}
 	if change.ChatInfo != nil {
 		portal.UpdateInfo(ctx, change.ChatInfo, source, intent, ts)
+	} else if source != nil {
+		source.MarkInPortal(ctx, portal)
 	}
 	if change.MemberChanges != nil {
 		err := portal.syncParticipants(ctx, change.MemberChanges, source, intent, ts)
