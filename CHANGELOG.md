@@ -1,3 +1,13 @@
+## unreleased
+
+* **Breaking change *(all)*** Switched to encoding/json/v2.
+  * Compiling with Go 1.26 now requires `GOEXPERIMENT=jsonv2`. Go 1.27+ will
+    build out of the box.
+* **Breaking change *(bridgev2)*** Changed login flows and steps to use
+  localizable strings.
+* **Breaking change *(client)*** Changed `Capabilities()` return value to be
+  wrapped like the actual JSON object is.
+
 ## v0.33.0 (2026-11-16)
 
 * *(bridgev2)* Removed `BotIntent()` from Matrix interface as it should never
