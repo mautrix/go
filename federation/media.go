@@ -79,6 +79,8 @@ func (c *Client) DownloadMedia(ctx context.Context, serverName, mediaID string) 
 	_ = mbr.Close()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to parse metadata: %w", err)
+	} else if meta == nil {
+		return nil, nil, fmt.Errorf("metadata is null")
 	}
 	part, err = mr.NextPart()
 	if err != nil {

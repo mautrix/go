@@ -143,7 +143,7 @@ func Authorize(
 			return fmt.Errorf("%w (%d)", ErrInvalidRoomIDLength, len(evt.RoomID))
 		} else if createEvts, err := getEvents([]id.EventID{id.EventID("$" + evt.RoomID[1:])}); err != nil {
 			return fmt.Errorf("%w: %w", ErrFailedToGetCreateEvent, err)
-		} else if len(createEvts) != 1 {
+		} else if len(createEvts) != 1 || createEvts[0] == nil {
 			return fmt.Errorf("%w (%s)", ErrCreateEventNotFound, evt.RoomID)
 		} else if isRejected(createEvts[0]) {
 			return ErrRejectedCreateEvent
@@ -695,7 +695,7 @@ func allowPowerChangeMap(roomVersion id.RoomVersion, maxVal int, path, ownID str
 		if err == nil && ownID != "" && key.Str != ownID {
 			parsedOldVal := parseIntWithVersion(roomVersion, value)
 			parsedNewVal := parseIntWithVersion(roomVersion, newVal)
-			if *parsedOldVal >= maxVal && *parsedOldVal != *parsedNewVal {
+			if parsedOldVal != nil && *parsedOldVal >= maxVal && (parsedNewVal == nil || *parsedOldVal != *parsedNewVal) {
 				err = fmt.Errorf("%w: can't change users.%s from %s to %s with sender level %d", ErrInvalidUserPowerChange, key.Str, stringifyForError(value), stringifyForError(newVal), maxVal)
 			}
 		}

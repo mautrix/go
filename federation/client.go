@@ -91,7 +91,7 @@ var ErrMismatchingServerName = errors.New("mismatching server name")
 
 func (c *Client) ServerKeys(ctx context.Context, serverName string) (resp *ServerKeyResponse, err error) {
 	err = c.MakeRequest(ctx, serverName, false, http.MethodGet, KeyURLPath{"v2", "server"}, nil, &resp)
-	if err == nil && resp.ServerName != serverName {
+	if err == nil && resp != nil && resp.ServerName != serverName {
 		err = fmt.Errorf("%w: %q != %q", ErrMismatchingServerName, serverName, resp.ServerName)
 	}
 	return
