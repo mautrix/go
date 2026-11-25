@@ -363,6 +363,7 @@ const (
 	// The site needs a desktop browser user agent, e.g. it redirects mobile browsers to an app download page.
 	UserAgentHintDesktop UserAgentHint = "desktop"
 	// The site needs the webview's own unmodified user agent, e.g. it rejects anything that looks spoofed.
+	// Takes precedence over other hints.
 	UserAgentHintNative UserAgentHint = "native"
 )
 
