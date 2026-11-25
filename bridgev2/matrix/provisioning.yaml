@@ -1263,13 +1263,13 @@ components:
                     type:
                       type: string
                       description: The type of data to extract.
-                      enum: [ cookie, local_storage, request_header, request_body, special ]
+                      enum: [ cookie, local_storage, request_header, request_body, redirect_url, special ]
                     name:
                       type: string
                       description: The name of the item to extract.
                     request_url_regex:
                       type: string
-                      description: For the `request_header` and `request_body` types, a regex that matches the URLs from which the values can be extracted.
+                      description: For the `request_header`, `request_body`, and `redirect_url` types, a regex that matches the request or redirect target URLs from which the values can be extracted.
                     cookie_domain:
                       type: string
                       description: For the `cookie` type, the domain of the cookie.
