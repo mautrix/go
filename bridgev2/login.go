@@ -312,6 +312,7 @@ const (
 	LoginCookieTypeLocalStorage  LoginCookieFieldSourceType = "local_storage"
 	LoginCookieTypeRequestHeader LoginCookieFieldSourceType = "request_header"
 	LoginCookieTypeRequestBody   LoginCookieFieldSourceType = "request_body"
+	LoginCookieTypeRedirectURL   LoginCookieFieldSourceType = "redirect_url"
 	LoginCookieTypeSpecial       LoginCookieFieldSourceType = "special"
 )
 
@@ -323,10 +324,11 @@ type LoginCookieFieldSource struct {
 	// Local storage:  key in local storage
 	// Request header: header name
 	// Request body:   field name inside body after it's parsed (as JSON or multipart form data)
+	// Redirect URL:   unused
 	// Special:        a namespaced identifier that clients can implement special handling for
 	Name string `json:"name"`
 
-	// For request header & body types, a regex matching request URLs where the value can be extracted from.
+	// For request header, body & redirect URL types, a regex matching request or redirect target URLs where the value can be extracted from.
 	RequestURLRegex string `json:"request_url_regex,omitempty"`
 	// For cookie types, the domain the cookie is present on.
 	CookieDomain string `json:"cookie_domain,omitempty"`
