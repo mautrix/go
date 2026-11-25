@@ -4942,7 +4942,7 @@ func (portal *Portal) getInitialMemberList(ctx context.Context, members *ChatMem
 				ghost.UpdateInfo(ctx, member.UserInfo)
 			}
 		}
-		intent, extraUserID, err := portal.getIntentAndUserMXIDFor(ctx, member.EventSender, source, loginsInPortal, 0)
+		intent, extraUserID, err := portal.getIntentAndUserMXIDFor(ctx, member.EventSender, source, loginsInPortal, RemoteEventChatInfoChange)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -5186,7 +5186,7 @@ func (portal *Portal) syncParticipants(
 				ghost.UpdateInfo(ctx, member.UserInfo)
 			}
 		}
-		intent, extraUserID, err := portal.getIntentAndUserMXIDFor(ctx, member.EventSender, source, loginsInPortal, 0)
+		intent, extraUserID, err := portal.getIntentAndUserMXIDFor(ctx, member.EventSender, source, loginsInPortal, RemoteEventChatInfoChange)
 		if err != nil {
 			return err
 		}
