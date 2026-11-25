@@ -597,6 +597,7 @@ func (prov *ProvisioningAPI) executeStep(
 		err = ErrNilStep
 	}
 	if err != nil && errors.Is(login.Ctx.Err(), context.DeadlineExceeded) {
+		zerolog.Ctx(ctx).Debug().Err(err).Msg("Login step failed after login timed out")
 		err = bridgev2.ErrLoginTimedOut
 	}
 	if err != nil {
