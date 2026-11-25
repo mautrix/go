@@ -13,7 +13,7 @@ import (
 type ImagePackImage struct {
 	URL  id.ContentURIString `json:"url"`
 	Body string              `json:"body,omitempty"`
-	Info *FileInfo           `json:"info,omitempty"`
+	Info *FileInfo           `json:"info,omitzero"`
 }
 
 type ImagePackUsage string
@@ -29,7 +29,7 @@ type ImagePackMetadata struct {
 	Usage       []ImagePackUsage    `json:"usage,omitempty"`
 	Attribution string              `json:"attribution,omitempty"`
 
-	BridgedPack *BridgedStickerPack `json:"fi.mau.bridged_pack,omitempty"`
+	BridgedPack *BridgedStickerPack `json:"fi.mau.bridged_pack,omitzero"`
 }
 
 func (ipm ImagePackMetadata) IsZero() bool {

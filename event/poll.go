@@ -73,8 +73,8 @@ type PollStart struct {
 }
 
 type PollStartEventContent struct {
-	RelatesTo *RelatesTo `json:"m.relates_to,omitempty"`
-	Mentions  *Mentions  `json:"m.mentions,omitempty"`
+	RelatesTo *RelatesTo `json:"m.relates_to,omitzero"`
+	Mentions  *Mentions  `json:"m.mentions,omitzero"`
 	PollStart PollStart  `json:"org.matrix.msc3381.poll.start"`
 }
 

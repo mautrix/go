@@ -9,7 +9,7 @@ package id
 import (
 	"bytes"
 	"database/sql/driver"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"regexp"
@@ -87,26 +87,32 @@ func ParseContentURIBytes(uri []byte) (parsed ContentURI, err error) {
 	return
 }
 
-func (uri *ContentURI) UnmarshalJSON(raw []byte) (err error) {
-	if string(raw) == "null" {
-		*uri = ContentURI{}
-		return nil
-	} else if len(raw) < 2 || raw[0] != '"' || raw[len(raw)-1] != '"' {
-		return fmt.Errorf("ContentURI: %w", ErrInputNotJSONString)
-	}
-	parsed, err := ParseContentURIBytes(raw[1 : len(raw)-1])
+func (uri *ContentURI) UnmarshalJSONFrom(dec *jsontext.Decoder) (err error) {
+	tok, err := dec.ReadToken()
 	if err != nil {
 		return err
 	}
-	*uri = parsed
-	return nil
+	switch tok.Kind() {
+	case jsontext.KindNull:
+		*uri = ContentURI{}
+		return nil
+	case jsontext.KindString:
+		parsed, err := ParseContentURI(tok.String())
+		if err != nil {
+			return err
+		}
+		*uri = parsed
+		return nil
+	default:
+		return fmt.Errorf("ContentURI: %w", ErrInputNotJSONString)
+	}
 }
 
-func (uri *ContentURI) MarshalJSON() ([]byte, error) {
+func (uri *ContentURI) MarshalJSONTo(enc *jsontext.Encoder) error {
 	if uri == nil || uri.IsEmpty() {
-		return []byte("null"), nil
+		return enc.WriteToken(jsontext.Null)
 	}
-	return json.Marshal(uri.String())
+	return enc.WriteToken(jsontext.String(uri.String()))
 }
 
 func (uri *ContentURI) UnmarshalText(raw []byte) (err error) {

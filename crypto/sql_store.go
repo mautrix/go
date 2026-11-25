@@ -10,7 +10,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"slices"

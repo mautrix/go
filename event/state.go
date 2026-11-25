@@ -8,7 +8,8 @@ package event
 
 import (
 	"encoding/base64"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"slices"
 
 	"go.mau.fi/util/jsontime"
@@ -33,8 +34,8 @@ type RoomNameEventContent struct {
 // https://spec.matrix.org/v1.2/client-server-api/#mroomavatar
 type RoomAvatarEventContent struct {
 	URL         id.ContentURIString `json:"url,omitempty"`
-	Info        *FileInfo           `json:"info,omitempty"`
-	MSC3414File *EncryptedFileInfo  `json:"org.matrix.msc3414.file,omitempty"`
+	Info        *FileInfo           `json:"info,omitzero"`
+	MSC3414File *EncryptedFileInfo  `json:"org.matrix.msc3414.file,omitzero"`
 }
 
 // ServerACLEventContent represents the content of a m.room.server_acl state event.
@@ -49,7 +50,7 @@ type ServerACLEventContent struct {
 // https://spec.matrix.org/v1.2/client-server-api/#mroomtopic
 type TopicEventContent struct {
 	Topic           string           `json:"topic"`
-	ExtensibleTopic *ExtensibleTopic `json:"m.topic,omitempty"`
+	ExtensibleTopic *ExtensibleTopic `json:"m.topic,omitzero"`
 }
 
 // ExtensibleTopic represents the contents of the m.topic field within the
@@ -138,9 +139,9 @@ const (
 // https://spec.matrix.org/v1.2/client-server-api/#mroomcreate
 type CreateEventContent struct {
 	Type        RoomType       `json:"type,omitempty"`
-	Federate    *bool          `json:"m.federate,omitempty"`
+	Federate    *bool          `json:"m.federate,omitzero"`
 	RoomVersion id.RoomVersion `json:"room_version,omitempty"`
-	Predecessor *Predecessor   `json:"predecessor,omitempty"`
+	Predecessor *Predecessor   `json:"predecessor,omitzero"`
 
 	// Room v12+ only
 	AdditionalCreators []id.UserID `json:"additional_creators,omitempty"`
@@ -261,7 +262,7 @@ type BridgeEventContent struct {
 	BridgeBot id.UserID          `json:"bridgebot"`
 	Creator   id.UserID          `json:"creator,omitempty"`
 	Protocol  BridgeInfoSection  `json:"protocol"`
-	Network   *BridgeInfoSection `json:"network,omitempty"`
+	Network   *BridgeInfoSection `json:"network,omitzero"`
 	Channel   BridgeInfoSection  `json:"channel"`
 
 	BeeperRoomType   string `json:"com.beeper.room_type,omitempty"`
@@ -285,11 +286,11 @@ type BeeperDisappearingTimer struct {
 
 type marshalableBeeperDisappearingTimer BeeperDisappearingTimer
 
-func (bdt *BeeperDisappearingTimer) MarshalJSON() ([]byte, error) {
+func (bdt *BeeperDisappearingTimer) MarshalJSONTo(enc *jsontext.Encoder) error {
 	if bdt == nil || bdt.Type == DisappearingTypeNone {
-		return []byte("{}"), nil
+		return enc.WriteValue(jsontext.Value("{}"))
 	}
-	return json.Marshal((*marshalableBeeperDisappearingTimer)(bdt))
+	return json.MarshalEncode(enc, (*marshalableBeeperDisappearingTimer)(bdt))
 }
 
 type SpaceChildEventContent struct {
@@ -338,7 +339,7 @@ type ModPolicyContent struct {
 	Entity         string               `json:"entity,omitempty"`
 	Reason         string               `json:"reason"`
 	Recommendation PolicyRecommendation `json:"recommendation"`
-	UnstableHashes *PolicyHashes        `json:"org.matrix.msc4205.hashes,omitempty"`
+	UnstableHashes *PolicyHashes        `json:"org.matrix.msc4205.hashes,omitzero"`
 }
 
 func (mpc *ModPolicyContent) EntityOrHash() string {
@@ -366,7 +367,7 @@ type PolicyServerPublicKeys struct {
 
 type RoomPolicyEventContent struct {
 	Via        string                  `json:"via,omitempty"`
-	PublicKeys *PolicyServerPublicKeys `json:"public_keys,omitempty"`
+	PublicKeys *PolicyServerPublicKeys `json:"public_keys,omitzero"`
 
 	// Deprecated, only for legacy use
 	PublicKey id.Ed25519 `json:"public_key,omitempty"`

@@ -6,7 +6,10 @@
 
 package pushrules
 
-import "encoding/json"
+import (
+	"encoding/json/jsontext"
+	"encoding/json/v2"
+)
 
 // PushActionType is the type of a PushAction
 type PushActionType string
@@ -76,20 +79,20 @@ func (actions PushActionArray) Should() (should PushActionArrayShould) {
 type PushAction struct {
 	Action PushActionType  `json:"action"`
 	Tweak  PushActionTweak `json:"set_tweak,omitempty"`
-	Value  any             `json:"value,omitempty"`
+	Value  any             `json:"value,omitzero"`
 }
 
-// UnmarshalJSON parses JSON into this PushAction.
+// UnmarshalJSONFrom parses JSON into this PushAction.
 //
 //   - If the JSON is a single string, the value is stored in the Action field.
 //   - If the JSON is an object with the set_tweak field, Action will be set to
 //     "set_tweak", Tweak will be set to the value of the set_tweak field and
 //     and Value will be set to the value of the value field.
 //   - In any other case, the function does nothing.
-func (action *PushAction) UnmarshalJSON(raw []byte) error {
+func (action *PushAction) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 	var data any
 
-	err := json.Unmarshal(raw, &data)
+	err := json.UnmarshalDecode(dec, &data)
 	if err != nil {
 		return err
 	}
@@ -109,15 +112,13 @@ func (action *PushAction) UnmarshalJSON(raw []byte) error {
 	return nil
 }
 
-// MarshalJSON is the reverse of UnmarshalJSON()
-func (action *PushAction) MarshalJSON() (raw []byte, err error) {
+// MarshalJSONTo is the reverse of UnmarshalJSONFrom()
+func (action *PushAction) MarshalJSONTo(enc *jsontext.Encoder) error {
 	if action.Action == ActionSetTweak {
-		data := map[string]any{
-			"set_tweak": action.Tweak,
-			"value":     action.Value,
-		}
-		return json.Marshal(&data)
+		return json.MarshalEncode(enc, struct {
+			SetTweak PushActionTweak `json:"set_tweak"`
+			Value    any             `json:"value"`
+		}{action.Tweak, action.Value})
 	}
-	data := string(action.Action)
-	return json.Marshal(&data)
+	return enc.WriteToken(jsontext.String(string(action.Action)))
 }

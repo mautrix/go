@@ -7,7 +7,7 @@
 package pushrules
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -65,7 +65,7 @@ type PushCondition struct {
 	// The glob-style pattern to match the field against. Only applicable if kind is EventMatch.
 	Pattern string `json:"pattern,omitempty"`
 	// The exact value to match the field against. Only applicable if kind is EventPropertyIs or EventPropertyContains.
-	Value any `json:"value,omitempty"`
+	Value any `json:"value,omitzero"`
 	// The condition that needs to be fulfilled for RoomMemberCount-type conditions.
 	// A decimal integer optionally prefixed by ==, <, >, >= or <=. Prefix "==" is assumed if no prefix found.
 	MemberCountCondition string `json:"is,omitempty"`

@@ -7,7 +7,7 @@
 package event
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
 
 	"go.mau.fi/util/exslices"
 	"go.mau.fi/util/ptr"
@@ -30,15 +30,15 @@ type RelatesTo struct {
 	EventID id.EventID   `json:"event_id,omitempty"`
 	Key     string       `json:"key,omitempty"`
 
-	InReplyTo     *InReplyTo `json:"m.in_reply_to,omitempty"`
+	InReplyTo     *InReplyTo `json:"m.in_reply_to,omitzero"`
 	IsFallingBack bool       `json:"is_falling_back,omitzero"`
 }
 
 type InReplyTo struct {
 	EventID id.EventID `json:"event_id,omitempty"`
 
-	UnstableRoomID id.RoomID       `json:"com.beeper.cross_room_id,omitempty"`
-	BeeperQuote    json.RawMessage `json:"com.beeper.quote,omitempty"`
+	UnstableRoomID id.RoomID      `json:"com.beeper.cross_room_id,omitempty"`
+	BeeperQuote    jsontext.Value `json:"com.beeper.quote,omitempty"`
 }
 
 func (rel *RelatesTo) Copy() *RelatesTo {
@@ -177,9 +177,9 @@ func (ta *ThreadAggregation) GetLatestEvent() *Event {
 }
 
 type Relations struct {
-	Thread     *ThreadAggregation    `json:"m.thread,omitempty"`
-	References *ReferenceAggregation `json:"m.reference,omitempty"`
-	LatestEdit *Event                `json:"m.replace,omitempty"`
+	Thread     *ThreadAggregation    `json:"m.thread,omitzero"`
+	References *ReferenceAggregation `json:"m.reference,omitzero"`
+	LatestEdit *Event                `json:"m.replace,omitzero"`
 }
 
 func (rel *Relations) GetLatestEdit() *Event {

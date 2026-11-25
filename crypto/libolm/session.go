@@ -23,6 +23,7 @@ import "C"
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json/jsontext"
 	"runtime"
 	"unsafe"
 
@@ -198,27 +199,26 @@ func (s *Session) GobDecode(rawPickled []byte) error {
 }
 
 // Deprecated
-func (s *Session) MarshalJSON() ([]byte, error) {
+func (s *Session) MarshalJSONTo(enc *jsontext.Encoder) error {
 	pickled, err := s.Pickle(pickleKey)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	quotes := make([]byte, len(pickled)+2)
-	quotes[0] = '"'
-	quotes[len(quotes)-1] = '"'
-	copy(quotes[1:len(quotes)-1], pickled)
-	return quotes, nil
+	return enc.WriteToken(jsontext.String(string(pickled)))
 }
 
 // Deprecated
-func (s *Session) UnmarshalJSON(data []byte) error {
-	if len(data) == 0 || data[0] != '"' || data[len(data)-1] != '"' {
+func (s *Session) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	tok, err := dec.ReadToken()
+	if err != nil {
+		return err
+	} else if tok.Kind() != jsontext.KindString {
 		return olm.ErrInputNotJSONString
 	}
 	if s == nil || s.int == nil {
 		*s = *NewBlankSession()
 	}
-	return s.Unpickle(data[1:len(data)-1], pickleKey)
+	return s.Unpickle([]byte(tok.String()), pickleKey)
 }
 
 // Id returns an identifier for this Session.  Will be the same for both ends

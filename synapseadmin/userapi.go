@@ -125,11 +125,11 @@ func (cli *Client) SuspendAccount(ctx context.Context, userID id.UserID, req Req
 
 type ReqCreateOrModifyAccount struct {
 	Password      string `json:"password,omitempty"`
-	LogoutDevices *bool  `json:"logout_devices,omitempty"`
+	LogoutDevices *bool  `json:"logout_devices,omitzero"`
 
-	Deactivated *bool `json:"deactivated,omitempty"`
-	Admin       *bool `json:"admin,omitempty"`
-	Locked      *bool `json:"locked,omitempty"`
+	Deactivated *bool `json:"deactivated,omitzero"`
+	Admin       *bool `json:"admin,omitzero"`
+	Locked      *bool `json:"locked,omitzero"`
 
 	Displayname string              `json:"displayname,omitempty"`
 	AvatarURL   id.ContentURIString `json:"avatar_url,omitempty"`

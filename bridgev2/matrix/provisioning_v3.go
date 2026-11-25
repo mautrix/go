@@ -40,7 +40,7 @@ type v3RespWhoami struct {
 type v3LoginStep struct {
 	*bridgev2.LoginStep
 	Instructions    string                  `json:"instructions"`
-	UserInputParams *v3LoginUserInputParams `json:"user_input,omitempty"`
+	UserInputParams *v3LoginUserInputParams `json:"user_input,omitzero"`
 }
 
 type v3RespSubmitLogin struct {

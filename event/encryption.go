@@ -7,7 +7,8 @@
 package event
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 
 	"go.mau.fi/util/jsonbytes"
@@ -42,15 +43,15 @@ type EncryptedEventContent struct {
 	// Only present for beeper stream events
 	IV jsonbytes.UnpaddedBytes `json:"iv,omitempty"`
 
-	Ciphertext json.RawMessage `json:"ciphertext"`
+	Ciphertext jsontext.Value `json:"ciphertext"`
 
 	MegolmCiphertext []byte `json:"-"`
 	// Only present for beeper stream events
 	BeeperStreamCiphertext jsonbytes.UnpaddedBytes `json:"-"`
 	OlmCiphertext          OlmCiphertexts          `json:"-"`
 
-	RelatesTo *RelatesTo `json:"m.relates_to,omitempty"`
-	Mentions  *Mentions  `json:"m.mentions,omitempty"`
+	RelatesTo *RelatesTo `json:"m.relates_to,omitzero"`
+	Mentions  *Mentions  `json:"m.mentions,omitzero"`
 }
 
 type OlmCiphertexts map[id.Curve25519]struct {
@@ -60,27 +61,27 @@ type OlmCiphertexts map[id.Curve25519]struct {
 
 type serializableEncryptedEventContent EncryptedEventContent
 
-func (content *EncryptedEventContent) UnmarshalJSON(data []byte) error {
-	err := json.Unmarshal(data, (*serializableEncryptedEventContent)(content))
+func (content *EncryptedEventContent) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	err := json.UnmarshalDecode(dec, (*serializableEncryptedEventContent)(content))
 	if err != nil {
 		return err
 	}
 	switch content.Algorithm {
 	case id.AlgorithmOlmV1:
 		content.OlmCiphertext = make(OlmCiphertexts)
-		return json.Unmarshal(content.Ciphertext, &content.OlmCiphertext)
+		return json.Unmarshal(content.Ciphertext, &content.OlmCiphertext, dec.Options())
 	case id.AlgorithmMegolmV1:
 		if len(content.Ciphertext) == 0 || content.Ciphertext[0] != '"' || content.Ciphertext[len(content.Ciphertext)-1] != '"' {
 			return fmt.Errorf("ciphertext %w", id.ErrInputNotJSONString)
 		}
 		content.MegolmCiphertext = content.Ciphertext[1 : len(content.Ciphertext)-1]
 	case id.AlgorithmBeeperStreamV1:
-		return json.Unmarshal(content.Ciphertext, &content.BeeperStreamCiphertext)
+		return json.Unmarshal(content.Ciphertext, &content.BeeperStreamCiphertext, dec.Options())
 	}
 	return nil
 }
 
-func (content *EncryptedEventContent) MarshalJSON() ([]byte, error) {
+func (content *EncryptedEventContent) MarshalJSONTo(enc *jsontext.Encoder) error {
 	var err error
 	switch content.Algorithm {
 	case id.AlgorithmOlmV1:
@@ -94,9 +95,9 @@ func (content *EncryptedEventContent) MarshalJSON() ([]byte, error) {
 		content.Ciphertext, err = json.Marshal(content.BeeperStreamCiphertext)
 	}
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return json.Marshal((*serializableEncryptedEventContent)(content))
+	return json.MarshalEncode(enc, (*serializableEncryptedEventContent)(content))
 }
 
 // RoomKeyEventContent represents the content of a m.room_key to_device event.
@@ -106,7 +107,7 @@ type RoomKeyEventContent struct {
 	RoomID        id.RoomID    `json:"room_id"`
 	SessionID     id.SessionID `json:"session_id"`
 	SessionKey    string       `json:"session_key"`
-	SharedHistory *bool        `json:"shared_history,omitempty"`
+	SharedHistory *bool        `json:"shared_history,omitzero"`
 
 	MaxAge      int64 `json:"com.beeper.max_age_ms,omitzero"`
 	MaxMessages int   `json:"com.beeper.max_messages,omitzero"`

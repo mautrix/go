@@ -8,7 +8,7 @@ package bridgev2
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"fmt"
 	"strings"
 	"time"
@@ -476,7 +476,7 @@ type NetworkAPIWithUserID interface {
 
 type ConnectBackgroundParams struct {
 	// RawData is the raw data in the push that triggered the background connection.
-	RawData json.RawMessage
+	RawData jsontext.Value
 	// ExtraData is the data returned by [PushParsingNetwork.ParsePushNotification].
 	// It's only present for native pushes. Relayed pushes will only have the raw data.
 	ExtraData any
@@ -866,7 +866,7 @@ type CreateChatResponse struct {
 type CreateChatFailedParticipant struct {
 	Reason          string         `json:"reason"`
 	InviteEventType string         `json:"invite_event_type,omitempty"`
-	InviteContent   *event.Content `json:"invite_content,omitempty"`
+	InviteContent   *event.Content `json:"invite_content,omitzero"`
 
 	UserMXID   id.UserID `json:"user_mxid,omitempty"`
 	DMRoomMXID id.RoomID `json:"dm_room_mxid,omitempty"`
@@ -971,7 +971,7 @@ type GroupFieldCapability struct {
 	MaxLength int `json:"max_length,omitzero"`
 
 	// Only for the disappear field: allowed disappearing settings
-	DisappearSettings *event.DisappearingTimerCapability `json:"settings,omitempty"`
+	DisappearSettings *event.DisappearingTimerCapability `json:"settings,omitzero"`
 
 	// This can be used to tell provisionutil not to call ValidateUserID on each participant.
 	// It only meant to allow hacks where ResolveIdentifier returns a fake ID that isn't actually valid for MXIDs.
@@ -984,12 +984,12 @@ type GroupCreateParams struct {
 	Username string `json:"username,omitempty"`
 	// Clients may also provide MXIDs here, but provisionutil will normalize them, so bridges only need to handle network IDs
 	Participants []networkid.UserID   `json:"participants,omitempty"`
-	Parent       *networkid.PortalKey `json:"parent,omitempty"`
+	Parent       *networkid.PortalKey `json:"parent,omitzero"`
 
-	Name      *event.RoomNameEventContent    `json:"name,omitempty"`
-	Avatar    *event.RoomAvatarEventContent  `json:"avatar,omitempty"`
-	Topic     *event.TopicEventContent       `json:"topic,omitempty"`
-	Disappear *event.BeeperDisappearingTimer `json:"disappear,omitempty"`
+	Name      *event.RoomNameEventContent    `json:"name,omitzero"`
+	Avatar    *event.RoomAvatarEventContent  `json:"avatar,omitzero"`
+	Topic     *event.TopicEventContent       `json:"topic,omitzero"`
+	Disappear *event.BeeperDisappearingTimer `json:"disappear,omitzero"`
 
 	// An existing room ID to bridge to. If unset, a new room will be created.
 	RoomID id.RoomID `json:"room_id,omitempty"`
@@ -1039,8 +1039,8 @@ type MatrixMembershipResult struct {
 }
 
 type ProfileUpdateParams struct {
-	Name   *string              `json:"name,omitempty"`
-	Avatar *id.ContentURIString `json:"avatar,omitempty"`
+	Name   *string              `json:"name,omitzero"`
+	Avatar *id.ContentURIString `json:"avatar,omitzero"`
 }
 
 type ProfileUpdatingNetworkAPI interface {
@@ -1128,8 +1128,8 @@ type WebPushConfig struct {
 }
 
 type FCMPushConfig struct {
-	SenderID  string          `json:"sender_id"`
-	LegacyIID json.RawMessage `json:"legacy_iid,omitempty"`
+	SenderID  string         `json:"sender_id"`
+	LegacyIID jsontext.Value `json:"legacy_iid,omitempty"`
 }
 
 type APNsPushConfig struct {
@@ -1137,9 +1137,9 @@ type APNsPushConfig struct {
 }
 
 type PushConfig struct {
-	Web  *WebPushConfig  `json:"web,omitempty"`
-	FCM  *FCMPushConfig  `json:"fcm,omitempty"`
-	APNs *APNsPushConfig `json:"apns,omitempty"`
+	Web  *WebPushConfig  `json:"web,omitzero"`
+	FCM  *FCMPushConfig  `json:"fcm,omitzero"`
+	APNs *APNsPushConfig `json:"apns,omitzero"`
 	// If Native is true, it means the network supports registering for pushes
 	// that are delivered directly to the app without the use of a push relay.
 	Native bool `json:"native,omitzero"`
@@ -1172,7 +1172,7 @@ type PushParsingNetwork interface {
 
 	// ParsePushNotification is called when a native push is received.
 	// It must return the corresponding user login ID to wake up, plus optionally data to pass to the wakeup call.
-	ParsePushNotification(ctx context.Context, data json.RawMessage) (networkid.UserLoginID, any, error)
+	ParsePushNotification(ctx context.Context, data jsontext.Value) (networkid.UserLoginID, any, error)
 }
 
 type ImportedImagePack struct {
@@ -1200,7 +1200,7 @@ type ResolvedMedia struct {
 type MediaResolvingNetworkAPI interface {
 	NetworkAPI
 
-	ResolveMedia(ctx context.Context, portal *Portal, msg *database.Message, unresolvedMedia json.RawMessage) (*ResolvedMedia, error)
+	ResolveMedia(ctx context.Context, portal *Portal, msg *database.Message, unresolvedMedia jsontext.Value) (*ResolvedMedia, error)
 }
 
 type RemoteEventType int

@@ -987,7 +987,7 @@ func (mach *OlmMachine) RepairOneTimeKeys(ctx context.Context) error {
 		} else {
 			log.Debug().Any("claimed_keys", claimed).Msg("Claimed own key")
 			for keyID, key := range claimed {
-				if ok, err = signatures.VerifySignatureJSON(key.RawData, mach.Client.UserID, mach.Client.DeviceID.String(), mach.OwnIdentity().SigningKey); err != nil {
+				if ok, err = signatures.VerifySignatureJSON(&key, mach.Client.UserID, mach.Client.DeviceID.String(), mach.OwnIdentity().SigningKey); err != nil {
 					log.Warn().Err(err).Stringer("key_id", keyID).Msg("Failed to verify signature of claimed key")
 				} else if !ok {
 					claimedInvalidSig++

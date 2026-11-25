@@ -15,7 +15,8 @@ import (
 	"crypto/sha512"
 	"encoding/base64"
 	"encoding/binary"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"math"
@@ -44,8 +45,8 @@ type ExportedSession struct {
 	SessionKey        string            `json:"session_key"`
 
 	// These are omitted in room key bundles
-	ForwardingChains *[]string `json:"forwarding_curve25519_key_chain,omitempty"`
-	SharedHistory    *bool     `json:"shared_history,omitempty"`
+	ForwardingChains *[]string `json:"forwarding_curve25519_key_chain,omitzero"`
+	SharedHistory    *bool     `json:"shared_history,omitzero"`
 }
 
 // The default number of pbkdf2 rounds to use when exporting keys
@@ -133,14 +134,13 @@ func formatKeyExportData(data []byte) []byte {
 
 func ExportKeysIter(passphrase string, sessions dbutil.RowIter[*InboundGroupSession]) ([]byte, error) {
 	buf := bytes.NewBuffer(make([]byte, 0, 50*1024))
-	enc := json.NewEncoder(buf)
 	buf.WriteByte('[')
 	err := sessions.Iter(func(session *InboundGroupSession) (bool, error) {
 		exported, err := session.export()
 		if err != nil {
 			return false, err
 		}
-		err = enc.Encode(exported)
+		err = json.MarshalWrite(buf, exported)
 		if err != nil {
 			return false, err
 		}
@@ -172,7 +172,7 @@ func ExportKeys(passphrase string, sessions []*InboundGroupSession) ([]byte, err
 	return EncryptKeyExport(passphrase, unencryptedData)
 }
 
-func EncryptKeyExport(passphrase string, unencryptedData json.RawMessage) ([]byte, error) {
+func EncryptKeyExport(passphrase string, unencryptedData jsontext.Value) ([]byte, error) {
 	// Make all the keys necessary for exporting
 	encryptionKey, hashKey, salt, iv := makeExportKeys(passphrase)
 

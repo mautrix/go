@@ -8,7 +8,7 @@ package commands
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"strings"
 
 	"github.com/rs/zerolog"
@@ -22,7 +22,7 @@ const ReactionMultiUseKey = "fi.mau.reaction_multi_use"
 
 type ReactionCommandData struct {
 	Command string `json:"command"`
-	Args    any    `json:"args,omitempty"`
+	Args    any    `json:"args,omitzero"`
 }
 
 func (proc *Processor[MetaType]) ParseReaction(ctx context.Context, evt *event.Event) *Event[MetaType] {

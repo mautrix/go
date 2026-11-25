@@ -10,7 +10,8 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/binary"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 
@@ -34,7 +35,7 @@ var (
 	NoGroupSession = ErrNoGroupSession
 )
 
-func getRawJSON[T any](content json.RawMessage, path ...string) *T {
+func getRawJSON[T any](content jsontext.Value, path ...string) *T {
 	value := gjson.GetBytes(content, exgjson.Path(path...))
 	if !value.IsObject() {
 		return nil
@@ -47,8 +48,8 @@ func getRawJSON[T any](content json.RawMessage, path ...string) *T {
 	return &result
 }
 
-func getRelatesTo(content any, plaintext json.RawMessage) *event.RelatesTo {
-	contentJSON, ok := content.(json.RawMessage)
+func getRelatesTo(content any, plaintext jsontext.Value) *event.RelatesTo {
+	contentJSON, ok := content.(jsontext.Value)
 	if ok {
 		return getRawJSON[event.RelatesTo](contentJSON, "m.relates_to")
 	}
@@ -64,7 +65,7 @@ func getRelatesTo(content any, plaintext json.RawMessage) *event.RelatesTo {
 }
 
 func getMentions(content any) *event.Mentions {
-	contentJSON, ok := content.(json.RawMessage)
+	contentJSON, ok := content.(jsontext.Value)
 	if ok {
 		return getRawJSON[event.Mentions](contentJSON, "m.mentions")
 	}
@@ -82,7 +83,7 @@ func getMentions(content any) *event.Mentions {
 type rawMegolmEvent struct {
 	RoomID   id.RoomID  `json:"room_id"`
 	Type     event.Type `json:"type"`
-	StateKey *string    `json:"state_key,omitempty"`
+	StateKey *string    `json:"state_key,omitzero"`
 	Content  any        `json:"content"`
 }
 

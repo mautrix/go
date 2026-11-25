@@ -10,7 +10,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"maps"
@@ -133,7 +134,7 @@ func ImportImagePack(ctx context.Context, login *bridgev2.UserLogin, packURL str
 
 var MaxPackBytes = 62 * 1024
 
-func SplitPack(resp *bridgev2.ImportedImagePack) ([]json.RawMessage, error) {
+func SplitPack(resp *bridgev2.ImportedImagePack) ([]jsontext.Value, error) {
 	fullPack, err := json.Marshal(&event.Content{
 		Parsed: resp.Content,
 		Raw:    resp.Extra,
@@ -142,12 +143,12 @@ func SplitPack(resp *bridgev2.ImportedImagePack) ([]json.RawMessage, error) {
 		return nil, fmt.Errorf("failed to marshal base content: %w", err)
 	}
 	if len(fullPack) < MaxPackBytes {
-		return []json.RawMessage{fullPack}, nil
+		return []jsontext.Value{fullPack}, nil
 	}
 
 	baseContent := exmaps.NonNilClone(resp.Extra)
 	baseContent["pack"] = resp.Content.Metadata
-	baseContent["images"] = map[string]json.RawMessage{}
+	baseContent["images"] = map[string]jsontext.Value{}
 	baseContent["fi.mau.combined_pack_key"] = resp.Shortcode
 	baseContent["fi.mau.combined_pack_index"] = 0
 	baseContent["fi.mau.combined_pack_count"] = 0
@@ -157,7 +158,7 @@ func SplitPack(resp *bridgev2.ImportedImagePack) ([]json.RawMessage, error) {
 	}
 
 	imageKeys := make([]string, 0, len(resp.Content.Images))
-	imageJSONs := make(map[string]json.RawMessage, len(resp.Content.Images))
+	imageJSONs := make(map[string]jsontext.Value, len(resp.Content.Images))
 	for key, image := range resp.Content.Images {
 		imageKeys = append(imageKeys, key)
 		imageJSONs[key], err = json.Marshal(image)
@@ -167,7 +168,7 @@ func SplitPack(resp *bridgev2.ImportedImagePack) ([]json.RawMessage, error) {
 	}
 
 	slices.Sort(imageKeys)
-	currentPackImages := make(map[string]json.RawMessage)
+	currentPackImages := make(map[string]jsontext.Value)
 	currentSize := len(basePack)
 	packs := make([]map[string]any, 0)
 	compilePack := func() {
@@ -181,7 +182,7 @@ func SplitPack(resp *bridgev2.ImportedImagePack) ([]json.RawMessage, error) {
 		meta.DisplayName = fmt.Sprintf("%s (part %d)", meta.DisplayName, len(packs)+1)
 		newPack["pack"] = meta
 		packs = append(packs, newPack)
-		currentPackImages = make(map[string]json.RawMessage)
+		currentPackImages = make(map[string]jsontext.Value)
 		currentSize = len(basePack)
 	}
 	if currentSize > MaxPackBytes/3 {
@@ -197,7 +198,7 @@ func SplitPack(resp *bridgev2.ImportedImagePack) ([]json.RawMessage, error) {
 		currentSize += nextSize
 	}
 	compilePack()
-	packJSONs := make([]json.RawMessage, len(packs))
+	packJSONs := make([]jsontext.Value, len(packs))
 	for i, pack := range packs {
 		pack["fi.mau.combined_pack_count"] = len(packs)
 		packJSONs[i], err = json.Marshal(pack)

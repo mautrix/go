@@ -8,7 +8,7 @@ package provisionutil
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -24,7 +24,7 @@ import (
 
 type ReqResolveMedia struct {
 	// The raw contents of the `com.beeper.unresolved_media` field in the message being resolved
-	UnresolvedMedia json.RawMessage `json:"com.beeper.unresolved_media"`
+	UnresolvedMedia jsontext.Value `json:"com.beeper.unresolved_media"`
 }
 
 type RespResolveMedia struct {

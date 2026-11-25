@@ -7,7 +7,9 @@
 package cmdschema
 
 import (
-	"encoding/json"
+	jsonv1 "encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"regexp"
@@ -90,7 +92,7 @@ func (ec *EventContent) ParseInput(owner id.UserID, sigils []string, input strin
 	return content, err
 }
 
-func (ec *EventContent) ParseArguments(input string) (json.RawMessage, error) {
+func (ec *EventContent) ParseArguments(input string) (jsontext.Value, error) {
 	args := make(map[string]any)
 	var retErr error
 	setError := func(err error) {
@@ -256,9 +258,9 @@ func normalizeNumber(value any) (int, error) {
 		return int(typedValue), nil
 	case float64:
 		return int(typedValue), nil
-	case json.Number:
+	case jsonv1.Number:
 		if i, err := typedValue.Int64(); err != nil {
-			return 0, fmt.Errorf("failed to parse json.Number: %w", err)
+			return 0, fmt.Errorf("failed to parse jsonv1.Number: %w", err)
 		} else {
 			return int(i), nil
 		}
@@ -431,7 +433,7 @@ func (ps *ParameterSchema) ParseString(value string) (any, error) {
 			} else {
 				return nil, fmt.Errorf("literal value %q does not match %q", typedValue, value)
 			}
-		case int, int64, float64, json.Number:
+		case int, int64, float64, jsonv1.Number:
 			expectedVal, _ := normalizeNumber(typedValue)
 			intVal, err := strconv.Atoi(value)
 			if err != nil {
@@ -448,7 +450,7 @@ func (ps *ParameterSchema) ParseString(value string) (any, error) {
 				return nil, fmt.Errorf("literal value %t does not match %t", typedValue, boolVal)
 			}
 			return boolVal, nil
-		case RoomIDValue, *RoomIDValue, map[string]any, json.RawMessage:
+		case RoomIDValue, *RoomIDValue, map[string]any, jsontext.Value:
 			expectedVal, _ := NormalizeRoomIDValue(typedValue)
 			parsed, err := parseRoomOrEventID(value)
 			if err != nil {

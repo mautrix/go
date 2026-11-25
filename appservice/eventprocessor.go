@@ -8,7 +8,7 @@ package appservice
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"runtime/debug"
 	"time"
 

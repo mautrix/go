@@ -81,7 +81,7 @@ type Connector struct {
 
 	MediaConfig             mautrix.RespMediaConfig
 	SpecVersions            *mautrix.RespVersions
-	SpecCaps                *mautrix.RespCapabilities
+	SpecCaps                *mautrix.Capabilities
 	specCapsLock            sync.Mutex
 	Capabilities            *bridgev2.MatrixCapabilities
 	IgnoreUnsupportedServer bool
@@ -447,7 +447,7 @@ func (br *Connector) ensureConnection(ctx context.Context) error {
 	return nil
 }
 
-func (br *Connector) fetchCapabilities(ctx context.Context) *mautrix.RespCapabilities {
+func (br *Connector) fetchCapabilities(ctx context.Context) *mautrix.Capabilities {
 	br.specCapsLock.Lock()
 	defer br.specCapsLock.Unlock()
 	if br.SpecCaps != nil {
@@ -458,8 +458,8 @@ func (br *Connector) fetchCapabilities(ctx context.Context) *mautrix.RespCapabil
 		br.Log.Err(err).Msg("Failed to fetch capabilities from homeserver")
 		return nil
 	}
-	br.SpecCaps = caps
-	return caps
+	br.SpecCaps = caps.Capabilities
+	return caps.Capabilities
 }
 
 func (br *Connector) fetchMediaConfig(ctx context.Context) {

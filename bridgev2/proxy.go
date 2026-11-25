@@ -8,7 +8,7 @@ package bridgev2
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"net/http"
@@ -53,7 +53,7 @@ func (br *Bridge) GetProxy(ctx context.Context, reason string) (string, error) {
 	var respData struct {
 		ProxyURL string `json:"proxy_url"`
 	}
-	if err = json.NewDecoder(resp.Body).Decode(&respData); err != nil {
+	if err = json.UnmarshalRead(resp.Body, &respData); err != nil {
 		return "", fmt.Errorf("failed to decode proxy lookup response: %w", err)
 	} else if respData.ProxyURL == "" {
 		return "", errors.New("proxy lookup returned an empty proxy URL")
