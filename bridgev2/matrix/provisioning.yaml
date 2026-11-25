@@ -1218,9 +1218,8 @@ components:
                 description: The URL to open when using a webview to extract cookies.
               user_agent:
                 type: string
-                deprecated: true
                 description: |
-                  Deprecated. Clients pick their own user agent, constrained by `user_agent_hints`.
+                  Clients pick their own user agent, constrained by `user_agent_hints`, and may ignore this.
                   Connectors that need to reuse the client's user agent should read `navigator.userAgent` in `extract_js`.
               user_agent_hints:
                 type: array
