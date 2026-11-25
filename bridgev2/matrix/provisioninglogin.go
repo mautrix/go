@@ -113,12 +113,10 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	var req ReqLoginStart
-	if r.Header.Get("Content-Type") == "application/json" && r.ContentLength != 0 {
-		if err := json.UnmarshalRead(r.Body, &req); err != nil {
-			zerolog.Ctx(r.Context()).Err(err).Msg("Failed to decode request body")
-			mautrix.MNotJSON.WithMessage("Failed to decode request body").Write(w)
-			return
-		}
+	if err := json.UnmarshalRead(r.Body, &req); err != nil && r.Header.Get("Content-Type") == "application/json" && r.ContentLength != 0 {
+		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to decode request body")
+		mautrix.MNotJSON.WithMessage("Failed to decode request body").Write(w)
+		return
 	}
 	clientCaps := req.ClientCapabilities
 	if r.URL.Query().Get("client_http") == "1" && !slices.Contains(clientCaps, bridgev2.ClientCapabilityHTTP) {

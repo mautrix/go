@@ -1236,6 +1236,9 @@ func (cli *Client) Versions(ctx context.Context) (resp *RespVersions, err error)
 func (cli *Client) Capabilities(ctx context.Context) (resp *RespCapabilities, err error) {
 	urlPath := cli.BuildClientURL("v3", "capabilities")
 	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	if err == nil && resp != nil && resp.Capabilities == nil {
+		resp.Capabilities = &Capabilities{}
+	}
 	return
 }
 

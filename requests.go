@@ -257,7 +257,7 @@ type ReqAliasCreate struct {
 
 type OneTimeKey struct {
 	Key        id.Curve25519         `json:"key"`
-	Fallback   bool                  `json:"fallback,omitzero"`
+	Fallback   *bool                 `json:"fallback,omitzero"`
 	Signatures signatures.Signatures `json:"signatures,omitempty"`
 	Unsigned   map[string]any        `json:"unsigned,omitempty"`
 	IsSigned   bool                  `json:"-"`

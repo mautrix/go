@@ -673,7 +673,7 @@ type signableRequest struct {
 	URI         string         `json:"uri"`
 	Origin      string         `json:"origin"`
 	Destination string         `json:"destination"`
-	Content     jsontext.Value `json:"content,omitempty"`
+	Content     jsontext.Value `json:"content,omitzero"`
 }
 
 func (r *signableRequest) Verify(key id.SigningKey, sig string) error {
