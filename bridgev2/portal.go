@@ -107,6 +107,12 @@ type Portal struct {
 	events         chan portalEvent
 	eventsSendLock sync.RWMutex
 
+	eventsFull        atomic.Bool
+	eventsFullLock    sync.Mutex
+	eventsFullSince   time.Time
+	eventsFullLastLog time.Time
+	eventsFullCount   int
+
 	eventsLock sync.Mutex
 	eventIdx   int
 
@@ -382,27 +388,72 @@ func (portal *Portal) queueEvent(ctx context.Context, evt portalEvent) EventHand
 		}
 		select {
 		case portal.events <- evt:
+			if portal.eventsFull.Load() && len(portal.events) <= cap(portal.events)/2 {
+				portal.markEventsNotFull(ctx)
+			}
 			return EventHandlingResultQueued
 		case <-portal.deleted:
 			return EventHandlingResultIgnored
 		default:
-			zerolog.Ctx(ctx).Error().
-				Str("portal_id", string(portal.ID)).
-				Msg("Portal event channel is full, queue will block")
+			portal.markEventsFull(ctx)
+			ticker := time.NewTicker(5 * time.Second)
+			defer ticker.Stop()
 			for {
 				select {
 				case portal.events <- evt:
 					return EventHandlingResultQueued
 				case <-portal.deleted:
 					return EventHandlingResultIgnored
-				case <-time.After(5 * time.Second):
-					zerolog.Ctx(ctx).Error().
-						Str("portal_id", string(portal.ID)).
-						Msg("Portal event channel is still full")
+				case <-ticker.C:
+					portal.logEventsStillFull(ctx)
 				}
 			}
 		}
 	}
+}
+
+func (portal *Portal) markEventsFull(ctx context.Context) {
+	portal.eventsFullLock.Lock()
+	defer portal.eventsFullLock.Unlock()
+	portal.eventsFullCount++
+	if portal.eventsFull.Load() {
+		return
+	}
+	portal.eventsFull.Store(true)
+	portal.eventsFullSince = time.Now()
+	portal.eventsFullLastLog = time.Time{}
+	zerolog.Ctx(ctx).Warn().
+		Str("portal_id", string(portal.ID)).
+		Msg("Portal event channel is full, queue will block")
+}
+
+func (portal *Portal) logEventsStillFull(ctx context.Context) {
+	portal.eventsFullLock.Lock()
+	defer portal.eventsFullLock.Unlock()
+	if time.Since(portal.eventsFullLastLog) < time.Minute {
+		return
+	}
+	portal.eventsFullLastLog = time.Now()
+	zerolog.Ctx(ctx).Error().
+		Str("portal_id", string(portal.ID)).
+		Time("full_since", portal.eventsFullSince).
+		Int("blocked_events", portal.eventsFullCount).
+		Msg("Portal event channel is still full")
+}
+
+func (portal *Portal) markEventsNotFull(ctx context.Context) {
+	portal.eventsFullLock.Lock()
+	defer portal.eventsFullLock.Unlock()
+	if !portal.eventsFull.Load() {
+		return
+	}
+	portal.eventsFull.Store(false)
+	zerolog.Ctx(ctx).Info().
+		Str("portal_id", string(portal.ID)).
+		Stringer("duration", time.Since(portal.eventsFullSince)).
+		Int("blocked_events", portal.eventsFullCount).
+		Msg("Portal event channel is no longer full")
+	portal.eventsFullCount = 0
 }
 
 func (portal *Portal) eventLoop() {
