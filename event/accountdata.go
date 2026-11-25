@@ -8,7 +8,7 @@ package event
 
 import (
 	"cmp"
-	"encoding/json"
+	jsonv1 "encoding/json"
 	"strings"
 	"time"
 
@@ -59,7 +59,7 @@ func (rt RoomTag) Name() string {
 type Tag = TagMetadata
 
 type TagMetadata struct {
-	Order json.Number `json:"order,omitempty,omitzero"`
+	Order jsonv1.Number `json:"order,omitempty,omitzero"`
 
 	MauDoublePuppetSource string `json:"fi.mau.double_puppet_source,omitempty"`
 }
@@ -131,7 +131,7 @@ type StoredPerMessageProfile struct {
 }
 
 type PerMessageProfilesEventContent struct {
-	DefaultProfileID *string `json:"default_profile_id,omitempty"`
+	DefaultProfileID *string `json:"default_profile_id,omitzero"`
 
 	Profiles []*StoredPerMessageProfile `json:"profiles,omitempty"`
 }

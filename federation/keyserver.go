@@ -7,7 +7,7 @@
 package federation
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"net/http"
 	"strconv"
 	"time"
@@ -62,8 +62,8 @@ func (ks *KeyServer) Register(r *http.ServeMux, log zerolog.Logger) {
 	keyRouter.HandleFunc("GET /v2/query/{serverName}", ks.GetQueryKeys)
 	keyRouter.HandleFunc("POST /v2/query", ks.PostQueryKeys)
 	errorBodies := exhttp.ErrorBodies{
-		NotFound:         exerrors.Must(new(mautrix.MUnrecognized.WithMessage("Unrecognized endpoint")).MarshalJSON()),
-		MethodNotAllowed: exerrors.Must(new(mautrix.MUnrecognized.WithMessage("Invalid method for endpoint")).MarshalJSON()),
+		NotFound:         exerrors.Must(json.Marshal(new(mautrix.MUnrecognized.WithMessage("Unrecognized endpoint")))),
+		MethodNotAllowed: exerrors.Must(json.Marshal(new(mautrix.MUnrecognized.WithMessage("Invalid method for endpoint")))),
 	}
 	r.Handle("/_matrix/key/", exhttp.ApplyMiddleware(
 		keyRouter,
@@ -134,7 +134,7 @@ type PostQueryKeysResponse struct {
 // https://spec.matrix.org/v1.9/server-server-api/#post_matrixkeyv2query
 func (ks *KeyServer) PostQueryKeys(w http.ResponseWriter, r *http.Request) {
 	var req ReqQueryKeys
-	err := json.NewDecoder(r.Body).Decode(&req)
+	err := json.UnmarshalRead(r.Body, &req)
 	if err != nil {
 		mautrix.MBadJSON.WithMessage("failed to parse request: %v", err).Write(w)
 		return

@@ -9,7 +9,8 @@ package bridgev2
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"maps"
 	"net/http"
@@ -229,7 +230,7 @@ func (ghost *Ghost) getExtraProfileMeta() any {
 	return mergedExtra
 }
 
-func (ghost *Ghost) getFullProfile() json.RawMessage {
+func (ghost *Ghost) getFullProfile() jsontext.Value {
 	marshaled := exerrors.Must(json.Marshal(ghost.getExtraProfileMeta()))
 	if ghost.Name != "" {
 		marshaled = exerrors.Must(sjson.SetBytes(marshaled, "displayname", ghost.Name))

@@ -4,7 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -13,19 +14,19 @@ import (
 const WebsocketCommandHTTPProxy = "http_proxy"
 
 type HTTPProxyRequest struct {
-	Method  string          `json:"method"`
-	Path    string          `json:"path"`
-	Query   string          `json:"query"`
-	Headers http.Header     `json:"headers"`
-	Body    json.RawMessage `json:"body"`
+	Method  string         `json:"method"`
+	Path    string         `json:"path"`
+	Query   string         `json:"query"`
+	Headers http.Header    `json:"headers"`
+	Body    jsontext.Value `json:"body"`
 
 	EscapedPath bool `json:"escaped_path,omitzero"`
 }
 
 type HTTPProxyResponse struct {
-	Status  int             `json:"status"`
-	Headers http.Header     `json:"headers"`
-	Body    json.RawMessage `json:"body"`
+	Status  int            `json:"status"`
+	Headers http.Header    `json:"headers"`
+	Body    jsontext.Value `json:"body"`
 
 	bodyBuf bytes.Buffer
 }
@@ -85,7 +86,7 @@ func (as *AppService) WebsocketHTTPProxy(cmd WebsocketCommand) (bool, any) {
 
 	if resp.bodyBuf.Len() > 0 {
 		bodyData := resp.bodyBuf.Bytes()
-		if json.Valid(bodyData) {
+		if jsontext.Value(bodyData).IsValid() {
 			resp.Body = bodyData
 		} else {
 			resp.Body = make([]byte, 2+base64.RawStdEncoding.EncodedLen(len(bodyData)))

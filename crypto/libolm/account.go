@@ -7,7 +7,8 @@ import "C"
 import (
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"runtime"
 	"unsafe"
 
@@ -183,27 +184,26 @@ func (a *Account) GobDecode(rawPickled []byte) error {
 }
 
 // Deprecated
-func (a *Account) MarshalJSON() ([]byte, error) {
+func (a *Account) MarshalJSONTo(enc *jsontext.Encoder) error {
 	pickled, err := a.Pickle(pickleKey)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	quotes := make([]byte, len(pickled)+2)
-	quotes[0] = '"'
-	quotes[len(quotes)-1] = '"'
-	copy(quotes[1:len(quotes)-1], pickled)
-	return quotes, nil
+	return enc.WriteToken(jsontext.String(string(pickled)))
 }
 
 // Deprecated
-func (a *Account) UnmarshalJSON(data []byte) error {
-	if len(data) == 0 || data[0] != '"' || data[len(data)-1] != '"' {
+func (a *Account) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	tok, err := dec.ReadToken()
+	if err != nil {
+		return err
+	} else if tok.Kind() != jsontext.KindString {
 		return olm.ErrInputNotJSONString
 	}
 	if a.int == nil {
 		*a = *NewBlankAccount()
 	}
-	return a.Unpickle(data[1:len(data)-1], pickleKey)
+	return a.Unpickle([]byte(tok.String()), pickleKey)
 }
 
 // IdentityKeysJSON returns the public parts of the identity keys for the Account.

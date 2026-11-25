@@ -9,7 +9,8 @@ package federation
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -45,9 +46,10 @@ type Client struct {
 
 func NewClient(serverName string, key *SigningKey, cache ResolutionCache, httpSettings exhttp.ClientSettings) *Client {
 	dialer := &net.Dialer{Timeout: httpSettings.DialTimeout}
+	srt := NewServerResolvingTransport(cache, dialer.DialContext, httpSettings)
 	c := &Client{
 		HTTP: &http.Client{
-			Transport: NewServerResolvingTransport(cache, dialer.DialContext, httpSettings),
+			Transport: srt,
 			Timeout:   httpSettings.GlobalTimeout,
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				// Federation requests do not allow redirects.
@@ -72,6 +74,7 @@ func NewClient(serverName string, key *SigningKey, cache ResolutionCache, httpSe
 		return nil
 	}
 	dialer.ControlContext = c.controlConn
+	srt.ResolveOpts = &ResolveServerNameOpts{HTTPClient: c.ExtHTTP}
 	return c
 }
 
@@ -99,8 +102,8 @@ func (c *Client) QueryKeys(ctx context.Context, serverName string, req *ReqQuery
 	return
 }
 
-type PDU = json.RawMessage
-type EDU = json.RawMessage
+type PDU = jsontext.Value
+type EDU = jsontext.Value
 
 type ReqSendTransaction struct {
 	Destination string `json:"destination"`
@@ -619,7 +622,7 @@ func (c *Client) compileRequest(ctx context.Context, params RequestParams) (*htt
 		Host:   params.ServerName,
 	}, params.Path.FullPath()...)
 	reqURL.RawQuery = params.Query.Encode()
-	var reqJSON json.RawMessage
+	var reqJSON jsontext.Value
 	var reqBody io.Reader
 	if params.RequestJSON != nil {
 		var err error
@@ -666,11 +669,11 @@ func (c *Client) compileRequest(ctx context.Context, params RequestParams) (*htt
 }
 
 type signableRequest struct {
-	Method      string          `json:"method"`
-	URI         string          `json:"uri"`
-	Origin      string          `json:"origin"`
-	Destination string          `json:"destination"`
-	Content     json.RawMessage `json:"content,omitempty"`
+	Method      string         `json:"method"`
+	URI         string         `json:"uri"`
+	Origin      string         `json:"origin"`
+	Destination string         `json:"destination"`
+	Content     jsontext.Value `json:"content,omitzero"`
 }
 
 func (r *signableRequest) Verify(key id.SigningKey, sig string) error {

@@ -266,8 +266,11 @@ func (br *Bridge) QueueRemoteEvent(login *UserLogin, evt RemoteEvent) EventHandl
 			Msg("Portal not found to handle remote event")
 		return EventHandlingResultIgnored
 	}
-	// TODO put this in a better place, and maybe cache to avoid constant db queries
-	login.MarkInPortal(ctx, portal)
+	switch evt.GetType() {
+	case RemoteEventUnknown, RemoteEventChatInfoChange, RemoteEventChatDelete:
+	default:
+		login.MarkInPortal(ctx, portal)
+	}
 	return portal.queueEvent(ctx, &portalRemoteEvent{
 		evt:    evt,
 		source: login,

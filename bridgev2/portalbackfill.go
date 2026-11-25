@@ -79,8 +79,20 @@ func (portal *Portal) doForwardBackfill(ctx context.Context, source *UserLogin, 
 		Bool("aggressive_deduplication", resp.AggressiveDeduplication).
 		Str("queried_latest_message_id", latestMessageID).
 		Msg("Fetched messages for forward backfill, deduplicating before sending")
+	aggressiveDedup := resp.AggressiveDeduplication
+	if !aggressiveDedup {
+		newLastMessage, err := portal.Bridge.DB.Message.GetLastPartAtOrBeforeTime(ctx, portal.PortalKey, time.Now().Add(10*time.Second))
+		if err != nil {
+			log.Err(err).Msg("Failed to check for messages bridged while fetching forward backfill")
+		} else if newLastMessage != nil && (lastMessage == nil || newLastMessage.RowID != lastMessage.RowID) {
+			log.Debug().
+				Str("new_latest_message_id", string(newLastMessage.ID)).
+				Msg("Messages were bridged while fetching forward backfill, checking all fetched messages for duplicates")
+			aggressiveDedup = true
+		}
+	}
 	// TODO mark backfill queue task as done if last message is nil (-> room was empty) and HasMore is false?
-	resp.Messages = portal.cutoffMessages(ctx, resp.Messages, resp.AggressiveDeduplication, true, lastMessage)
+	resp.Messages = portal.cutoffMessages(ctx, resp.Messages, aggressiveDedup, true, lastMessage)
 	if len(resp.Messages) == 0 {
 		log.Warn().Msg("No messages left to backfill after cutting off old messages")
 		if resp.CompleteCallback != nil {

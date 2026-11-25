@@ -1593,6 +1593,17 @@ func (portal *Portal) pendingMessageTimeoutLoop(ctx context.Context, cfg *Outgoi
 	}
 }
 
+func (portal *Portal) isOutgoingMessagePending(mxid id.EventID) bool {
+	portal.outgoingMessagesLock.Lock()
+	defer portal.outgoingMessagesLock.Unlock()
+	for _, msg := range portal.outgoingMessages {
+		if msg.evt != nil && msg.evt.ID == mxid {
+			return true
+		}
+	}
+	return false
+}
+
 func (portal *Portal) checkPendingMessages(ctx context.Context, cfg *OutgoingTimeoutConfig) {
 	if login := portal.Bridge.GetCachedUserLoginByID(portal.Receiver); login != nil {
 		if suppressor, ok := login.Client.(OutgoingTimeoutSuppressingNetworkAPI); ok && suppressor.SuppressOutgoingTimeouts() {
@@ -2711,6 +2722,9 @@ func (portal *Portal) handleMatrixRedaction(
 			},
 			TargetReaction: redactionTargetReaction,
 		})
+	} else if portal.isOutgoingMessagePending(content.Redacts) {
+		log.Debug().Msg("Redaction target message is still pending")
+		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("redaction %w", ErrTargetMessagePending))
 	} else {
 		log.Debug().Msg("Redaction target message not found in database")
 		return EventHandlingResultIgnored.WithMSSError(fmt.Errorf("redaction %w", ErrTargetMessageNotFound))
@@ -3136,10 +3150,28 @@ func (portal *Portal) cutOffLongMessage(ctx context.Context, content *event.Cont
 			textContent.Body = cutOffMessageText(textContent.Body, excess, "\n\n[long message cut off]", false)
 		}
 	}
-	zerolog.Ctx(ctx).Warn().
+	newSize := messageContentSize(content, msg)
+	evt := zerolog.Ctx(ctx).Warn().
 		Int("original_size", origSize).
-		Int("new_size", messageContentSize(content, msg)).
-		Msg("Cut off message content that was too large for a Matrix event")
+		Int("new_size", newSize)
+	if newSize > limit {
+		evt = evt.
+			Int("limit", limit).
+			Int("body_size", len(textContent.Body)).
+			Int("formatted_body_size", len(textContent.FormattedBody)).
+			Int("link_previews_size", jsonSize(msg.BeeperLinkPreviews)).
+			Int("mentions_size", jsonSize(msg.Mentions)).
+			Int("extra_size", jsonSize(content.Raw)).
+			Bool("is_edit", msg.NewContent != nil)
+		if msg.NewContent != nil {
+			evt = evt.
+				Int("outer_body_size", len(msg.Body)).
+				Int("outer_formatted_body_size", len(msg.FormattedBody)).
+				Int("new_content_link_previews_size", jsonSize(msg.NewContent.BeeperLinkPreviews)).
+				Int("new_content_mentions_size", jsonSize(msg.NewContent.Mentions))
+		}
+	}
+	evt.Msg("Cut off message content that was too large for a Matrix event")
 }
 
 func (portal *Portal) sendConvertedMessage(
@@ -4423,6 +4455,8 @@ func (portal *Portal) ProcessChatInfoChange(ctx context.Context, sender EventSen
 	}
 	if change.ChatInfo != nil {
 		portal.UpdateInfo(ctx, change.ChatInfo, source, intent, ts)
+	} else if source != nil {
+		source.MarkInPortal(ctx, portal)
 	}
 	if change.MemberChanges != nil {
 		err := portal.syncParticipants(ctx, change.MemberChanges, source, intent, ts)
@@ -5250,25 +5284,65 @@ func (portal *Portal) updateUserLocalInfo(ctx context.Context, info *UserLocalPo
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to mark room as DM")
 		}
 	}
-	if info == nil {
+	if info == nil || (info.MutedUntil == nil && info.Tag == nil) {
 		return
 	}
-	if info.MutedUntil != nil && (didJustCreate || !portal.Bridge.Config.MuteOnlyOnCreate) && (!didJustCreate || info.MutedUntil.After(time.Now())) {
-		err := dp.MuteRoom(ctx, portal.MXID, *info.MutedUntil)
-		if err != nil {
-			zerolog.Ctx(ctx).Err(err).Msg("Failed to mute room")
+	prev, err := portal.Bridge.DB.UserPortal.Get(ctx, source.UserLogin, portal.PortalKey)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to get user portal to check previous mute and tag")
+		return
+	} else if prev == nil {
+		prev = database.UserPortalFor(source.UserLogin, portal.PortalKey)
+	}
+	update := prev.CopyWithoutValues()
+	if info.MutedUntil != nil {
+		mutedUntil := normalizeMutedUntil(*info.MutedUntil)
+		known := !prev.MutedUntil.IsZero()
+		if !known || !normalizeMutedUntil(prev.MutedUntil).Equal(mutedUntil) || didJustCreate {
+			var err error
+			if (didJustCreate && mutedUntil.After(time.Now())) || (!didJustCreate && known && !portal.Bridge.Config.MuteOnlyOnCreate) {
+				err = dp.MuteRoom(ctx, portal.MXID, *info.MutedUntil)
+			}
+			if err != nil {
+				zerolog.Ctx(ctx).Err(err).Msg("Failed to mute room")
+				if didJustCreate {
+					update.MutedUntil = Unmuted
+				}
+			} else {
+				update.MutedUntil = mutedUntil
+			}
 		}
 	}
 	if info.Tag != nil &&
 		len(portal.Bridge.Config.OnlyBridgeTags) > 0 &&
 		(*info.Tag == "" || slices.Contains(portal.Bridge.Config.OnlyBridgeTags, *info.Tag)) &&
-		(didJustCreate || !portal.Bridge.Config.TagOnlyOnCreate) &&
-		(!didJustCreate || *info.Tag != "") {
-		err := dp.TagRoom(ctx, portal.MXID, *info.Tag, *info.Tag != "")
+		(prev.Tag == nil || *prev.Tag != *info.Tag || didJustCreate) {
+		var err error
+		if (didJustCreate && *info.Tag != "") || (!didJustCreate && prev.Tag != nil && !portal.Bridge.Config.TagOnlyOnCreate) {
+			err = dp.TagRoom(ctx, portal.MXID, *info.Tag, *info.Tag != "")
+		}
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to tag room")
+			if didJustCreate {
+				update.Tag = ptr.Ptr[event.RoomTag]("")
+			}
+		} else {
+			update.Tag = ptr.Ptr(*info.Tag)
 		}
 	}
+	if !update.MutedUntil.IsZero() || update.Tag != nil {
+		err = portal.Bridge.DB.UserPortal.Put(ctx, update)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to save user portal mute and tag")
+		}
+	}
+}
+
+func normalizeMutedUntil(mutedUntil time.Time) time.Time {
+	if mutedUntil.Before(time.Now()) {
+		return Unmuted
+	}
+	return time.UnixMilli(mutedUntil.UnixMilli())
 }
 
 func DisappearingMessageNotice(expiration time.Duration, implicit bool) *event.MessageEventContent {

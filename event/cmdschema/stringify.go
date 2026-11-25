@@ -7,7 +7,9 @@
 package cmdschema
 
 import (
-	"encoding/json"
+	jsonv1 "encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"strconv"
 	"strings"
 )
@@ -33,7 +35,7 @@ func quoteString(val string) string {
 func (ec *EventContent) StringifyArgs(args any) string {
 	var argMap map[string]any
 	switch typedArgs := args.(type) {
-	case json.RawMessage:
+	case jsontext.Value:
 		err := json.Unmarshal(typedArgs, &argMap)
 		if err != nil {
 			return ""
@@ -96,7 +98,7 @@ func singleArgumentToString(val any) string {
 	switch typedVal := val.(type) {
 	case string:
 		return quoteString(typedVal)
-	case json.Number:
+	case jsonv1.Number:
 		return typedVal.String()
 	case bool:
 		return strconv.FormatBool(typedVal)
@@ -106,7 +108,7 @@ func singleArgumentToString(val any) string {
 		return strconv.FormatInt(typedVal, 10)
 	case float64:
 		return strconv.FormatInt(int64(typedVal), 10)
-	case map[string]any, json.RawMessage, RoomIDValue, *RoomIDValue:
+	case map[string]any, jsontext.Value, RoomIDValue, *RoomIDValue:
 		normalized, err := NormalizeRoomIDValue(typedVal)
 		if err != nil {
 			return ""

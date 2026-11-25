@@ -7,7 +7,8 @@
 package cmdschema
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"slices"
 	"strings"
@@ -29,8 +30,8 @@ type RoomIDValue struct {
 
 func NormalizeRoomIDValue(input any) (riv *RoomIDValue, err error) {
 	switch typedValue := input.(type) {
-	case map[string]any, json.RawMessage:
-		var raw json.RawMessage
+	case map[string]any, jsontext.Value:
+		var raw jsontext.Value
 		if raw, err = json.Marshal(input); err != nil {
 			err = fmt.Errorf("failed to roundtrip room ID value: %w", err)
 		} else if err = json.Unmarshal(raw, &riv); err != nil {
@@ -112,20 +113,17 @@ func (riv *RoomIDValue) IsValid() bool {
 
 type RoomIDOrString string
 
-func (ros *RoomIDOrString) UnmarshalJSON(data []byte) error {
-	if len(data) == 0 {
-		return fmt.Errorf("empty data for room ID or string")
-	}
-	if data[0] == '"' {
+func (ros *RoomIDOrString) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	if dec.PeekKind() == jsontext.KindString {
 		var str string
-		if err := json.Unmarshal(data, &str); err != nil {
+		if err := json.UnmarshalDecode(dec, &str); err != nil {
 			return err
 		}
 		*ros = RoomIDOrString(str)
 		return nil
 	}
 	var riv RoomIDValue
-	if err := json.Unmarshal(data, &riv); err != nil {
+	if err := json.UnmarshalDecode(dec, &riv); err != nil {
 		return err
 	} else if err = riv.Validate(); err != nil {
 		return err

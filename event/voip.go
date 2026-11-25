@@ -7,7 +7,8 @@
 package event
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"strconv"
 )
@@ -42,31 +43,35 @@ type CallCandidate struct {
 
 type CallVersion string
 
-func (cv *CallVersion) UnmarshalJSON(raw []byte) error {
-	var numberVersion int
-	err := json.Unmarshal(raw, &numberVersion)
-	if err != nil {
-		var stringVersion string
-		err = json.Unmarshal(raw, &stringVersion)
-		if err != nil {
-			return fmt.Errorf("failed to parse CallVersion: %w", err)
-		}
-		*cv = CallVersion(stringVersion)
-	} else {
+func (cv *CallVersion) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	var err error
+	if dec.PeekKind() == jsontext.KindNumber {
+		var numberVersion int
+		err = json.UnmarshalDecode(dec, &numberVersion)
 		*cv = CallVersion(strconv.Itoa(numberVersion))
+	} else {
+		var stringVersion string
+		err = json.UnmarshalDecode(dec, &stringVersion)
+		*cv = CallVersion(stringVersion)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to parse CallVersion: %w", err)
 	}
 	return nil
 }
 
-func (cv *CallVersion) MarshalJSON() ([]byte, error) {
+func (cv *CallVersion) MarshalJSONTo(enc *jsontext.Encoder) error {
+	if len(*cv) == 0 {
+		return enc.WriteToken(jsontext.String(""))
+	}
 	for _, char := range *cv {
 		if char < '0' || char > '9' {
 			// The version contains weird characters, return as string.
-			return json.Marshal(string(*cv))
+			return enc.WriteToken(jsontext.String(string(*cv)))
 		}
 	}
 	// The version consists of only ASCII digits, return as an integer.
-	return []byte(*cv), nil
+	return enc.WriteValue(jsontext.Value(*cv))
 }
 
 func (cv *CallVersion) Int() (int, error) {
@@ -76,7 +81,7 @@ func (cv *CallVersion) Int() (int, error) {
 type BaseCallEventContent struct {
 	CallID  string      `json:"call_id"`
 	PartyID string      `json:"party_id"`
-	Version CallVersion `json:"version,omitempty"`
+	Version CallVersion `json:"version,omitzero"`
 }
 
 type CallInviteEventContent struct {

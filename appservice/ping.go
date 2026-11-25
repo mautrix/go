@@ -8,7 +8,7 @@ package appservice
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"strings"
 	"time"
@@ -45,7 +45,7 @@ func (intent *IntentAPI) EnsureAppserviceConnection(ctx context.Context) bool {
 		evt := zerolog.Ctx(ctx).WithLevel(level).Err(err).Str("txn_id", txnID)
 		if pingErrBody != "" {
 			bodyBytes := []byte(pingErrBody)
-			if json.Valid(bodyBytes) {
+			if jsontext.Value(bodyBytes).IsValid() {
 				evt.RawJSON("body", bodyBytes)
 			} else {
 				evt.Str("body", pingErrBody)

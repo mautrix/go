@@ -7,6 +7,7 @@
 package pushrules_test
 
 import (
+	"encoding/json/v2"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -106,7 +107,7 @@ func TestPushActionArray_Should_SoundNameEmpty(t *testing.T) {
 
 func TestPushAction_UnmarshalJSON_InvalidJSONFails(t *testing.T) {
 	pa := &pushrules.PushAction{}
-	err := pa.UnmarshalJSON([]byte("Not JSON"))
+	err := json.Unmarshal([]byte("Not JSON"), pa)
 	assert.NotNil(t, err)
 }
 
@@ -117,9 +118,9 @@ func TestPushAction_UnmarshalJSON_InvalidTypeDoesNothing(t *testing.T) {
 		Value:  "unchanged",
 	}
 
-	err := pa.UnmarshalJSON([]byte(`{"foo": "bar"}`))
+	err := json.Unmarshal([]byte(`{"foo": "bar"}`), pa)
 	assert.NoError(t, err)
-	err = pa.UnmarshalJSON([]byte(`9001`))
+	err = json.Unmarshal([]byte(`9001`), pa)
 	assert.NoError(t, err)
 
 	assert.Equal(t, pushrules.PushActionType("unchanged"), pa.Action)
@@ -134,7 +135,7 @@ func TestPushAction_UnmarshalJSON_StringChangesActionType(t *testing.T) {
 		Value:  "unchanged",
 	}
 
-	err := pa.UnmarshalJSON([]byte(`"foo"`))
+	err := json.Unmarshal([]byte(`"foo"`), pa)
 	assert.NoError(t, err)
 
 	assert.Equal(t, pushrules.PushActionType("foo"), pa.Action)
@@ -149,7 +150,7 @@ func TestPushAction_UnmarshalJSON_SetTweakChangesTweak(t *testing.T) {
 		Value:  "unchanged",
 	}
 
-	err := pa.UnmarshalJSON([]byte(`{"set_tweak": "foo", "value": 123.0}`))
+	err := json.Unmarshal([]byte(`{"set_tweak": "foo", "value": 123.0}`), pa)
 	assert.NoError(t, err)
 
 	assert.Equal(t, pushrules.ActionSetTweak, pa.Action)
@@ -163,7 +164,7 @@ func TestPushAction_MarshalJSON_TweakOutputWorks(t *testing.T) {
 		Tweak:  pushrules.PushActionTweak("foo"),
 		Value:  "bar",
 	}
-	data, err := pa.MarshalJSON()
+	data, err := json.Marshal(pa)
 	assert.NoError(t, err)
 	assert.Equal(t, []byte(`{"set_tweak":"foo","value":"bar"}`), data)
 }
@@ -174,7 +175,7 @@ func TestPushAction_MarshalJSON_OtherOutputWorks(t *testing.T) {
 		Tweak:  pushrules.PushActionTweak("foo"),
 		Value:  "bar",
 	}
-	data, err := pa.MarshalJSON()
+	data, err := json.Marshal(pa)
 	assert.NoError(t, err)
 	assert.Equal(t, []byte(`"something else"`), data)
 }

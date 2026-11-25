@@ -22,8 +22,8 @@ import (
 type ClientInternals Client
 
 // Deprecated: client internals should be used carefully and only when necessary.
-func (client *Client) Internal() *ClientInternals {
-	return (*ClientInternals)(client)
+func (cli *Client) Internal() *ClientInternals {
+	return (*ClientInternals)(cli)
 }
 
 func (cli *ClientInternals) IncrementSyncingID() uint32 {
@@ -70,8 +70,8 @@ func (cli *ClientInternals) MakeMSC4323URL(action string, target id.UserID) stri
 	return (*Client)(cli).makeMSC4323URL(action, target)
 }
 
-func (cli *ClientInternals) MakeOAuthRequest(ctx context.Context, reqType, url string, payload url.Values, resp any) (err error) {
-	return (*Client)(cli).makeOAuthRequest(ctx, reqType, url, payload, resp)
+func (cli *ClientInternals) MakeOAuthRequest(ctx context.Context, reqType, url string, payload url.Values, resp any, sensitive bool) (err error) {
+	return (*Client)(cli).makeOAuthRequest(ctx, reqType, url, payload, resp, sensitive)
 }
 
 func (cli *ClientInternals) SaveAndSetTokens(ctx context.Context, start time.Time, resp *oauth.TokenResponse, alwaysCallSave bool) (err error) {

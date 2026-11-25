@@ -9,7 +9,7 @@ package federation
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"io"
@@ -235,7 +235,7 @@ func (sa *ServerAuth) Authenticate(r *http.Request) (*http.Request, *mautrix.Res
 				Str("server_name", parsed.Origin).
 				Msg("Failed to read request body to authenticate")
 			return nil, &errBodyReadFailed
-		} else if !json.Valid(reqBody) {
+		} else if !jsontext.Value(reqBody).IsValid() {
 			return nil, &errInvalidJSONBody
 		}
 	}

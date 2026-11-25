@@ -7,7 +7,8 @@
 package mautrix_test
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -52,7 +53,7 @@ const sampleData = `{
   }
 }`
 
-var sampleObject = mautrix.RespCapabilities{
+var sampleObjectInner = mautrix.Capabilities{
 	RoomVersions: &mautrix.CapRoomVersions{
 		Default: "9",
 		Available: map[string]mautrix.CapRoomVersionStability{
@@ -81,10 +82,16 @@ var sampleObject = mautrix.RespCapabilities{
 	},
 }
 
+var sampleObject = mautrix.RespCapabilities{
+	Capabilities: &sampleObjectInner,
+}
+
 func TestRespCapabilities_UnmarshalJSON(t *testing.T) {
-	var caps mautrix.RespCapabilities
-	err := json.Unmarshal([]byte(sampleData), &caps)
+	var wrapped mautrix.RespCapabilities
+	err := json.Unmarshal([]byte(sampleData), &wrapped)
 	require.NoError(t, err)
+
+	caps := wrapped.Capabilities
 
 	require.NotNil(t, caps.RoomVersions)
 	assert.Equal(t, "9", caps.RoomVersions.Default)
@@ -104,8 +111,8 @@ func TestRespCapabilities_UnmarshalJSON(t *testing.T) {
 func TestRespCapabilities_MarshalJSON(t *testing.T) {
 	marshaled, err := canonicaljson.Marshal(&sampleObject)
 	require.NoError(t, err)
-	origData := json.RawMessage(sampleData)
+	origData := jsontext.Value(sampleData)
 	require.NoError(t, canonicaljson.Canonicalize(&origData))
 	assert.Equal(t, string(marshaled), string(origData))
-	assert.Len(t, sampleObject.Custom, 1)
+	assert.Len(t, sampleObject.Capabilities.Custom, 1)
 }

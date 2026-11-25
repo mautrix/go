@@ -8,7 +8,8 @@ package commands
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"strings"
 
@@ -36,7 +37,7 @@ type Event[MetaType any] struct {
 	// RawArgs is the same as args, but without the splitting by whitespace.
 	RawArgs string
 
-	StructuredArgs json.RawMessage
+	StructuredArgs jsontext.Value
 
 	Ctx     context.Context
 	Log     *zerolog.Logger

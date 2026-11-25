@@ -7,7 +7,8 @@
 package mautrix
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"net/http"
@@ -172,8 +173,8 @@ type RespError struct {
 	InternalError string
 }
 
-func (e *RespError) UnmarshalJSON(data []byte) error {
-	err := json.Unmarshal(data, &e.ExtraData)
+func (e *RespError) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	err := json.UnmarshalDecode(dec, &e.ExtraData)
 	if err != nil {
 		return err
 	}
@@ -192,7 +193,7 @@ func (e *RespError) mutateOAuthError() {
 	}
 }
 
-func (e *RespError) MarshalJSON() ([]byte, error) {
+func (e *RespError) MarshalJSONTo(enc *jsontext.Encoder) error {
 	data := exmaps.NonNilClone(e.ExtraData)
 	if e.OAuth {
 		data["error"] = e.ErrCode
@@ -211,7 +212,7 @@ func (e *RespError) MarshalJSON() ([]byte, error) {
 	} else {
 		delete(data, "fi.mau.internal_error")
 	}
-	return json.Marshal(data)
+	return json.MarshalEncode(enc, data)
 }
 
 func (e RespError) Write(w http.ResponseWriter) {

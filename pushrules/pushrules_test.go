@@ -7,7 +7,7 @@
 package pushrules_test
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -21,7 +21,7 @@ func TestEventToPushRules(t *testing.T) {
 		Type:      event.AccountDataPushRules,
 		Timestamp: 1523380910,
 		Content: event.Content{
-			VeryRaw: json.RawMessage(JSONExamplePushRules),
+			VeryRaw: jsontext.Value(JSONExamplePushRules),
 		},
 	}
 	pushRuleset, err := pushrules.EventToPushRules(evt)

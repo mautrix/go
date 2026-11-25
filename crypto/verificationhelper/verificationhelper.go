@@ -655,7 +655,10 @@ func (vh *VerificationHelper) onVerificationRequest(ctx context.Context, evt *ev
 		vh.activeTransactionsLock.Unlock()
 		return
 	} else if !errors.Is(err, ErrUnknownVerificationTransaction) {
-		if txn.TransactionID == verificationRequest.TransactionID {
+		if txn.TransactionID == verificationRequest.TransactionID && txn.VerificationState == VerificationStateRequested {
+			log.Debug().Msg("Ignoring duplicate verification request")
+			vh.expireTransactionAt(txn.TransactionID, txn.ExpirationTime.Time)
+		} else if txn.TransactionID == verificationRequest.TransactionID {
 			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnexpectedMessage, "received a new verification request for the same transaction ID")
 		} else {
 			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnexpectedMessage, "received multiple verification requests from the same device")

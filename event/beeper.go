@@ -10,7 +10,8 @@ import (
 	"crypto/sha256"
 	"encoding/base32"
 	"encoding/binary"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"html"
 	"regexp"
@@ -61,13 +62,13 @@ type BeeperMessageStatusEventContent struct {
 
 	MutateEventKey string `json:"mutate_event_key,omitempty"`
 
-	DisappearingTimer *BeeperDisappearingTimer `json:"disappearing_timer,omitempty"`
+	DisappearingTimer *BeeperDisappearingTimer `json:"disappearing_timer,omitzero"`
 
 	// Indicates the set of users to whom the event was delivered. If nil, then
 	// the client should not expect delivered status at any later point. If not
 	// nil (even if empty), this field indicates which users the event was
 	// delivered to.
-	DeliveredToUsers *[]id.UserID `json:"delivered_to_users,omitempty"`
+	DeliveredToUsers *[]id.UserID `json:"delivered_to_users,omitzero"`
 }
 
 type BeeperRelatesTo struct {
@@ -151,10 +152,10 @@ type BeeperSendStateEventContent struct {
 
 type IntOrString int
 
-func (ios *IntOrString) UnmarshalJSON(data []byte) error {
-	if len(data) > 0 && data[0] == '"' {
+func (ios *IntOrString) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	if dec.PeekKind() == jsontext.KindString {
 		var str string
-		err := json.Unmarshal(data, &str)
+		err := json.UnmarshalDecode(dec, &str)
 		if err != nil {
 			return err
 		}
@@ -165,7 +166,7 @@ func (ios *IntOrString) UnmarshalJSON(data []byte) error {
 		*ios = IntOrString(intVal)
 		return nil
 	}
-	return json.Unmarshal(data, (*int)(ios))
+	return json.UnmarshalDecode(dec, (*int)(ios))
 }
 
 type LinkPreview struct {
@@ -190,7 +191,7 @@ type BeeperLinkPreview struct {
 	LinkPreview
 
 	MatchedURL      string             `json:"matched_url,omitempty"`
-	ImageEncryption *EncryptedFileInfo `json:"beeper:image:encryption,omitempty"`
+	ImageEncryption *EncryptedFileInfo `json:"beeper:image:encryption,omitzero"`
 	ImageBlurhash   string             `json:"matrix:image:blurhash,omitempty"`
 }
 
@@ -206,11 +207,11 @@ type BeeperProfileExtra struct {
 type BeeperPerMessageProfile struct {
 	ID          string               `json:"id"`
 	Displayname string               `json:"displayname,omitempty"`
-	AvatarURL   *id.ContentURIString `json:"avatar_url,omitempty"`
-	AvatarFile  *EncryptedFileInfo   `json:"avatar_file,omitempty"`
+	AvatarURL   *id.ContentURIString `json:"avatar_url,omitzero"`
+	AvatarFile  *EncryptedFileInfo   `json:"avatar_file,omitzero"`
 	HasFallback bool                 `json:"has_fallback,omitzero"`
 
-	Unknown json.RawMessage `json:",embed,unknown,omitempty"`
+	Unknown jsontext.Value `json:",embed,unknown"`
 }
 
 type BeeperActionMessageType string
@@ -267,7 +268,7 @@ type BeeperStreamInfo struct {
 	Type               string                      `json:"type"`
 	ExpiryMS           int64                       `json:"expiry_ms,omitzero"`
 	MaxBufferedUpdates int                         `json:"max_buffered_updates,omitzero"`
-	Encryption         *BeeperStreamEncryptionInfo `json:"encryption,omitempty"`
+	Encryption         *BeeperStreamEncryptionInfo `json:"encryption,omitzero"`
 }
 
 func (info *BeeperStreamInfo) Clone() *BeeperStreamInfo {
@@ -355,19 +356,20 @@ func (b *BeeperEncodedOrder) IsZero() bool {
 	return b == nil || (b.order == 0 && b.suborder == 0)
 }
 
-func (b *BeeperEncodedOrder) MarshalJSON() ([]byte, error) {
-	return []byte(`"` + b.String() + `"`), nil
+func (b *BeeperEncodedOrder) MarshalJSONTo(enc *jsontext.Encoder) error {
+	return enc.WriteToken(jsontext.String(b.String()))
 }
 
-func (b *BeeperEncodedOrder) UnmarshalJSON(data []byte) error {
+func (b *BeeperEncodedOrder) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 	if b == nil {
 		return fmt.Errorf("BeeperEncodedOrder: receiver is nil")
 	}
-	str := string(data)
-	if len(str) < 2 {
-		return fmt.Errorf("invalid encoded order string: %s", str)
+	var str string
+	err := json.UnmarshalDecode(dec, &str)
+	if err != nil {
+		return fmt.Errorf("invalid encoded order string: %w", err)
 	}
-	decoded, err := BeeperEncodedOrderFromString(str[1 : len(str)-1])
+	decoded, err := BeeperEncodedOrderFromString(str)
 	if err != nil {
 		return err
 	}

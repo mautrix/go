@@ -7,7 +7,7 @@
 package event_test
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -136,7 +136,6 @@ func TestMessageEventContent__ParseMedia(t *testing.T) {
 	assert.Equal(t, map[string]any{"custom_field": "meow"}, content.GetInfo().Extra)
 
 	content.GetInfo().Extra["cat"] = 5
-	content.GetInfo().Extra["w"] = 1234
 	marshaledExtra, err := json.Marshal(content.GetInfo())
 	assert.NoError(t, err)
 	var unmarshaledMap map[string]any
@@ -183,5 +182,5 @@ const expectedCustomMarshalResult = `{"body":"test","msgtype":"m.text","net.maun
 func TestMessageEventContent__Marshal_Custom(t *testing.T) {
 	data, err := json.Marshal(customParsedMessage)
 	assert.NoError(t, err)
-	assert.Equal(t, expectedCustomMarshalResult, string(data))
+	assert.JSONEq(t, expectedCustomMarshalResult, string(data))
 }

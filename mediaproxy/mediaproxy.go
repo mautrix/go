@@ -9,6 +9,7 @@ package mediaproxy
 import (
 	"bytes"
 	"context"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -273,8 +274,8 @@ func (mp *MediaProxy) EnableServerAuth(client *federation.Client, keyCache feder
 
 func (mp *MediaProxy) RegisterRoutes(router *http.ServeMux, log zerolog.Logger) {
 	errorBodies := exhttp.ErrorBodies{
-		NotFound:         exerrors.Must(new(mautrix.MUnrecognized.WithMessage("Unrecognized endpoint")).MarshalJSON()),
-		MethodNotAllowed: exerrors.Must(new(mautrix.MUnrecognized.WithMessage("Invalid method for endpoint")).MarshalJSON()),
+		NotFound:         exerrors.Must(json.Marshal(new(mautrix.MUnrecognized.WithMessage("Unrecognized endpoint")))),
+		MethodNotAllowed: exerrors.Must(json.Marshal(new(mautrix.MUnrecognized.WithMessage("Invalid method for endpoint")))),
 	}
 	router.Handle("/_matrix/federation/", exhttp.ApplyMiddleware(
 		mp.FederationRouter,

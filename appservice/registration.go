@@ -22,7 +22,7 @@ type Registration struct {
 	AppToken        string     `yaml:"as_token" json:"as_token"`
 	ServerToken     string     `yaml:"hs_token" json:"hs_token"`
 	SenderLocalpart string     `yaml:"sender_localpart" json:"sender_localpart"`
-	RateLimited     *bool      `yaml:"rate_limited,omitempty" json:"rate_limited,omitempty"`
+	RateLimited     *bool      `yaml:"rate_limited,omitempty" json:"rate_limited,omitzero"`
 	Namespaces      Namespaces `yaml:"namespaces" json:"namespaces"`
 	Protocols       []string   `yaml:"protocols,omitempty" json:"protocols,omitempty"`
 

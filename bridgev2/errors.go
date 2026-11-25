@@ -74,6 +74,7 @@ var (
 	ErrInvalidStateKey                  error = WrapErrorInStatus(errors.New("room metadata state key is unset or non-empty")).WithErrorAsMessage().WithIsCertain(true).WithSendNotice(false)
 	ErrDatabaseError                    error = WrapErrorInStatus(errors.New("database error")).WithMessage("internal database error").WithIsCertain(true).WithSendNotice(true)
 	ErrTargetMessageNotFound            error = WrapErrorInStatus(errors.New("target message not found")).WithErrorAsMessage().WithIsCertain(true).WithSendNotice(false)
+	ErrTargetMessagePending             error = WrapErrorInStatus(errors.New("target message is still being sent")).WithErrorAsMessage().WithIsCertain(true).WithSendNotice(false)
 	ErrUnsupportedMessageType           error = WrapErrorInStatus(errors.New("unsupported message type")).WithErrorAsMessage().WithIsCertain(true).WithSendNotice(true).WithErrorReason(event.MessageStatusUnsupported)
 	ErrUnsupportedMediaType             error = WrapErrorInStatus(errors.New("unsupported media type")).WithErrorAsMessage().WithIsCertain(true).WithSendNotice(true).WithErrorReason(event.MessageStatusUnsupported)
 	ErrUnsupportedViewLimitedType       error = WrapErrorInStatus(errors.New("unsupported view-limited type")).WithErrorAsMessage().WithIsCertain(true).WithSendNotice(true).WithErrorReason(event.MessageStatusUnsupported)

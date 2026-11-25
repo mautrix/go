@@ -9,7 +9,7 @@ package signatures
 import (
 	"bytes"
 	"encoding/base64"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 
@@ -60,13 +60,13 @@ func VerifySignature(message []byte, key id.Ed25519, signature []byte) (ok bool,
 // This function is a wrapper over [Utility.VerifySignatureJSON] that creates
 // and destroys the [Utility] object transparently.
 //
-// If the "obj" is not already a [json.RawMessage], it will re-encoded as JSON
+// If the "obj" is not already a [jsontext.Value], it will re-encoded as JSON
 // for the verification, so "json" tags will be honored.
 //
 // [Appendix 3]: https://spec.matrix.org/v1.9/appendices/#signing-json
 func VerifySignatureJSON(obj any, userID id.UserID, keyName string, key id.Ed25519) (bool, error) {
 	var err error
-	objJSON, ok := obj.(json.RawMessage)
+	objJSON, ok := obj.(jsontext.Value)
 	if !ok {
 		objJSON, err = canonicaljson.Marshal(obj)
 		if err != nil {

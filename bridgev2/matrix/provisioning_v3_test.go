@@ -8,7 +8,8 @@ package matrix
 
 import (
 	"bytes"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -98,10 +99,9 @@ func serveVersioned(t *testing.T, version string, handler http.HandlerFunc) []by
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/"+version+"/test", nil))
 	require.Equal(t, http.StatusOK, rec.Code)
-	var indented bytes.Buffer
-	require.NoError(t, json.Indent(&indented, bytes.TrimSpace(rec.Body.Bytes()), "", "\t"))
-	indented.WriteByte('\n')
-	return indented.Bytes()
+	indented := jsontext.Value(bytes.TrimSpace(rec.Body.Bytes())).Clone()
+	require.NoError(t, indented.Indent(jsontext.WithIndent("\t")))
+	return append(indented, '\n')
 }
 
 // The v3 golden files pin the legacy format. UPDATE_GOLDEN=1 rewrites them.

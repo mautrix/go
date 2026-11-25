@@ -7,6 +7,7 @@ import "C"
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json/jsontext"
 	"runtime"
 	"unsafe"
 
@@ -185,27 +186,26 @@ func (s *InboundGroupSession) GobDecode(rawPickled []byte) error {
 }
 
 // Deprecated
-func (s *InboundGroupSession) MarshalJSON() ([]byte, error) {
+func (s *InboundGroupSession) MarshalJSONTo(enc *jsontext.Encoder) error {
 	pickled, err := s.Pickle(pickleKey)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	quotes := make([]byte, len(pickled)+2)
-	quotes[0] = '"'
-	quotes[len(quotes)-1] = '"'
-	copy(quotes[1:len(quotes)-1], pickled)
-	return quotes, nil
+	return enc.WriteToken(jsontext.String(string(pickled)))
 }
 
 // Deprecated
-func (s *InboundGroupSession) UnmarshalJSON(data []byte) error {
-	if len(data) == 0 || data[0] != '"' || data[len(data)-1] != '"' {
+func (s *InboundGroupSession) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	tok, err := dec.ReadToken()
+	if err != nil {
+		return err
+	} else if tok.Kind() != jsontext.KindString {
 		return olm.ErrInputNotJSONString
 	}
 	if s == nil || s.int == nil {
 		*s = *NewBlankInboundGroupSession()
 	}
-	return s.Unpickle(data[1:len(data)-1], pickleKey)
+	return s.Unpickle([]byte(tok.String()), pickleKey)
 }
 
 // decryptMaxPlaintextLen returns the maximum number of bytes of plain-text a

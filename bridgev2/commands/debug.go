@@ -7,7 +7,7 @@
 package commands
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"strings"
 	"time"
 

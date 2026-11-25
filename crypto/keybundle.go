@@ -8,7 +8,7 @@ package crypto
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"time"
@@ -56,7 +56,7 @@ func (mach *OlmMachine) DownloadRoomKeyBundle(ctx context.Context, content *even
 	}
 	var bundle RoomKeyBundle
 	stream := content.File.DecryptStream(resp.Body)
-	err = json.NewDecoder(stream).Decode(&bundle)
+	err = json.UnmarshalRead(stream, &bundle)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode room key bundle: %w", err)
 	}

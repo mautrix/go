@@ -182,8 +182,8 @@ func (dtc *DisappearingTimerCapability) Supports(content *BeeperDisappearingTime
 }
 
 type MessageRequestFeatures struct {
-	AcceptWithMessage CapabilitySupportLevel `json:"accept_with_message,omitempty"`
-	AcceptWithButton  CapabilitySupportLevel `json:"accept_with_button,omitempty"`
+	AcceptWithMessage CapabilitySupportLevel `json:"accept_with_message,omitzero"`
+	AcceptWithButton  CapabilitySupportLevel `json:"accept_with_button,omitzero"`
 }
 
 func (mrf *MessageRequestFeatures) Clone() *MessageRequestFeatures {

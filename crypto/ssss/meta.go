@@ -30,7 +30,7 @@ type KeyMetadata struct {
 	IV  string `json:"iv,omitempty"`
 	MAC string `json:"mac,omitempty"`
 
-	Passphrase *PassphraseMetadata `json:"passphrase,omitempty"`
+	Passphrase *PassphraseMetadata `json:"passphrase,omitzero"`
 }
 
 // VerifyRecoveryKey verifies that the given passphrase is valid and returns the computed SSSS key.

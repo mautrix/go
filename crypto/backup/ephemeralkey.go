@@ -9,7 +9,8 @@ package backup
 import (
 	"crypto/ecdh"
 	"encoding/base64"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 )
 
 // EphemeralKey is a wrapper around an ECDH X25519 public key that implements
@@ -18,16 +19,16 @@ type EphemeralKey struct {
 	*ecdh.PublicKey
 }
 
-func (k *EphemeralKey) MarshalJSON() ([]byte, error) {
+func (k *EphemeralKey) MarshalJSONTo(enc *jsontext.Encoder) error {
 	if k == nil || k.PublicKey == nil {
-		return json.Marshal(nil)
+		return enc.WriteToken(jsontext.Null)
 	}
-	return json.Marshal(base64.RawStdEncoding.EncodeToString(k.Bytes()))
+	return enc.WriteToken(jsontext.String(base64.RawStdEncoding.EncodeToString(k.Bytes())))
 }
 
-func (k *EphemeralKey) UnmarshalJSON(data []byte) error {
+func (k *EphemeralKey) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 	var keyStr string
-	err := json.Unmarshal(data, &keyStr)
+	err := json.UnmarshalDecode(dec, &keyStr)
 	if err != nil {
 		return err
 	}

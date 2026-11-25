@@ -28,14 +28,14 @@ type PowerLevelsEventContent struct {
 	Events        map[string]int `json:"events,omitempty"`
 	EventsDefault int            `json:"events_default,omitzero"`
 
-	Notifications *NotificationPowerLevels `json:"notifications,omitempty"`
+	Notifications *NotificationPowerLevels `json:"notifications,omitzero"`
 
-	StateDefaultPtr *int `json:"state_default,omitempty"`
+	StateDefaultPtr *int `json:"state_default,omitzero"`
 
-	InvitePtr *int `json:"invite,omitempty"`
-	KickPtr   *int `json:"kick,omitempty"`
-	BanPtr    *int `json:"ban,omitempty"`
-	RedactPtr *int `json:"redact,omitempty"`
+	InvitePtr *int `json:"invite,omitzero"`
+	KickPtr   *int `json:"kick,omitzero"`
+	BanPtr    *int `json:"ban,omitzero"`
+	RedactPtr *int `json:"redact,omitzero"`
 
 	// This is not a part of power levels, it's added by mautrix-go internally in certain places
 	// in order to detect creator power accurately.
@@ -65,7 +65,7 @@ func (pl *PowerLevelsEventContent) Clone() *PowerLevelsEventContent {
 }
 
 type NotificationPowerLevels struct {
-	RoomPtr *int `json:"room,omitempty"`
+	RoomPtr *int `json:"room,omitzero"`
 }
 
 func (npl *NotificationPowerLevels) Clone() *NotificationPowerLevels {

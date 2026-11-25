@@ -36,5 +36,5 @@ type MegolmSessionData struct {
 	SenderClaimedKeys  SenderClaimedKeys `json:"sender_claimed_keys"`
 	SenderKey          id.SenderKey      `json:"sender_key"`
 	SessionKey         string            `json:"session_key"`
-	SharedHistory      *bool             `json:"shared_history,omitempty"`
+	SharedHistory      *bool             `json:"shared_history,omitzero"`
 }

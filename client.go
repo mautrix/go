@@ -6,7 +6,9 @@ package mautrix
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	jsonv1 "encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -419,7 +421,7 @@ func (cli *Client) LogRequestDone(req *http.Request, resp *http.Response, err er
 	}
 	if body := req.Context().Value(LogBodyContextKey); body != nil {
 		switch typedLogBody := body.(type) {
-		case json.RawMessage:
+		case jsontext.Value:
 			evt.RawJSON("req_body", typedLogBody)
 		case string:
 			evt.Str("req_body", typedLogBody)
@@ -492,12 +494,14 @@ func (params *FullRequest) compileRequest(ctx context.Context) (*http.Request, e
 		} else if len(jsonStr) > 32768 {
 			logBody = fmt.Sprintf("<large content omitted (%d bytes)>", len(jsonStr))
 		} else {
-			logBody = json.RawMessage(jsonStr)
+			logBody = jsontext.Value(jsonStr)
 		}
 		reqBody = bytes.NewReader(jsonStr)
 		reqLen = int64(len(jsonStr))
 	} else if params.RequestBytes != nil {
-		if params.Headers.Get("Content-Type") == "application/x-www-form-urlencoded" && len(params.RequestBytes) < 4196 {
+		if params.SensitiveContent && !logSensitiveContent {
+			logBody = "<sensitive content omitted>"
+		} else if params.Headers.Get("Content-Type") == "application/x-www-form-urlencoded" && len(params.RequestBytes) < 4196 {
 			logBody = string(params.RequestBytes)
 		} else {
 			logBody = fmt.Sprintf("<%d bytes>", len(params.RequestBytes))
@@ -521,7 +525,7 @@ func (params *FullRequest) compileRequest(ctx context.Context) (*http.Request, e
 		}
 	} else if params.Method != http.MethodGet && params.Method != http.MethodHead {
 		params.RequestJSON = struct{}{}
-		logBody = json.RawMessage("{}")
+		logBody = jsontext.Value("{}")
 		reqBody = bytes.NewReader([]byte("{}"))
 		reqLen = 2
 	}
@@ -725,7 +729,7 @@ func streamResponse(req *http.Request, res *http.Response, responseJSON any, lim
 		return nil, ErrBodyReadReachedLimit
 	} else if _, err = file.Seek(0, 0); err != nil {
 		return nil, fmt.Errorf("failed to seek to beginning of response file: %w", err)
-	} else if err = json.NewDecoder(file).Decode(responseJSON); err != nil {
+	} else if err = json.UnmarshalRead(file, responseJSON); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response body to file: %w", err)
 	} else {
 		return nil, nil
@@ -1232,6 +1236,9 @@ func (cli *Client) Versions(ctx context.Context) (resp *RespVersions, err error)
 func (cli *Client) Capabilities(ctx context.Context) (resp *RespCapabilities, err error) {
 	urlPath := cli.BuildClientURL("v3", "capabilities")
 	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	if err == nil && resp != nil && resp.Capabilities == nil {
+		resp.Capabilities = &Capabilities{}
+	}
 	return
 }
 
@@ -1913,18 +1920,18 @@ func parseRoomStateArray(req *http.Request, res *http.Response, responseJSON any
 	response := make(RoomStateMap)
 	responsePtr := responseJSON.(*map[event.Type]map[string]*event.Event)
 	*responsePtr = response
-	dec := json.NewDecoder(io.LimitReader(res.Body, limit))
+	dec := jsontext.NewDecoder(io.LimitReader(res.Body, limit))
 
-	arrayStart, err := dec.Token()
+	arrayStart, err := dec.ReadToken()
 	if err != nil {
 		return nil, err
-	} else if arrayStart != json.Delim('[') {
-		return nil, fmt.Errorf("expected array start, got %+v", arrayStart)
+	} else if arrayStart.Kind() != jsontext.KindBeginArray {
+		return nil, fmt.Errorf("expected array start, got %s", arrayStart.Kind())
 	}
 
-	for i := 1; dec.More(); i++ {
+	for i := 1; dec.PeekKind() != jsontext.KindEndArray; i++ {
 		var evt *event.Event
-		err = dec.Decode(&evt)
+		err = json.UnmarshalDecode(dec, &evt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse state array item #%d: %v", i, err)
 		}
@@ -1938,11 +1945,11 @@ func parseRoomStateArray(req *http.Request, res *http.Response, responseJSON any
 		subMap[*evt.StateKey] = evt
 	}
 
-	arrayEnd, err := dec.Token()
+	arrayEnd, err := dec.ReadToken()
 	if err != nil {
 		return nil, err
-	} else if arrayEnd != json.Delim(']') {
-		return nil, fmt.Errorf("expected array end, got %+v", arrayStart)
+	} else if arrayEnd.Kind() != jsontext.KindEndArray {
+		return nil, fmt.Errorf("expected array end, got %s", arrayEnd.Kind())
 	}
 	return nil, nil
 }
@@ -2609,7 +2616,7 @@ func (cli *Client) SetBeeperInboxState(ctx context.Context, roomID id.RoomID, co
 
 func (cli *Client) AddTag(ctx context.Context, roomID id.RoomID, tag event.RoomTag, order float64) error {
 	return cli.AddTagWithCustomData(ctx, roomID, tag, &event.TagMetadata{
-		Order: json.Number(strconv.FormatFloat(order, 'e', -1, 64)),
+		Order: jsonv1.Number(strconv.FormatFloat(order, 'e', -1, 64)),
 	})
 }
 
@@ -2918,14 +2925,22 @@ func (cli *Client) SetDeviceInfo(ctx context.Context, deviceID id.DeviceID, req 
 }
 
 func (cli *Client) DeleteDevice(ctx context.Context, deviceID id.DeviceID, req *ReqDeleteDevice[any]) error {
-	urlPath := cli.BuildClientURL("v3", "devices", deviceID)
-	_, err := cli.MakeRequest(ctx, http.MethodDelete, urlPath, req, nil)
+	_, err := cli.MakeFullRequest(ctx, FullRequest{
+		Method:           http.MethodDelete,
+		URL:              cli.BuildClientURL("v3", "devices", deviceID),
+		RequestJSON:      req,
+		SensitiveContent: req.Auth != nil,
+	})
 	return err
 }
 
 func (cli *Client) DeleteDevices(ctx context.Context, req *ReqDeleteDevices[any]) error {
-	urlPath := cli.BuildClientURL("v3", "delete_devices")
-	_, err := cli.MakeRequest(ctx, http.MethodPost, urlPath, req, nil)
+	_, err := cli.MakeFullRequest(ctx, FullRequest{
+		Method:           http.MethodPost,
+		URL:              cli.BuildClientURL("v3", "delete_devices"),
+		RequestJSON:      req,
+		SensitiveContent: req.Auth != nil,
+	})
 	return err
 }
 

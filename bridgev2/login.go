@@ -8,7 +8,8 @@ package bridgev2
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -162,7 +163,7 @@ type LoginProcessCookies interface {
 
 type LoginProcessWebAuthn interface {
 	LoginProcess
-	SubmitWebAuthnResponse(ctx context.Context, response json.RawMessage) (*LoginStep, error)
+	SubmitWebAuthnResponse(ctx context.Context, response jsontext.Value) (*LoginStep, error)
 }
 
 type LoginFlow struct {
@@ -210,12 +211,12 @@ type LoginStep struct {
 
 	// Exactly one of the following structs must be filled depending on the step type.
 
-	DisplayAndWaitParams *LoginDisplayAndWaitParams `json:"display_and_wait,omitempty"`
-	CookiesParams        *LoginCookiesParams        `json:"cookies,omitempty"`
-	ClientHTTPParams     *LoginClientHTTPParams     `json:"client_http,omitempty"`
-	UserInputParams      *LoginUserInputParams      `json:"user_input,omitempty"`
-	WebAuthnParams       *LoginWebAuthnParams       `json:"webauthn,omitempty"`
-	CompleteParams       *LoginCompleteParams       `json:"complete,omitempty"`
+	DisplayAndWaitParams *LoginDisplayAndWaitParams `json:"display_and_wait,omitzero"`
+	CookiesParams        *LoginCookiesParams        `json:"cookies,omitzero"`
+	ClientHTTPParams     *LoginClientHTTPParams     `json:"client_http,omitzero"`
+	UserInputParams      *LoginUserInputParams      `json:"user_input,omitzero"`
+	WebAuthnParams       *LoginWebAuthnParams       `json:"webauthn,omitzero"`
+	CompleteParams       *LoginCompleteParams       `json:"complete,omitzero"`
 }
 
 func (ls *LoginStep) MarshalZerologObject(e *zerolog.Event) {
@@ -291,7 +292,7 @@ type LoginWebAuthnParams struct {
 
 	// Standard parameters for https://developer.mozilla.org/en-US/docs/Web/API/CredentialsContainer/get
 	// Only publicKey seems to be used in practice, so the other options aren't allowed yet.
-	PublicKey json.RawMessage `json:"publicKey,omitempty"`
+	PublicKey jsontext.Value `json:"publicKey,omitempty"`
 }
 
 type LoginDisplayAndWaitParams struct {
@@ -314,6 +315,7 @@ const (
 	LoginCookieTypeLocalStorage  LoginCookieFieldSourceType = "local_storage"
 	LoginCookieTypeRequestHeader LoginCookieFieldSourceType = "request_header"
 	LoginCookieTypeRequestBody   LoginCookieFieldSourceType = "request_body"
+	LoginCookieTypeRedirectURL   LoginCookieFieldSourceType = "redirect_url"
 	LoginCookieTypeSpecial       LoginCookieFieldSourceType = "special"
 )
 
@@ -325,10 +327,11 @@ type LoginCookieFieldSource struct {
 	// Local storage:  key in local storage
 	// Request header: header name
 	// Request body:   field name inside body after it's parsed (as JSON or multipart form data)
+	// Redirect URL:   unused
 	// Special:        a namespaced identifier that clients can implement special handling for
 	Name string `json:"name"`
 
-	// For request header & body types, a regex matching request URLs where the value can be extracted from.
+	// For request header, body & redirect URL types, a regex matching request or redirect target URLs where the value can be extracted from.
 	RequestURLRegex string `json:"request_url_regex,omitempty"`
 	// For cookie types, the domain the cookie is present on.
 	CookieDomain string `json:"cookie_domain,omitempty"`
@@ -458,18 +461,18 @@ type LoginInputOption struct {
 	Label l10n.Message `json:"label"`
 }
 
-// UnmarshalJSON also accepts the bare string used by provisioning v3.
-func (opt *LoginInputOption) UnmarshalJSON(data []byte) error {
-	if len(data) > 0 && data[0] == '"' {
+// UnmarshalJSONFrom also accepts the bare string used by provisioning v3.
+func (opt *LoginInputOption) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	if dec.PeekKind() == jsontext.KindString {
 		var val string
-		if err := json.Unmarshal(data, &val); err != nil {
+		if err := json.UnmarshalDecode(dec, &val); err != nil {
 			return err
 		}
 		*opt = LoginInputOption{Value: val, Label: l10n.Unlocalized(val)}
 		return nil
 	}
 	type plain LoginInputOption
-	return json.Unmarshal(data, (*plain)(opt))
+	return json.UnmarshalDecode(dec, (*plain)(opt))
 }
 
 // UnlocalizedOptions makes options whose labels are their values.

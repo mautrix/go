@@ -14,6 +14,7 @@ import (
 	"go.mau.fi/util/dbutil"
 
 	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -30,11 +31,14 @@ type UserPortal struct {
 	InSpace   *bool
 	Preferred *bool
 	LastRead  time.Time
+
+	MutedUntil time.Time
+	Tag        *event.RoomTag
 }
 
 const (
 	getUserPortalBaseQuery = `
-		SELECT bridge_id, user_mxid, login_id, portal_id, portal_receiver, in_space, preferred, last_read
+		SELECT bridge_id, user_mxid, login_id, portal_id, portal_receiver, in_space, preferred, last_read, muted_until, tag
 		FROM user_portal
 	`
 	getUserPortalQuery = getUserPortalBaseQuery + `
@@ -54,15 +58,17 @@ const (
 		INSERT INTO user_portal (bridge_id, user_mxid, login_id, portal_id, portal_receiver, in_space, preferred)
 		VALUES ($1, $2, $3, $4, $5, false, false)
 		ON CONFLICT (bridge_id, user_mxid, login_id, portal_id, portal_receiver) DO UPDATE SET portal_id=user_portal.portal_id
-		RETURNING bridge_id, user_mxid, login_id, portal_id, portal_receiver, in_space, preferred, last_read
+		RETURNING bridge_id, user_mxid, login_id, portal_id, portal_receiver, in_space, preferred, last_read, muted_until, tag
 	`
 	upsertUserPortalQuery = `
-		INSERT INTO user_portal (bridge_id, user_mxid, login_id, portal_id, portal_receiver, in_space, preferred, last_read)
-		VALUES ($1, $2, $3, $4, $5, COALESCE($6, false), COALESCE($7, false), $8)
+		INSERT INTO user_portal (bridge_id, user_mxid, login_id, portal_id, portal_receiver, in_space, preferred, last_read, muted_until, tag)
+		VALUES ($1, $2, $3, $4, $5, COALESCE($6, false), COALESCE($7, false), $8, $9, $10)
 		ON CONFLICT (bridge_id, user_mxid, login_id, portal_id, portal_receiver) DO UPDATE
 			SET in_space=COALESCE($6, user_portal.in_space),
 			    preferred=COALESCE($7, user_portal.preferred),
-			    last_read=COALESCE($8, user_portal.last_read)
+			    last_read=COALESCE($8, user_portal.last_read),
+			    muted_until=COALESCE($9, user_portal.muted_until),
+			    tag=COALESCE($10, user_portal.tag)
 	`
 	markLoginAsPreferredQuery = `
 		UPDATE user_portal SET preferred=(login_id=$3) WHERE bridge_id=$1 AND user_mxid=$2 AND portal_id=$4 AND portal_receiver=$5
@@ -155,16 +161,23 @@ func (upq *UserPortalQuery) GetNonReceiverSpaceChildren(ctx context.Context) ([]
 }
 
 func (up *UserPortal) Scan(row dbutil.Scannable) (*UserPortal, error) {
-	var lastRead sql.NullInt64
+	var lastRead, mutedUntil sql.NullInt64
+	var tag sql.NullString
 	err := row.Scan(
 		&up.BridgeID, &up.UserMXID, &up.LoginID, &up.Portal.ID, &up.Portal.Receiver,
-		&up.InSpace, &up.Preferred, &lastRead,
+		&up.InSpace, &up.Preferred, &lastRead, &mutedUntil, &tag,
 	)
 	if err != nil {
 		return nil, err
 	}
 	if lastRead.Valid {
 		up.LastRead = time.Unix(0, lastRead.Int64)
+	}
+	if mutedUntil.Valid {
+		up.MutedUntil = time.UnixMilli(mutedUntil.Int64)
+	}
+	if tag.Valid {
+		up.Tag = (*event.RoomTag)(&tag.String)
 	}
 	return up, nil
 }
@@ -175,6 +188,8 @@ func (up *UserPortal) sqlVariables() []any {
 		up.InSpace,
 		up.Preferred,
 		dbutil.ConvertedPtr(up.LastRead, time.Time.UnixNano),
+		dbutil.ConvertedPtr(up.MutedUntil, time.Time.UnixMilli),
+		up.Tag,
 	}
 }
 
