@@ -596,6 +596,10 @@ func (prov *ProvisioningAPI) executeStep(
 	if err == nil && nextStep == nil {
 		err = ErrNilStep
 	}
+	if err != nil && errors.Is(login.Ctx.Err(), context.DeadlineExceeded) {
+		zerolog.Ctx(ctx).Debug().Err(err).Msg("Login step failed after login timed out")
+		err = bridgev2.ErrLoginTimedOut
+	}
 	if err != nil {
 		prov.deleteLogin(login, &completedLoginData{userID: login.UserMXID, err: err}, true, err)
 		return
