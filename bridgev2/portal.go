@@ -1593,6 +1593,17 @@ func (portal *Portal) pendingMessageTimeoutLoop(ctx context.Context, cfg *Outgoi
 	}
 }
 
+func (portal *Portal) isOutgoingMessagePending(mxid id.EventID) bool {
+	portal.outgoingMessagesLock.Lock()
+	defer portal.outgoingMessagesLock.Unlock()
+	for _, msg := range portal.outgoingMessages {
+		if msg.evt != nil && msg.evt.ID == mxid {
+			return true
+		}
+	}
+	return false
+}
+
 func (portal *Portal) checkPendingMessages(ctx context.Context, cfg *OutgoingTimeoutConfig) {
 	if login := portal.Bridge.GetCachedUserLoginByID(portal.Receiver); login != nil {
 		if suppressor, ok := login.Client.(OutgoingTimeoutSuppressingNetworkAPI); ok && suppressor.SuppressOutgoingTimeouts() {
@@ -2711,6 +2722,9 @@ func (portal *Portal) handleMatrixRedaction(
 			},
 			TargetReaction: redactionTargetReaction,
 		})
+	} else if portal.isOutgoingMessagePending(content.Redacts) {
+		log.Debug().Msg("Redaction target message is still pending")
+		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("redaction %w", ErrTargetMessagePending))
 	} else {
 		log.Debug().Msg("Redaction target message not found in database")
 		return EventHandlingResultIgnored.WithMSSError(fmt.Errorf("redaction %w", ErrTargetMessageNotFound))
