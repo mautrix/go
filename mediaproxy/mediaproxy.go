@@ -403,7 +403,7 @@ func (mp *MediaProxy) DownloadMediaFederation(w http.ResponseWriter, r *http.Req
 			return err
 		})
 		if err != nil {
-			log.Err(err).Msg("Failed to do media proxy with temp file")
+			logTempFileError(log, err)
 			if !responseStarted {
 				if mautrixRespError, ok := errors.AsType[mautrix.RespError](err); ok {
 					mautrixRespError.Write(w)
@@ -494,7 +494,7 @@ func (mp *MediaProxy) DownloadMedia(w http.ResponseWriter, r *http.Request) {
 			return err
 		})
 		if err != nil {
-			log.Err(err).Msg("Failed to do media proxy with temp file")
+			logTempFileError(log, err)
 			if !responseStarted {
 				if mautrixRespError, ok := errors.AsType[mautrix.RespError](err); ok {
 					mautrixRespError.Write(w)
@@ -519,6 +519,14 @@ func (mp *MediaProxy) DownloadMedia(w http.ResponseWriter, r *http.Request) {
 	} else {
 		panic(fmt.Errorf("unknown GetMediaResponse type %T", resp))
 	}
+}
+
+func logTempFileError(log *zerolog.Logger, err error) {
+	level := zerolog.ErrorLevel
+	if respErr, ok := errors.AsType[mautrix.RespError](err); ok && respErr.StatusCode >= 400 && respErr.StatusCode < 500 {
+		level = zerolog.DebugLevel
+	}
+	log.WithLevel(level).Err(err).Msg("Failed to do media proxy with temp file")
 }
 
 func doTempFileDownload(
