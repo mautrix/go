@@ -1218,16 +1218,14 @@ components:
                 description: The URL to open when using a webview to extract cookies.
               user_agent:
                 type: string
-                description: An optional user agent that the webview should use.
-              user_agent_engine:
-                type: string
-                enum: [ chromium, webkit ]
+                deprecated: true
                 description: |
-                  If set, clients whose webview uses a different browser engine should ignore `user_agent`.
+                  Deprecated. Clients pick their own user agent, constrained by `user_agent_hints`.
+                  Connectors that need to reuse the client's user agent should read `navigator.userAgent` in `extract_js`.
               user_agent_hints:
                 type: array
                 description: |
-                  Hints for clients choosing their own user agent when `user_agent` isn't used.
+                  Requirements for the user agent the client picks for the webview.
                   `desktop` means the site needs a desktop browser user agent.
                 items:
                   type: string

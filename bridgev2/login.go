@@ -354,13 +354,6 @@ type LoginCookie struct {
 	HTTPOnly bool   `json:"http_only,omitzero"`
 }
 
-type BrowserEngine string
-
-const (
-	BrowserEngineChromium BrowserEngine = "chromium"
-	BrowserEngineWebKit   BrowserEngine = "webkit"
-)
-
 type UserAgentHint string
 
 const (
@@ -369,11 +362,11 @@ const (
 )
 
 type LoginCookiesParams struct {
-	URL       string `json:"url"`
+	URL string `json:"url"`
+	// Clients pick their own user agent and may ignore this. Use UserAgentHints to constrain it,
+	// and read navigator.userAgent in ExtractJS if the connector needs to reuse it.
 	UserAgent string `json:"user_agent,omitempty"`
-	// If set, clients whose webview uses a different browser engine should ignore UserAgent.
-	UserAgentEngine BrowserEngine `json:"user_agent_engine,omitempty"`
-	// Hints for clients choosing their own user agent when UserAgent isn't used.
+	// Requirements for the user agent the client picks for the webview.
 	UserAgentHints []UserAgentHint `json:"user_agent_hints,omitempty"`
 
 	// Cookies the client should set in the webview before loading the URL, used to continue a login
@@ -404,7 +397,6 @@ type LoginCookiesParams struct {
 func (lcp *LoginCookiesParams) MarshalZerologObject(e *zerolog.Event) {
 	e.Str("url", lcp.URL).
 		Str("user_agent", lcp.UserAgent).
-		Str("user_agent_engine", string(lcp.UserAgentEngine)).
 		Any("user_agent_hints", lcp.UserAgentHints).
 		Int("initial_cookie_count", len(lcp.InitialCookies)).
 		Any("fields", lcp.Fields).
