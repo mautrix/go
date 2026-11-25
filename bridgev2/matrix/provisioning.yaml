@@ -1226,7 +1226,7 @@ components:
                 description: |
                   Requirements for the user agent the client picks for the webview.
                   `desktop` means the site needs a desktop browser user agent.
-                  `native` means the site needs the webview's own unmodified user agent.
+                  `native` means the site needs the webview's own unmodified user agent, and takes precedence over other hints.
                 items:
                   type: string
                   enum: [ desktop, native ]
