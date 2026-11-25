@@ -388,9 +388,6 @@ func (portal *Portal) queueEvent(ctx context.Context, evt portalEvent) EventHand
 		}
 		select {
 		case portal.events <- evt:
-			if portal.eventsFull.Load() && len(portal.events) <= cap(portal.events)/2 {
-				portal.markEventsNotFull(ctx)
-			}
 			return EventHandlingResultQueued
 		case <-portal.deleted:
 			return EventHandlingResultIgnored
@@ -441,15 +438,14 @@ func (portal *Portal) logEventsStillFull(ctx context.Context) {
 		Msg("Portal event channel is still full")
 }
 
-func (portal *Portal) markEventsNotFull(ctx context.Context) {
+func (portal *Portal) markEventsNotFull() {
 	portal.eventsFullLock.Lock()
 	defer portal.eventsFullLock.Unlock()
 	if !portal.eventsFull.Load() {
 		return
 	}
 	portal.eventsFull.Store(false)
-	zerolog.Ctx(ctx).Info().
-		Str("portal_id", string(portal.ID)).
+	portal.Log.Info().
 		Stringer("duration", time.Since(portal.eventsFullSince)).
 		Int("blocked_events", portal.eventsFullCount).
 		Msg("Portal event channel is no longer full")
@@ -462,6 +458,9 @@ func (portal *Portal) eventLoop() {
 		case rawEvt := <-portal.events:
 			if rawEvt == nil {
 				return
+			}
+			if portal.eventsFull.Load() && len(portal.events) <= cap(portal.events)/2 {
+				portal.markEventsNotFull()
 			}
 			if portal.Bridge.Config.AsyncEvents {
 				go portal.handleSingleEventWithDelayLogging(i, rawEvt)
