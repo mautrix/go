@@ -51,7 +51,7 @@ func (c *Client) DownloadMedia(ctx context.Context, serverName, mediaID string) 
 		DontReadBody: true,
 	})
 	if err != nil {
-		return nil, nil, nil
+		return nil, nil, err
 	}
 	defer func() {
 		if data == nil {
