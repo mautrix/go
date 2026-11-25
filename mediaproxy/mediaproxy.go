@@ -324,7 +324,7 @@ func (mp *MediaProxy) getMedia(w http.ResponseWriter, r *http.Request) GetMediaR
 		mautrixRespError, isRespError := errors.AsType[mautrix.RespError](err)
 		logLevel := zerolog.ErrorLevel
 		if r.Context().Err() != nil || (isRespError && mautrixRespError.StatusCode >= 400 && mautrixRespError.StatusCode < 500) {
-			logLevel = zerolog.WarnLevel
+			logLevel = zerolog.DebugLevel
 		}
 		zerolog.Ctx(r.Context()).WithLevel(logLevel).Err(err).
 			Str("media_id", mediaID).
