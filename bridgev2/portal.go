@@ -5270,25 +5270,65 @@ func (portal *Portal) updateUserLocalInfo(ctx context.Context, info *UserLocalPo
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to mark room as DM")
 		}
 	}
-	if info == nil {
+	if info == nil || (info.MutedUntil == nil && info.Tag == nil) {
 		return
 	}
-	if info.MutedUntil != nil && (didJustCreate || !portal.Bridge.Config.MuteOnlyOnCreate) && (!didJustCreate || info.MutedUntil.After(time.Now())) {
-		err := dp.MuteRoom(ctx, portal.MXID, *info.MutedUntil)
-		if err != nil {
-			zerolog.Ctx(ctx).Err(err).Msg("Failed to mute room")
+	prev, err := portal.Bridge.DB.UserPortal.Get(ctx, source.UserLogin, portal.PortalKey)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to get user portal to check previous mute and tag")
+		return
+	} else if prev == nil {
+		prev = database.UserPortalFor(source.UserLogin, portal.PortalKey)
+	}
+	update := prev.CopyWithoutValues()
+	if info.MutedUntil != nil {
+		mutedUntil := normalizeMutedUntil(*info.MutedUntil)
+		known := !prev.MutedUntil.IsZero()
+		if !known || !normalizeMutedUntil(prev.MutedUntil).Equal(mutedUntil) || didJustCreate {
+			var err error
+			if (didJustCreate && mutedUntil.After(time.Now())) || (!didJustCreate && known && !portal.Bridge.Config.MuteOnlyOnCreate) {
+				err = dp.MuteRoom(ctx, portal.MXID, *info.MutedUntil)
+			}
+			if err != nil {
+				zerolog.Ctx(ctx).Err(err).Msg("Failed to mute room")
+				if didJustCreate {
+					update.MutedUntil = Unmuted
+				}
+			} else {
+				update.MutedUntil = mutedUntil
+			}
 		}
 	}
 	if info.Tag != nil &&
 		len(portal.Bridge.Config.OnlyBridgeTags) > 0 &&
 		(*info.Tag == "" || slices.Contains(portal.Bridge.Config.OnlyBridgeTags, *info.Tag)) &&
-		(didJustCreate || !portal.Bridge.Config.TagOnlyOnCreate) &&
-		(!didJustCreate || *info.Tag != "") {
-		err := dp.TagRoom(ctx, portal.MXID, *info.Tag, *info.Tag != "")
+		(prev.Tag == nil || *prev.Tag != *info.Tag || didJustCreate) {
+		var err error
+		if (didJustCreate && *info.Tag != "") || (!didJustCreate && prev.Tag != nil && !portal.Bridge.Config.TagOnlyOnCreate) {
+			err = dp.TagRoom(ctx, portal.MXID, *info.Tag, *info.Tag != "")
+		}
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to tag room")
+			if didJustCreate {
+				update.Tag = ptr.Ptr[event.RoomTag]("")
+			}
+		} else {
+			update.Tag = ptr.Ptr(*info.Tag)
 		}
 	}
+	if !update.MutedUntil.IsZero() || update.Tag != nil {
+		err = portal.Bridge.DB.UserPortal.Put(ctx, update)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to save user portal mute and tag")
+		}
+	}
+}
+
+func normalizeMutedUntil(mutedUntil time.Time) time.Time {
+	if mutedUntil.Before(time.Now()) {
+		return Unmuted
+	}
+	return time.UnixMilli(mutedUntil.UnixMilli())
 }
 
 func DisappearingMessageNotice(expiration time.Duration, implicit bool) *event.MessageEventContent {
