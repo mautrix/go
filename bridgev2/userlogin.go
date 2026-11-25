@@ -409,7 +409,13 @@ func DeleteManyPortals(ctx context.Context, portals []*Portal, errorCallback fun
 	slices.SortFunc(portals, func(a, b *Portal) int {
 		return cmp.Compare(getDepth(b), getDepth(a))
 	})
-	for _, portal := range portals {
+	for i, portal := range portals {
+		if ctx.Err() != nil {
+			zerolog.Ctx(ctx).Warn().Err(ctx.Err()).
+				Int("remaining_portals", len(portals)-i).
+				Msg("Context canceled, stopping portal cleanup")
+			return
+		}
 		err := portal.Delete(ctx)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).
