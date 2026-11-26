@@ -76,6 +76,9 @@ type Connector struct {
 
 	doublePuppetIntents *exsync.Map[id.UserID, *appservice.IntentAPI]
 
+	messageStatusQueues     map[id.RoomID][]messageStatusRequest
+	messageStatusQueuesLock sync.Mutex
+
 	deterministicEventIDServer string
 	BridgeStateVersion         any
 
@@ -129,6 +132,7 @@ func NewConnector(cfg *bridgeconfig.Config) *Connector {
 	c.uploadSema = semaphore.NewWeighted(c.MediaConfig.UploadSize + 1)
 	c.Capabilities = &bridgev2.MatrixCapabilities{}
 	c.doublePuppetIntents = exsync.NewMap[id.UserID, *appservice.IntentAPI]()
+	c.messageStatusQueues = make(map[id.RoomID][]messageStatusRequest)
 	return c
 }
 
@@ -540,8 +544,36 @@ func (br *Connector) SendBridgeStatus(ctx context.Context, state *status.BridgeS
 	}
 }
 
+type messageStatusRequest struct {
+	ctx context.Context
+	ms  *bridgev2.MessageStatus
+	evt *bridgev2.MessageStatusEventInfo
+}
+
 func (br *Connector) SendMessageStatus(ctx context.Context, ms *bridgev2.MessageStatus, evt *bridgev2.MessageStatusEventInfo) {
-	go br.internalSendMessageStatus(ctx, ms, evt, "")
+	br.messageStatusQueuesLock.Lock()
+	queue, running := br.messageStatusQueues[evt.RoomID]
+	br.messageStatusQueues[evt.RoomID] = append(queue, messageStatusRequest{ctx: ctx, ms: ms, evt: evt})
+	br.messageStatusQueuesLock.Unlock()
+	if !running {
+		go br.sendQueuedMessageStatuses(evt.RoomID)
+	}
+}
+
+func (br *Connector) sendQueuedMessageStatuses(roomID id.RoomID) {
+	for {
+		br.messageStatusQueuesLock.Lock()
+		queue := br.messageStatusQueues[roomID]
+		if len(queue) == 0 {
+			delete(br.messageStatusQueues, roomID)
+			br.messageStatusQueuesLock.Unlock()
+			return
+		}
+		req := queue[0]
+		br.messageStatusQueues[roomID] = queue[1:]
+		br.messageStatusQueuesLock.Unlock()
+		br.internalSendMessageStatus(req.ctx, req.ms, req.evt, "")
+	}
 }
 
 func (br *Connector) internalSendMessageStatus(ctx context.Context, ms *bridgev2.MessageStatus, evt *bridgev2.MessageStatusEventInfo, editEvent id.EventID) id.EventID {
