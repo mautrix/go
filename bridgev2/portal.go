@@ -4190,6 +4190,10 @@ func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserL
 		readUpTo = lastTarget.Timestamp
 	}
 	if err != nil {
+		if !sender.IsFromMe && errors.Is(err, mautrix.MForbidden) {
+			addTargetLog(log.Debug().Err(err)).Msg("Ignoring read receipt from user who isn't in the room")
+			return EventHandlingResultIgnored
+		}
 		addTargetLog(log.Err(err)).Msg("Failed to bridge read receipt")
 		return EventHandlingResultFailed.WithError(err)
 	} else {
