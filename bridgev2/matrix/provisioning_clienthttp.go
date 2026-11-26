@@ -77,9 +77,12 @@ func (prov *ProvisioningAPI) PostLoginClientHTTP(w http.ResponseWriter, r *http.
 	}
 	var currentStep *bridgev2.LoginStep
 	var stepWaitChan chan struct{}
+	var stepResult *stepExecutionResult
 	err = login.step.WithLock(func(sm *stepManager) error {
 		if sm.err != nil {
 			return sm.err
+		} else if reqID == sm.cancelledHTTP {
+			return bridgev2.ErrLoginStepCancelled
 		}
 		currentStep = sm.next
 		if sm.prev != nil && sm.prev.TxnID == txnID && sm.prev.StepID == reqID && sm.prev.Type == bridgev2.LoginStepTypeClientHTTP {
@@ -112,6 +115,7 @@ func (prov *ProvisioningAPI) PostLoginClientHTTP(w http.ResponseWriter, r *http.
 				Msg("Client HTTP response was already submitted, ignoring new data")
 		}
 		stepWaitChan = sm.wait
+		stepResult = sm.stepResult
 		return nil
 	})
 	if errors.Is(err, errReturnCurrentStep) {
@@ -129,7 +133,13 @@ func (prov *ProvisioningAPI) PostLoginClientHTTP(w http.ResponseWriter, r *http.
 		w.WriteHeader(499)
 		return
 	}
-	nextStep, err := login.step.GetNext()
+	var nextStep *bridgev2.LoginStep
+	login.step.WithNonErroringLock(func(sm *stepManager) {
+		nextStep, err = sm.next, sm.err
+		if err == nil && stepResult != nil && errors.Is(stepResult.err, bridgev2.ErrLoginStepCancelled) {
+			err = bridgev2.ErrLoginStepCancelled
+		}
+	})
 	// Check the actual error before checking if the context expired, because if there was an
 	// error, then we already deleted the login session, which canceled the context.
 	if err != nil {
@@ -192,6 +202,8 @@ func (p *ProvLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 	err := p.step.WithLock(func(sm *stepManager) error {
 		if sm.err != nil {
 			return fmt.Errorf("login is errored: %w", sm.err)
+		} else if errors.Is(context.Cause(req.Context()), bridgev2.ErrLoginStepCancelled) {
+			return bridgev2.ErrLoginStepCancelled
 		}
 		if !sm.started {
 			return fmt.Errorf("illegal client HTTP request: no ongoing step")
@@ -255,6 +267,9 @@ func (p *ProvLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 		log.Warn().Msg("Login context cancelled during client HTTP request")
 		return nil, fmt.Errorf("login context cancelled during client HTTP request: %w", p.Ctx.Err())
 	case <-req.Context().Done():
+		if errors.Is(context.Cause(req.Context()), bridgev2.ErrLoginStepCancelled) {
+			return nil, bridgev2.ErrLoginStepCancelled
+		}
 		log.Warn().Err(req.Context().Err()).Msg("Client HTTP request canceled")
 		p.CancelCtx()
 		return nil, req.Context().Err()
@@ -269,7 +284,9 @@ func (p *ProvLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 			return nil, fmt.Errorf("invalid client WebSocket upgrade response")
 		}
 		if _, err = stream.waitConn(req.Context()); err != nil {
-			if req.Context().Err() != nil {
+			if errors.Is(context.Cause(req.Context()), bridgev2.ErrLoginStepCancelled) {
+				return nil, bridgev2.ErrLoginStepCancelled
+			} else if req.Context().Err() != nil {
 				p.CancelCtx()
 			}
 			return nil, err

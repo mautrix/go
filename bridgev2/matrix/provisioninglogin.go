@@ -40,14 +40,16 @@ type stepManager struct {
 
 	reqCounter int
 
-	pendingHTTP chan *bridgev2.LoginClientHTTPResponse
-	stepCancel  context.CancelCauseFunc
-	stepResult  *stepExecutionResult
-	cancelling  bool
+	pendingHTTP   chan *bridgev2.LoginClientHTTPResponse
+	cancelledHTTP string
+	stepCancel    context.CancelCauseFunc
+	stepResult    *stepExecutionResult
+	cancelling    bool
 }
 
 type stepExecutionResult struct {
-	err error
+	step *bridgev2.LoginStep
+	err  error
 }
 
 func (sm *stepManager) GetNext() (*bridgev2.LoginStep, error) {
@@ -332,9 +334,13 @@ func (prov *ProvisioningAPI) cancelLoginStep(
 			return sm.err
 		}
 		currentStep = sm.next
-		if sm.prev != nil && expectedTxnID != "" && sm.prev.TxnID == expectedTxnID {
+		if currentStep.Type == bridgev2.LoginStepTypeClientHTTP && sm.stepCancel != nil && sm.stepResult != nil &&
+			sm.stepResult.step != nil && sm.stepResult.step.StepID == expectedID {
+			currentStep = sm.stepResult.step
+		} else if sm.prev != nil && expectedTxnID != "" && sm.prev.TxnID == expectedTxnID {
 			return errReturnCurrentStep
-		} else if currentStep.StepID != expectedID {
+		}
+		if currentStep.StepID != expectedID {
 			return mautrix.MBadState.WithMessage("Step ID does not match")
 		} else if expectedTxnID != "" && currentStep.TxnID != expectedTxnID {
 			return mautrix.MBadState.WithMessage("Transaction ID does not match")
@@ -362,6 +368,15 @@ func (prov *ProvisioningAPI) cancelLoginStep(
 			return nil
 		} else if currentStep.Type == bridgev2.LoginStepTypeDisplayAndWait && sm.started && sm.stepCancel != nil {
 			sm.stepCancel(bridgev2.ErrLoginStepCancelled)
+			if sm.next != currentStep {
+				sm.cancelledHTTP = sm.next.StepID
+				sm.pendingHTTP = nil
+				sm.prev = nil
+				sm.next = currentStep
+				if sm.wait == nil {
+					sm.wait = make(chan struct{})
+				}
+			}
 			stepWaitChan = sm.wait
 			stepResult = sm.stepResult
 		} else if sm.started {
@@ -477,7 +492,7 @@ func (prov *ProvisioningAPI) doLoginStep(
 				Msg("Submitting login step")
 			stepCtx, cancel := context.WithCancelCause(login.Ctx)
 			sm.stepCancel = cancel
-			sm.stepResult = &stepExecutionResult{}
+			sm.stepResult = &stepExecutionResult{step: currentStep}
 			go prov.executeStep(login, stepCtx, currentStep.Type, params, rawParams, nil, sm.stepResult)
 		} else {
 			log.Debug().
