@@ -258,6 +258,7 @@ func (mach *OlmMachine) tryDecryptOlmCiphertext(ctx context.Context, sender id.U
 		return nil, fmt.Errorf("failed to decrypt olm event with session created from prekey message: %w", err)
 	}
 
+	ctx = context.WithoutCancel(ctx)
 	endTimeTrace = mach.timeTrace(ctx, "saving new session in database", time.Second)
 	err = mach.CryptoStore.PutOlmHash(ctx, ciphertextHash, time.Now())
 	if err != nil {
@@ -340,6 +341,7 @@ func (mach *OlmMachine) tryDecryptOlmCiphertextWithExistingSession(
 				return nil, ErrDecryptionFailedWithMatchingSession
 			}
 		} else {
+			ctx = context.WithoutCancel(ctx)
 			endTimeTrace = mach.timeTrace(ctx, "updating session in database", time.Second)
 			err = mach.CryptoStore.PutOlmHash(ctx, ciphertextHash, time.Now())
 			if err != nil {
