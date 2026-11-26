@@ -812,5 +812,5 @@ func (br *Connector) HandleNewlyBridgedRoom(ctx context.Context, roomID id.RoomI
 }
 
 func (br *Connector) GetURLPreview(ctx context.Context, url string) (*event.LinkPreview, error) {
-	return br.Bot.GetURLPreview(ctx, url)
+	return br.Bot.GetURLPreview(ctx, url, false)
 }
