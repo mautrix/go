@@ -15,7 +15,7 @@ func UpdateProfile(ctx context.Context, login *bridgev2.UserLogin, params *bridg
 	if !ok {
 		return bridgev2.RespError(mautrix.MUnrecognized.WithMessage("This bridge does not support updating profiles"))
 	}
-	if params == nil || params.Name == nil && params.Avatar == nil {
+	if params == nil || (params.Name == nil && params.Avatar == nil) {
 		return bridgev2.RespError(mautrix.MInvalidParam.WithMessage("A name or avatar is required"))
 	}
 	if params.Avatar != nil && *params.Avatar != "" {
