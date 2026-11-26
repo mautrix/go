@@ -76,7 +76,7 @@ type Connector struct {
 
 	doublePuppetIntents *exsync.Map[id.UserID, *appservice.IntentAPI]
 
-	messageStatusQueues     map[id.RoomID][]messageStatusRequest
+	messageStatusQueues     map[id.RoomID]*exsync.Queue[messageStatusRequest]
 	messageStatusQueuesLock sync.Mutex
 
 	deterministicEventIDServer string
@@ -132,7 +132,7 @@ func NewConnector(cfg *bridgeconfig.Config) *Connector {
 	c.uploadSema = semaphore.NewWeighted(c.MediaConfig.UploadSize + 1)
 	c.Capabilities = &bridgev2.MatrixCapabilities{}
 	c.doublePuppetIntents = exsync.NewMap[id.UserID, *appservice.IntentAPI]()
-	c.messageStatusQueues = make(map[id.RoomID][]messageStatusRequest)
+	c.messageStatusQueues = make(map[id.RoomID]*exsync.Queue[messageStatusRequest])
 	return c
 }
 
@@ -551,27 +551,35 @@ type messageStatusRequest struct {
 }
 
 func (br *Connector) SendMessageStatus(ctx context.Context, ms *bridgev2.MessageStatus, evt *bridgev2.MessageStatusEventInfo) {
+	if evt.EventType.IsEphemeral() || evt.SourceEventID == "" {
+		return
+	}
 	br.messageStatusQueuesLock.Lock()
 	queue, running := br.messageStatusQueues[evt.RoomID]
-	br.messageStatusQueues[evt.RoomID] = append(queue, messageStatusRequest{ctx: ctx, ms: ms, evt: evt})
+	if !running {
+		queue = exsync.NewQueue[messageStatusRequest]()
+		br.messageStatusQueues[evt.RoomID] = queue
+	}
+	queue.Push(messageStatusRequest{ctx: ctx, ms: ms, evt: evt})
 	br.messageStatusQueuesLock.Unlock()
 	if !running {
-		go br.sendQueuedMessageStatuses(evt.RoomID)
+		go br.sendQueuedMessageStatuses(evt.RoomID, queue)
 	}
 }
 
-func (br *Connector) sendQueuedMessageStatuses(roomID id.RoomID) {
+func (br *Connector) sendQueuedMessageStatuses(roomID id.RoomID, queue *exsync.Queue[messageStatusRequest]) {
 	for {
-		br.messageStatusQueuesLock.Lock()
-		queue := br.messageStatusQueues[roomID]
-		if len(queue) == 0 {
+		req, ok := queue.Pop()
+		if !ok {
+			br.messageStatusQueuesLock.Lock()
+			if queue.Len() > 0 {
+				br.messageStatusQueuesLock.Unlock()
+				continue
+			}
 			delete(br.messageStatusQueues, roomID)
 			br.messageStatusQueuesLock.Unlock()
 			return
 		}
-		req := queue[0]
-		br.messageStatusQueues[roomID] = queue[1:]
-		br.messageStatusQueuesLock.Unlock()
 		br.internalSendMessageStatus(req.ctx, req.ms, req.evt, "")
 	}
 }
