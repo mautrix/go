@@ -181,39 +181,49 @@ func (parser *HTMLParser) listToString(node *html.Node, ctx Context) string {
 	ordered := node.Data == "ol"
 	taggedChildren := parser.nodeToTaggedStrings(node.FirstChild, ctx)
 	counter := 1
-	indentLength := 0
 	if ordered {
 		start := parser.getAttribute(node, "start")
 		if len(start) > 0 {
 			counter, _ = strconv.Atoi(start)
 		}
-
-		longestIndex := (counter - 1) + len(taggedChildren)
-		indentLength = Digits(longestIndex)
 	}
-	indent := strings.Repeat(" ", indentLength+2)
-	var children []string
+	var items []TaggedString
+	var numbers []int
+	indentLength := 0
+	childNode := node.FirstChild
 	for _, child := range taggedChildren {
+		itemNode := childNode
+		childNode = childNode.NextSibling
 		if child.tag != "li" {
 			continue
 		}
+		if ordered {
+			if value, err := strconv.Atoi(parser.getAttribute(itemNode, "value")); err == nil {
+				counter = value
+			}
+			numbers = append(numbers, counter)
+			indentLength = max(indentLength, Digits(counter))
+			counter++
+		}
+		items = append(items, child)
+	}
+	indent := strings.Repeat(" ", indentLength+2)
+	children := make([]string, len(items))
+	for i, child := range items {
 		var prefix string
 		// TODO make bullets and numbering configurable
 		if ordered {
-			// Ensure padding is at least 0 even on negative start indexes where longestIndex is usually wrong
-			indexPadding := max(indentLength-Digits(counter), 0)
-			prefix = fmt.Sprintf("%d. %s", counter, strings.Repeat(" ", indexPadding))
+			indexPadding := indentLength - Digits(numbers[i])
+			prefix = fmt.Sprintf("%d. %s", numbers[i], strings.Repeat(" ", indexPadding))
 		} else {
 			prefix = "* "
 		}
 		str := prefix + child.string
-		counter++
 		parts := strings.Split(str, "\n")
-		for i, part := range parts[1:] {
-			parts[i+1] = indent + part
+		for j, part := range parts[1:] {
+			parts[j+1] = indent + part
 		}
-		str = strings.Join(parts, "\n")
-		children = append(children, str)
+		children[i] = strings.Join(parts, "\n")
 	}
 	return strings.Join(children, "\n")
 }
