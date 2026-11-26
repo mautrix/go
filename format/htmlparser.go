@@ -9,7 +9,6 @@ package format
 import (
 	"context"
 	"fmt"
-	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -169,12 +168,7 @@ func (parser *HTMLParser) getAttribute(node *html.Node, attribute string) string
 
 // Digits counts the number of digits (and the sign, if negative) in an integer.
 func Digits(num int) int {
-	if num == 0 {
-		return 1
-	} else if num < 0 {
-		return Digits(-num) + 1
-	}
-	return int(math.Floor(math.Log10(float64(num))) + 1)
+	return len(strconv.Itoa(num))
 }
 
 func (parser *HTMLParser) listToString(node *html.Node, ctx Context) string {
