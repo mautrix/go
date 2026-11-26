@@ -12,6 +12,7 @@ import (
 	"html"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"maunium.net/go/mautrix/crypto/attachment"
 	"maunium.net/go/mautrix/id"
@@ -231,7 +232,11 @@ func (content *MessageEventContent) SetEdit(original id.EventID) {
 		content.Body = "* " + content.Body
 	}
 	if len(content.Body) > 100 {
-		content.Body = content.Body[:min(len(content.Body), 50)] + "[edit fallback cut…]"
+		cut := 50
+		for cut > 0 && !utf8.RuneStart(content.Body[cut]) {
+			cut--
+		}
+		content.Body = content.Body[:cut] + "[edit fallback cut…]"
 	}
 }
 
