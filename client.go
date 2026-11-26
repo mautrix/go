@@ -2342,10 +2342,12 @@ func (cli *Client) UploadMedia(ctx context.Context, data ReqUploadMedia) (*RespM
 // GetURLPreview asks the homeserver to fetch a preview for a given URL.
 //
 // See https://spec.matrix.org/v1.2/client-server-api/#get_matrixmediav3preview_url
-func (cli *Client) GetURLPreview(ctx context.Context, url string) (*RespPreviewURL, error) {
-	reqURL := cli.BuildURLWithQuery(ClientURLPath{"v1", "media", "preview_url"}, map[string]string{
-		"url": url,
-	})
+func (cli *Client) GetURLPreview(ctx context.Context, url string, persistAssets bool) (*RespPreviewURL, error) {
+	query := map[string]string{"url": url}
+	if persistAssets && cli.SpecVersions.Supports(FeatureUnstablePersistURLPreviews) {
+		query["uk.timedout.msc4586.persist_assets"] = "true"
+	}
+	reqURL := cli.BuildURLWithQuery(ClientURLPath{"v1", "media", "preview_url"}, query)
 	var output RespPreviewURL
 	_, err := cli.MakeRequest(ctx, http.MethodGet, reqURL, nil, &output)
 	return &output, err
