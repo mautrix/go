@@ -1218,7 +1218,18 @@ components:
                 description: The URL to open when using a webview to extract cookies.
               user_agent:
                 type: string
-                description: An optional user agent that the webview should use.
+                description: |
+                  Clients pick their own user agent, constrained by `user_agent_hints`, and may ignore this.
+                  Connectors that need to reuse the client's user agent should read `navigator.userAgent` in `extract_js`.
+              user_agent_hints:
+                type: array
+                description: |
+                  Requirements for the user agent the client picks for the webview.
+                  `desktop` means the site needs a desktop browser user agent.
+                  `native` means the site needs the webview's own unmodified user agent, and takes precedence over other hints.
+                items:
+                  type: string
+                  enum: [ desktop, native ]
               wait_for_url_pattern:
                 type: string
                 description: |
@@ -1233,6 +1244,12 @@ components:
                   A JavaScript snippet that can extract some or all of the fields.
                   The snippet will evaluate to a promise that resolves when the relevant fields are found.
                   Fields that are not present in the promise result must be extracted another way.
+                  Clients run it once in every main-frame document after DOMContentLoaded.
+              init_js:
+                type: string
+                description: |
+                  A JavaScript snippet that clients run at document start in every main-frame document,
+                  before the page's own scripts. Its result is ignored.
               hidden:
                 type: boolean
                 description: If set, the client should load the URL and run `extract_js` in a webview that is not shown to the user.
@@ -1437,9 +1454,10 @@ components:
       description: |
         A feature that the client supports during login.
         `webauthn` means it can complete `webauthn` steps,
-        `client_http` means it can execute `client_http` steps, and
-        `client_websocket` means it can open full duplex tunnels for `client_http` steps.
-      enum: [ webauthn, client_http, client_websocket ]
+        `client_http` means it can execute `client_http` steps,
+        `client_websocket` means it can open full duplex tunnels for `client_http` steps, and
+        `webview_third_party_cookies` means its cookie login webview allows third-party cookies.
+      enum: [ webauthn, client_http, client_websocket, webview_third_party_cookies ]
     ClientCapabilities:
       type: array
       description: |

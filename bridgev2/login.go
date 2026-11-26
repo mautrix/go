@@ -60,6 +60,8 @@ const (
 	ClientCapabilityWebAuthn  ClientCapability = "webauthn"
 	ClientCapabilityHTTP      ClientCapability = "client_http"
 	ClientCapabilityWebSocket ClientCapability = "client_websocket"
+	// The client's cookie login webview allows third-party cookies.
+	ClientCapabilityWebviewThirdPartyCookies ClientCapability = "webview_third_party_cookies"
 )
 
 type ClientCapabilities []ClientCapability
@@ -355,9 +357,23 @@ type LoginCookie struct {
 	HTTPOnly bool   `json:"http_only,omitzero"`
 }
 
+type UserAgentHint string
+
+const (
+	// The site needs a desktop browser user agent, e.g. it redirects mobile browsers to an app download page.
+	UserAgentHintDesktop UserAgentHint = "desktop"
+	// The site needs the webview's own unmodified user agent, e.g. it rejects anything that looks spoofed.
+	// Takes precedence over other hints.
+	UserAgentHintNative UserAgentHint = "native"
+)
+
 type LoginCookiesParams struct {
-	URL       string `json:"url"`
+	URL string `json:"url"`
+	// Clients pick their own user agent and may ignore this. Use UserAgentHints to constrain it,
+	// and read navigator.userAgent in ExtractJS if the connector needs to reuse it.
 	UserAgent string `json:"user_agent,omitempty"`
+	// Requirements for the user agent the client picks for the webview.
+	UserAgentHints []UserAgentHint `json:"user_agent_hints,omitempty"`
 
 	// Cookies the client should set in the webview before loading the URL, used to continue a login
 	// session that was partially completed elsewhere (e.g. a captcha or checkpoint challenge).
@@ -367,7 +383,11 @@ type LoginCookiesParams struct {
 	// A JavaScript snippet that can extract some or all of the fields.
 	// The snippet will evaluate to a promise that resolves when the relevant fields are found.
 	// Fields that are not present in the promise result must be extracted another way.
+	// Clients run it once in every main-frame document after DOMContentLoaded.
 	ExtractJS string `json:"extract_js,omitempty"`
+	// A JavaScript snippet that clients run at document start in every main-frame document,
+	// before the page's own scripts. Its result is ignored.
+	InitJS string `json:"init_js,omitempty"`
 	// A regex pattern that the URL should match before the client closes the webview.
 	//
 	// The client may submit the login if the user closes the webview after all cookies are collected
@@ -383,9 +403,11 @@ type LoginCookiesParams struct {
 func (lcp *LoginCookiesParams) MarshalZerologObject(e *zerolog.Event) {
 	e.Str("url", lcp.URL).
 		Str("user_agent", lcp.UserAgent).
+		Any("user_agent_hints", lcp.UserAgentHints).
 		Int("initial_cookie_count", len(lcp.InitialCookies)).
 		Any("fields", lcp.Fields).
 		Str("extract_js", lcp.ExtractJS).
+		Str("init_js", lcp.InitJS).
 		Str("wait_for_url_pattern", lcp.WaitForURLPattern).
 		Bool("hidden", lcp.Hidden)
 }
