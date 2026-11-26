@@ -170,14 +170,14 @@ type CheckpointsJSON struct {
 }
 
 func (cj *CheckpointsJSON) SendHTTP(ctx context.Context, cli *http.Client, endpoint string, token string) error {
-	var body bytes.Buffer
-	if err := json.MarshalWrite(&body, cj); err != nil {
+	body, err := json.Marshal(cj)
+	if err != nil {
 		return fmt.Errorf("failed to encode message checkpoint JSON: %w", err)
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, &body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
