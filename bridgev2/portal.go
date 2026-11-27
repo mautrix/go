@@ -3174,6 +3174,22 @@ func (portal *Portal) cutOffLongMessage(ctx context.Context, content *event.Cont
 	evt.Msg("Cut off message content that was too large for a Matrix event")
 }
 
+func (portal *Portal) addPowerLevelContext(ctx context.Context, evt *zerolog.Event, sender id.UserID, evtType event.Type) {
+	pl, err := portal.Bridge.Matrix.GetPowerLevels(ctx, portal.MXID)
+	if err != nil {
+		evt.AnErr("power_levels_error", err)
+	}
+	if pl == nil {
+		return
+	}
+	evt.Bool("power_levels_partial", err != nil).
+		Int("sender_power_level", pl.GetUserLevel(sender)).
+		Int("users_default", pl.UsersDefault).
+		Int("events_default", pl.EventsDefault).
+		Int("required_power_level", pl.GetEventLevel(evtType)).
+		Int("encrypted_power_level", pl.GetEventLevel(event.EventEncrypted))
+}
+
 func (portal *Portal) sendConvertedMessage(
 	ctx context.Context,
 	source *UserLogin,
@@ -3233,7 +3249,11 @@ func (portal *Portal) sendConvertedMessage(
 				PartIndex:   i,
 			})
 			if err != nil {
-				logContext(log.Err(err)).Str("part_id", string(part.ID)).Msg("Failed to send message part to Matrix")
+				logEvt := logContext(log.Err(err)).Str("part_id", string(part.ID))
+				if errors.Is(err, mautrix.MForbidden) {
+					portal.addPowerLevelContext(ctx, logEvt, intent.GetMXID(), part.Type)
+				}
+				logEvt.Msg("Failed to send message part to Matrix")
 				errorList = append(errorList, fmt.Errorf("failed to send message part to Matrix: %w", err))
 				continue
 			}
