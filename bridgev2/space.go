@@ -141,6 +141,8 @@ func (ul *UserLogin) GetSpaceRoom(ctx context.Context) (id.RoomID, error) {
 	defer ul.spaceCreateLock.Unlock()
 	if ul.SpaceRoom != "" {
 		return ul.SpaceRoom, nil
+	} else if ul.deleted.Load() {
+		return "", ErrNotLoggedIn
 	}
 	netName := ul.Bridge.Network.GetName()
 	var err error

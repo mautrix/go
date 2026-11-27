@@ -233,6 +233,10 @@ func (ul *UserLogin) QueueRemoteEvent(evt RemoteEvent) EventHandlingResult {
 
 func (br *Bridge) QueueRemoteEvent(login *UserLogin, evt RemoteEvent) EventHandlingResult {
 	log := login.Log
+	if login.deleted.Load() {
+		log.Debug().Stringer("event_type", evt.GetType()).Msg("Dropping remote event from deleted login")
+		return EventHandlingResultIgnored
+	}
 	ctx := log.WithContext(br.BackgroundCtx)
 	maybeUncertain, ok := evt.(RemoteEventWithUncertainPortalReceiver)
 	isUncertain := ok && maybeUncertain.PortalReceiverIsUncertain()
