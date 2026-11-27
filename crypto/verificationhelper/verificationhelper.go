@@ -224,8 +224,24 @@ func (vh *VerificationHelper) Init(ctx context.Context) error {
 				vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnknownTransaction, "The transaction ID was not recognized.")
 				vh.activeTransactionsLock.Unlock()
 				return
+			} else if err != nil {
+				log.Err(err).Msg("failed to get verification transaction")
+				vh.activeTransactionsLock.Unlock()
+				return
 			} else {
 				vh.activeTransactionsLock.Unlock()
+			}
+
+			if evt.Sender != txn.TheirUserID {
+				log.Warn().
+					Stringer("expected_sender", txn.TheirUserID).
+					Msg("Ignoring verification event from unexpected sender")
+				return
+			} else if txn.RoomID != evt.RoomID {
+				log.Warn().
+					Stringer("expected_room_id", txn.RoomID).
+					Msg("Ignoring verification event in unexpected room")
+				return
 			}
 
 			logCtx := log.With().
@@ -641,6 +657,16 @@ func (vh *VerificationHelper) onVerificationRequest(ctx context.Context, evt *ev
 	}
 
 	vh.activeTransactionsLock.Lock()
+	if existingTxn, err := vh.store.GetVerificationTransaction(ctx, verificationRequest.TransactionID); err == nil &&
+		(existingTxn.TheirUserID != evt.Sender || existingTxn.TheirDeviceID != verificationRequest.FromDevice) {
+		log.Warn().Msg("Ignoring verification request with a transaction ID that is already in use")
+		vh.activeTransactionsLock.Unlock()
+		return
+	} else if err != nil && !errors.Is(err, ErrUnknownVerificationTransaction) {
+		log.Err(err).Msg("failed to get verification transaction")
+		vh.activeTransactionsLock.Unlock()
+		return
+	}
 	newTxn := VerificationTransaction{
 		ExpirationTime:        jsontime.UnixMilli{Time: verificationRequest.Timestamp.Add(time.Minute * 10)},
 		RoomID:                evt.RoomID,
@@ -710,6 +736,16 @@ func (vh *VerificationHelper) onVerificationReady(ctx context.Context, txn Verif
 	}
 
 	readyEvt := evt.Content.AsVerificationReady()
+	if txn.TheirDeviceID != "" {
+		log.Warn().Msg("Ignoring verification ready event for a request we didn't send")
+		return
+	} else if readyEvt.FromDevice == "" || (txn.TheirUserID == vh.client.UserID && readyEvt.FromDevice == vh.client.DeviceID) {
+		log.Warn().Stringer("from_device", readyEvt.FromDevice).Msg("Ignoring verification ready event with invalid device ID")
+		return
+	} else if txn.RoomID == "" && !slices.Contains(txn.SentToDeviceIDs, readyEvt.FromDevice) {
+		log.Warn().Stringer("from_device", readyEvt.FromDevice).Msg("Ignoring verification ready event from a device the request wasn't sent to")
+		return
+	}
 
 	// Update the transaction state.
 	txn.VerificationState = VerificationStateReady
@@ -784,6 +820,11 @@ func (vh *VerificationHelper) onVerificationStart(ctx context.Context, txn Verif
 	vh.activeTransactionsLock.Lock()
 	defer vh.activeTransactionsLock.Unlock()
 
+	if startEvt.FromDevice != txn.TheirDeviceID {
+		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnexpectedMessage, "start event from_device doesn't match the device that accepted the request")
+		return
+	}
+
 	if txn.VerificationState == VerificationStateSASStarted || txn.VerificationState == VerificationStateOurQRScanned || txn.VerificationState == VerificationStateTheirQRScanned {
 		// We might have sent the event, and they also sent an event.
 		if txn.StartEventContent == nil || !txn.StartedByUs {
@@ -820,6 +861,9 @@ func (vh *VerificationHelper) onVerificationStart(ctx context.Context, txn Verif
 			log.Debug().Msg("Using their start event instead of ours because they are alphabetically before us")
 			txn.StartedByUs = false
 			txn.StartEventContent = startEvt
+		} else {
+			log.Debug().Msg("Ignoring their start event because we are alphabetically before them")
+			return
 		}
 	} else if txn.VerificationState != VerificationStateReady {
 		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnexpectedMessage, "got start event for transaction that is not in ready state")
@@ -831,13 +875,22 @@ func (vh *VerificationHelper) onVerificationStart(ctx context.Context, txn Verif
 	switch startEvt.Method {
 	case event.VerificationMethodSAS:
 		log.Info().Msg("Received SAS start event")
+		if !slices.Contains(vh.supportedMethods, event.VerificationMethodSAS) || vh.showSAS == nil ||
+			!slices.Contains(txn.TheirSupportedMethods, event.VerificationMethodSAS) {
+			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnknownMethod, "SAS verification is not supported")
+			return
+		}
 		txn.VerificationState = VerificationStateSASStarted
 		if err := vh.onVerificationStartSAS(ctx, txn, evt); err != nil {
 			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "failed to handle SAS verification start: %w", err)
 		}
 	case event.VerificationMethodReciprocate:
 		log.Info().Msg("Received reciprocate start event")
-		if len(txn.QRCodeSharedSecret) == 0 || len(txn.StartEventContent.Secret) == 0 || vh.qrCodeScanned == nil {
+		if !slices.Contains(vh.supportedMethods, event.VerificationMethodReciprocate) ||
+			!slices.Contains(txn.TheirSupportedMethods, event.VerificationMethodReciprocate) {
+			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnknownMethod, "reciprocate method was not negotiated")
+			return
+		} else if len(txn.QRCodeSharedSecret) == 0 || len(txn.StartEventContent.Secret) == 0 || vh.qrCodeScanned == nil {
 			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnexpectedMessage, "unexpected reciprocate for non-QR verification")
 			return
 		} else if !bytes.Equal(txn.QRCodeSharedSecret, txn.StartEventContent.Secret) {
@@ -871,8 +924,11 @@ func (vh *VerificationHelper) onVerificationDone(ctx context.Context, txn Verifi
 
 	if !slices.Contains([]VerificationState{
 		VerificationStateTheirQRScanned, VerificationStateOurQRScanned, VerificationStateSASMACExchanged,
-	}, txn.VerificationState) {
+	}, txn.VerificationState) || txn.StartEventContent == nil {
 		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnexpectedMessage, "got done event for transaction that is not in QR-scanned or MAC-exchanged state")
+		return
+	} else if txn.ReceivedTheirDone {
+		log.Warn().Msg("Ignoring duplicate done event")
 		return
 	}
 

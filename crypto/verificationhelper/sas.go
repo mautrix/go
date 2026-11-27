@@ -48,6 +48,8 @@ func (vh *VerificationHelper) StartSAS(ctx context.Context, txnID id.Verificatio
 		return fmt.Errorf("transaction is not in ready state: %s", txn.VerificationState.String())
 	} else if txn.StartEventContent != nil {
 		return errors.New("start event already sent or received")
+	} else if !slices.Contains(vh.supportedMethods, event.VerificationMethodSAS) || vh.showSAS == nil {
+		return errors.New("SAS verification is not supported")
 	}
 
 	txn.VerificationState = VerificationStateSASStarted
@@ -105,6 +107,10 @@ func (vh *VerificationHelper) ConfirmSAS(ctx context.Context, txnID id.Verificat
 		return fmt.Errorf("failed to get transaction %s: %w", txnID, err)
 	} else if txn.VerificationState != VerificationStateSASKeysExchanged {
 		return errors.New("transaction is not in keys exchanged state")
+	} else if txn.SentOurMAC {
+		return errors.New("MAC already sent")
+	} else if txn.EphemeralKey == nil || txn.OtherPublicKey == nil {
+		return errors.New("ephemeral keys are missing")
 	}
 
 	keys := map[id.KeyID]jsonbytes.UnpaddedBytes{}
@@ -285,9 +291,18 @@ func (vh *VerificationHelper) onVerificationAccept(ctx context.Context, txn Veri
 
 	vh.activeTransactionsLock.Lock()
 	defer vh.activeTransactionsLock.Unlock()
-	if txn.VerificationState != VerificationStateSASStarted {
+	if txn.VerificationState != VerificationStateSASStarted || !txn.StartedByUs || txn.StartEventContent == nil {
 		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnexpectedMessage,
 			"received accept event for a transaction that is not in the started state")
+		return
+	} else if !slices.Contains(txn.StartEventContent.KeyAgreementProtocols, acceptEvt.KeyAgreementProtocol) ||
+		!slices.Contains(txn.StartEventContent.Hashes, acceptEvt.Hash) ||
+		!slices.Contains(txn.StartEventContent.MessageAuthenticationCodes, acceptEvt.MessageAuthenticationCode) {
+		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnknownMethod,
+			"accept event contains methods that weren't offered in the start event")
+		return
+	} else if len(acceptEvt.Commitment) == 0 {
+		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeInvalidMessage, "accept event is missing commitment")
 		return
 	}
 
@@ -325,7 +340,7 @@ func (vh *VerificationHelper) onVerificationKey(ctx context.Context, txn Verific
 	vh.activeTransactionsLock.Lock()
 	defer vh.activeTransactionsLock.Unlock()
 
-	if txn.VerificationState != VerificationStateSASAccepted {
+	if txn.VerificationState != VerificationStateSASAccepted || txn.EphemeralKey == nil || txn.StartEventContent == nil {
 		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnexpectedMessage,
 			"received key event for a transaction that is not in the accepted state")
 		return
@@ -334,7 +349,7 @@ func (vh *VerificationHelper) onVerificationKey(ctx context.Context, txn Verific
 	var err error
 	publicKey, err := ecdh.X25519().NewPublicKey(keyEvt.Key)
 	if err != nil {
-		log.Err(err).Msg("Failed to generate other public key")
+		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeInvalidMessage, "failed to parse public key: %w", err)
 		return
 	}
 	txn.OtherPublicKey = &ECDHPublicKey{publicKey}
@@ -343,29 +358,36 @@ func (vh *VerificationHelper) onVerificationKey(ctx context.Context, txn Verific
 		// Verify that the commitment hash is correct
 		commitment, err := calculateCommitment(publicKey, txn)
 		if err != nil {
-			log.Err(err).Msg("Failed to calculate commitment")
+			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeInternalError, "failed to calculate commitment: %w", err)
 			return
 		}
 		if !bytes.Equal(commitment, txn.Commitment) {
 			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeKeyMismatch, "The key was not the one we expected")
 			return
 		}
-	} else {
+	}
+
+	sasBytes, err := vh.verificationSASHKDF(txn)
+	if err != nil {
+		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeInvalidMessage, "failed to compute SAS: %w", err)
+		return
+	}
+
+	sendOurKey := !txn.EphemeralPublicKeyShared
+	txn.EphemeralPublicKeyShared = true
+	txn.VerificationState = VerificationStateSASKeysExchanged
+	if err = vh.store.SaveVerificationTransaction(ctx, txn); err != nil {
+		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeInternalError, "failed to save verification transaction: %w", err)
+		return
+	}
+	if sendOurKey {
 		err = vh.sendVerificationEvent(ctx, txn, event.InRoomVerificationKey, &event.VerificationKeyEventContent{
 			Key: txn.EphemeralKey.PublicKey().Bytes(),
 		})
 		if err != nil {
-			log.Err(err).Msg("Failed to send key event")
+			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeInternalError, "failed to send key event: %w", err)
 			return
 		}
-		txn.EphemeralPublicKeyShared = true
-	}
-	txn.VerificationState = VerificationStateSASKeysExchanged
-
-	sasBytes, err := vh.verificationSASHKDF(txn)
-	if err != nil {
-		log.Err(err).Msg("Failed to compute HKDF for SAS")
-		return
 	}
 
 	var decimals []int
@@ -390,13 +412,12 @@ func (vh *VerificationHelper) onVerificationKey(ctx context.Context, txn Verific
 		}
 	}
 	vh.showSAS(ctx, txn.TransactionID, emojis, emojiDescriptions, decimals)
-
-	if err := vh.store.SaveVerificationTransaction(ctx, txn); err != nil {
-		log.Err(err).Msg("failed to save verification transaction")
-	}
 }
 
 func (vh *VerificationHelper) verificationSASHKDF(txn VerificationTransaction) ([]byte, error) {
+	if txn.EphemeralKey == nil || txn.OtherPublicKey == nil {
+		return nil, errors.New("ephemeral keys are missing")
+	}
 	sharedSecret, err := txn.EphemeralKey.ECDH(txn.OtherPublicKey.PublicKey)
 	if err != nil {
 		return nil, err
@@ -487,6 +508,9 @@ func BrokenB64Encode(input []byte) string {
 }
 
 func (vh *VerificationHelper) verificationMACHKDF(txn VerificationTransaction, senderUser id.UserID, senderDevice id.DeviceID, receivingUser id.UserID, receivingDevice id.DeviceID, keyID, key string) ([]byte, error) {
+	if txn.EphemeralKey == nil || txn.OtherPublicKey == nil {
+		return nil, errors.New("ephemeral keys are missing")
+	}
 	sharedSecret, err := txn.EphemeralKey.ECDH(txn.OtherPublicKey.PublicKey)
 	if err != nil {
 		return nil, err
@@ -663,6 +687,16 @@ func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn Verific
 	vh.activeTransactionsLock.Lock()
 	defer vh.activeTransactionsLock.Unlock()
 	macEvt := evt.Content.AsVerificationMAC()
+
+	if txn.VerificationState != VerificationStateSASKeysExchanged || txn.ReceivedTheirMAC {
+		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnexpectedMessage,
+			"received MAC event for a transaction that is not in the keys exchanged state")
+		return
+	} else if txn.EphemeralKey == nil || txn.OtherPublicKey == nil {
+		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnexpectedMessage,
+			"received MAC event before ephemeral keys were exchanged")
+		return
+	}
 
 	// Verifying Keys MAC
 	log.Info().Msg("Verifying MAC for all sent keys")

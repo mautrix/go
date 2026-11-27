@@ -73,8 +73,8 @@ func NewQRCodeFromBytes(data []byte) (*QRCode, error) {
 	if data[7] != 0x00 && data[7] != 0x01 && data[7] != 0x02 {
 		return nil, ErrInvalidQRCodeMode
 	}
-	transactionIDLength := binary.BigEndian.Uint16(data[8:10])
-	if len(data) < int(10+transactionIDLength+64) {
+	transactionIDLength := int(binary.BigEndian.Uint16(data[8:10]))
+	if len(data) < 10+transactionIDLength+64 {
 		return nil, fmt.Errorf("%w for transaction ID: expected at least %d bytes, got %d", ErrInvalidQRCodeLength, 10+transactionIDLength+64, len(data))
 	}
 	transactionID := data[10 : 10+transactionIDLength]
