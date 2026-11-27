@@ -2278,7 +2278,9 @@ func (cli *Client) uploadMediaToURL(ctx context.Context, data ReqUploadMedia) (*
 
 	var m *RespMediaUpload
 	_, err := cli.MakeRequest(ctx, http.MethodPost, notifyURL, nil, &m)
-	if err != nil {
+	if errors.Is(err, MCannotOverwriteMedia) {
+		return &RespMediaUpload{ContentURI: data.MXC}, nil
+	} else if err != nil {
 		return nil, err
 	}
 

@@ -70,6 +70,8 @@ var (
 	MInvalidParam = RespError{ErrCode: "M_INVALID_PARAM", StatusCode: http.StatusBadRequest}
 	// The client specified a room key backup version that is not the current room key backup version for the user.
 	MWrongRoomKeysVersion = RespError{ErrCode: "M_WRONG_ROOM_KEYS_VERSION", StatusCode: http.StatusForbidden}
+	// The client attempted to upload content to an MXC URI that already has content.
+	MCannotOverwriteMedia = RespError{ErrCode: "M_CANNOT_OVERWRITE_MEDIA", StatusCode: http.StatusConflict}
 
 	MURLNotSet         = RespError{ErrCode: "M_URL_NOT_SET"}
 	MBadStatus         = RespError{ErrCode: "M_BAD_STATUS"}
