@@ -81,6 +81,7 @@ var TypeMap = map[Type]reflect.Type{
 	AccountDataMarkedUnread:       reflect.TypeFor[MarkedUnreadEventContent](),
 	AccountDataBeeperMute:         reflect.TypeFor[BeeperMuteEventContent](),
 	AccountDataPerMessageProfiles: reflect.TypeFor[PerMessageProfilesEventContent](),
+	AccountDataProfileAnnotations: reflect.TypeFor[ProfileAnnotationsEventContent](),
 
 	AccountDataImagePackRooms:         reflect.TypeFor[ImagePackRoomsEventContent](),
 	AccountDataUnstableImagePackRooms: reflect.TypeFor[ImagePackRoomsEventContent](),
