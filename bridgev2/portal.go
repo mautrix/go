@@ -2746,6 +2746,10 @@ func (portal *Portal) handleMatrixRedaction(
 
 func (portal *Portal) handleRemoteEvent(ctx context.Context, source *UserLogin, evtType RemoteEventType, evt RemoteEvent) (res EventHandlingResult) {
 	log := zerolog.Ctx(ctx)
+	if source.deleted.Load() {
+		log.Debug().Msg("Dropping event from deleted login")
+		return EventHandlingResultIgnored
+	}
 	if portal.MXID == "" {
 		mcp, ok := evt.(RemoteEventThatMayCreatePortal)
 		if !ok || !mcp.ShouldCreatePortal() || !portal.Bridge.Config.PortalCreateFilter.ShouldAllow(source.ID, portal.PortalKey) {
@@ -5835,6 +5839,12 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 	if cancellableCtx.Err() != nil {
 		return cancellableCtx.Err()
 	}
+	source.portalCreateLock.RLock()
+	unlockCreate := sync.OnceFunc(source.portalCreateLock.RUnlock)
+	defer unlockCreate()
+	if source.deleted.Load() {
+		return ErrNotLoggedIn
+	}
 	roomID, err := portal.Bridge.Bot.CreateRoom(ctx, &req)
 	if err != nil {
 		log.Err(err).Msg("Failed to create Matrix room")
@@ -5855,6 +5865,7 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 		log.Err(err).Msg("Failed to save portal to database after creating Matrix room")
 		return err
 	}
+	unlockCreate()
 	if info.CanBackfill && portal.RoomType != database.RoomTypeSpace {
 		err = portal.Bridge.DB.BackfillTask.Upsert(ctx, &database.BackfillTask{
 			PortalKey:         portal.PortalKey,

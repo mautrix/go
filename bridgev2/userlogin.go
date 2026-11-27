@@ -13,6 +13,7 @@ import (
 	"maps"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -39,6 +40,9 @@ type UserLogin struct {
 	spaceCreateLock sync.Mutex
 	deleteLock      sync.Mutex
 	disconnectOnce  sync.Once
+
+	deleted          atomic.Bool
+	portalCreateLock sync.RWMutex
 }
 
 var ErrorOnUserLoginLoadFail = false
@@ -329,18 +333,21 @@ func (ul *UserLogin) Delete(ctx context.Context, state status.BridgeState, opts 
 	if ul.BridgeState == nil {
 		return
 	}
+	ul.deleted.Store(true)
 	if opts.LogoutRemote {
 		ul.Client.LogoutRemote(ctx)
 	}
 	ul.Disconnect()
 	var portals []*database.UserPortal
 	var err error
+	ul.portalCreateLock.Lock()
 	if cleanupRooms {
 		portals, err = ul.Bridge.DB.UserPortal.GetAllForLogin(ctx, ul.UserLogin)
 		if err != nil {
 			ul.Log.Err(err).Msg("Failed to get user portals")
 		}
 	}
+	ul.portalCreateLock.Unlock()
 	err = ul.Bridge.DB.UserLogin.Delete(ctx, ul.ID)
 	if err != nil {
 		ul.Log.Err(err).Msg("Failed to delete user login")
