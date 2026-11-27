@@ -380,6 +380,8 @@ func (ul *UserLogin) Delete(ctx context.Context, state status.BridgeState, opts 
 }
 
 func (ul *UserLogin) deleteSpace(ctx context.Context) {
+	ul.spaceCreateLock.Lock()
+	defer ul.spaceCreateLock.Unlock()
 	if ul.SpaceRoom == "" {
 		return
 	}
