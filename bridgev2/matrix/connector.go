@@ -76,6 +76,9 @@ type Connector struct {
 
 	doublePuppetIntents *exsync.Map[id.UserID, *appservice.IntentAPI]
 
+	messageStatusQueues     map[id.EventID]*exsync.Queue[messageStatusRequest]
+	messageStatusQueuesLock sync.Mutex
+
 	deterministicEventIDServer string
 	BridgeStateVersion         any
 
@@ -129,6 +132,7 @@ func NewConnector(cfg *bridgeconfig.Config) *Connector {
 	c.uploadSema = semaphore.NewWeighted(c.MediaConfig.UploadSize + 1)
 	c.Capabilities = &bridgev2.MatrixCapabilities{}
 	c.doublePuppetIntents = exsync.NewMap[id.UserID, *appservice.IntentAPI]()
+	c.messageStatusQueues = make(map[id.EventID]*exsync.Queue[messageStatusRequest])
 	return c
 }
 
@@ -540,8 +544,44 @@ func (br *Connector) SendBridgeStatus(ctx context.Context, state *status.BridgeS
 	}
 }
 
+type messageStatusRequest struct {
+	ctx context.Context
+	ms  *bridgev2.MessageStatus
+	evt *bridgev2.MessageStatusEventInfo
+}
+
 func (br *Connector) SendMessageStatus(ctx context.Context, ms *bridgev2.MessageStatus, evt *bridgev2.MessageStatusEventInfo) {
-	go br.internalSendMessageStatus(ctx, ms, evt, "")
+	if evt.EventType.IsEphemeral() || evt.SourceEventID == "" {
+		return
+	}
+	br.messageStatusQueuesLock.Lock()
+	queue, running := br.messageStatusQueues[evt.SourceEventID]
+	if !running {
+		queue = exsync.NewQueue[messageStatusRequest]()
+		br.messageStatusQueues[evt.SourceEventID] = queue
+	}
+	queue.Push(messageStatusRequest{ctx: ctx, ms: ms, evt: evt})
+	br.messageStatusQueuesLock.Unlock()
+	if !running {
+		go br.sendQueuedMessageStatuses(evt.SourceEventID, queue)
+	}
+}
+
+func (br *Connector) sendQueuedMessageStatuses(eventID id.EventID, queue *exsync.Queue[messageStatusRequest]) {
+	for {
+		req, ok := queue.Pop()
+		if !ok {
+			br.messageStatusQueuesLock.Lock()
+			if queue.Len() > 0 {
+				br.messageStatusQueuesLock.Unlock()
+				continue
+			}
+			delete(br.messageStatusQueues, eventID)
+			br.messageStatusQueuesLock.Unlock()
+			return
+		}
+		br.internalSendMessageStatus(req.ctx, req.ms, req.evt, "")
+	}
 }
 
 func (br *Connector) internalSendMessageStatus(ctx context.Context, ms *bridgev2.MessageStatus, evt *bridgev2.MessageStatusEventInfo, editEvent id.EventID) id.EventID {
