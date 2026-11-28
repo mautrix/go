@@ -127,6 +127,7 @@ CREATE TABLE message (
 	CONSTRAINT message_txn_id_unique UNIQUE (bridge_id, room_receiver, send_txn_id)
 );
 CREATE INDEX message_room_idx ON message (bridge_id, room_id, room_receiver);
+CREATE INDEX message_room_timestamp_idx ON message (bridge_id, room_id, room_receiver, timestamp);
 
 CREATE TABLE disappearing_message (
 	bridge_id    TEXT   NOT NULL,
