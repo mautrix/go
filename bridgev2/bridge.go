@@ -238,10 +238,18 @@ func (br *Bridge) PostStart(ctx context.Context) {
 	expectedBridgeInfoVer, expectedCapVer := br.Network.GetBridgeInfoVersion()
 	doResendBridgeInfo := bridgeInfoVer != expectedBridgeInfoVer || br.didSplitPortals || br.Config.ResendBridgeInfo
 	doResendCapabilities := capVer != expectedCapVer || br.didSplitPortals
+	newBridgeInfoVer := fmt.Sprintf("%d,%d", expectedBridgeInfoVer, expectedCapVer)
 	if doResendBridgeInfo || doResendCapabilities {
-		br.ResendBridgeInfo(ctx, doResendBridgeInfo, doResendCapabilities)
+		go func() {
+			ctx := br.BackgroundCtx
+			br.ResendBridgeInfo(ctx, doResendBridgeInfo, doResendCapabilities)
+			if ctx.Err() == nil {
+				br.DB.KV.Set(ctx, database.KeyBridgeInfoVersion, newBridgeInfoVer)
+			}
+		}()
+	} else {
+		br.DB.KV.Set(ctx, database.KeyBridgeInfoVersion, newBridgeInfoVer)
 	}
-	br.DB.KV.Set(ctx, database.KeyBridgeInfoVersion, fmt.Sprintf("%d,%d", expectedBridgeInfoVer, expectedCapVer))
 }
 
 func (br *Bridge) GetBeeperStreamPublisher() BeeperStreamPublisher {
@@ -263,6 +271,8 @@ func parseBridgeInfoVersion(version string) (info, capabilities int, err error) 
 	return
 }
 
+const ResendBridgeInfoDelay = 1 * time.Second
+
 func (br *Bridge) ResendBridgeInfo(ctx context.Context, resendInfo, resendCaps bool) {
 	log := zerolog.Ctx(ctx).With().Str("action", "resend bridge info").Logger()
 	portals, err := br.GetAllPortalsWithMXID(ctx)
@@ -271,8 +281,14 @@ func (br *Bridge) ResendBridgeInfo(ctx context.Context, resendInfo, resendCaps b
 		return
 	}
 	for _, portal := range portals {
+		if ctx.Err() != nil {
+			log.Warn().Msg("Bridge is stopping, bridge info resend will continue on next start")
+			return
+		}
+		sent := false
 		if resendInfo {
 			portal.UpdateBridgeInfo(ctx)
+			sent = true
 		}
 		if resendCaps {
 			logins, err := br.GetUserLoginsInPortal(ctx, portal.PortalKey)
@@ -285,19 +301,25 @@ func (br *Bridge) ResendBridgeInfo(ctx context.Context, resendInfo, resendCaps b
 				found := false
 				for _, login := range logins {
 					if portal.CapState.ID == "" || login.ID == portal.CapState.Source {
-						portal.UpdateCapabilities(ctx, login, true)
+						sent = portal.UpdateCapabilities(ctx, login, true) || sent
 						found = true
 					}
 				}
 				if !found && len(logins) > 0 {
 					portal.CapState.Source = ""
-					portal.UpdateCapabilities(ctx, logins[0], true)
+					sent = portal.UpdateCapabilities(ctx, logins[0], true) || sent
 				} else if !found {
 					log.Warn().
 						Stringer("room_id", portal.MXID).
 						Object("portal_key", portal.PortalKey).
 						Msg("No user login found to update capabilities")
 				}
+			}
+		}
+		if sent {
+			select {
+			case <-time.After(ResendBridgeInfoDelay):
+			case <-ctx.Done():
 			}
 		}
 	}
