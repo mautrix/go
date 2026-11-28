@@ -240,13 +240,12 @@ func (br *Bridge) PostStart(ctx context.Context) {
 	doResendCapabilities := capVer != expectedCapVer || br.didSplitPortals
 	newBridgeInfoVer := fmt.Sprintf("%d,%d", expectedBridgeInfoVer, expectedCapVer)
 	if doResendBridgeInfo || doResendCapabilities {
-		go func() {
-			ctx := br.BackgroundCtx
+		go func(ctx context.Context) {
 			br.ResendBridgeInfo(ctx, doResendBridgeInfo, doResendCapabilities)
 			if ctx.Err() == nil {
 				br.DB.KV.Set(ctx, database.KeyBridgeInfoVersion, newBridgeInfoVer)
 			}
-		}()
+		}(br.BackgroundCtx)
 	} else {
 		br.DB.KV.Set(ctx, database.KeyBridgeInfoVersion, newBridgeInfoVer)
 	}
@@ -282,13 +281,11 @@ func (br *Bridge) ResendBridgeInfo(ctx context.Context, resendInfo, resendCaps b
 	}
 	for _, portal := range portals {
 		if ctx.Err() != nil {
-			log.Warn().Msg("Bridge is stopping, bridge info resend will continue on next start")
+			log.Warn().Msg("Bridge is stopping, bridge info resend will be retried on next start")
 			return
 		}
-		sent := false
 		if resendInfo {
 			portal.UpdateBridgeInfo(ctx)
-			sent = true
 		}
 		if resendCaps {
 			logins, err := br.GetUserLoginsInPortal(ctx, portal.PortalKey)
@@ -301,13 +298,13 @@ func (br *Bridge) ResendBridgeInfo(ctx context.Context, resendInfo, resendCaps b
 				found := false
 				for _, login := range logins {
 					if portal.CapState.ID == "" || login.ID == portal.CapState.Source {
-						sent = portal.UpdateCapabilities(ctx, login, true) || sent
+						portal.UpdateCapabilities(ctx, login, true)
 						found = true
 					}
 				}
 				if !found && len(logins) > 0 {
 					portal.CapState.Source = ""
-					sent = portal.UpdateCapabilities(ctx, logins[0], true) || sent
+					portal.UpdateCapabilities(ctx, logins[0], true)
 				} else if !found {
 					log.Warn().
 						Stringer("room_id", portal.MXID).
@@ -316,11 +313,9 @@ func (br *Bridge) ResendBridgeInfo(ctx context.Context, resendInfo, resendCaps b
 				}
 			}
 		}
-		if sent {
-			select {
-			case <-time.After(ResendBridgeInfoDelay):
-			case <-ctx.Done():
-			}
+		select {
+		case <-time.After(ResendBridgeInfoDelay):
+		case <-ctx.Done():
 		}
 	}
 	log.Info().
