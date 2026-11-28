@@ -34,7 +34,7 @@ type IntentAPI struct {
 	registerLock sync.Mutex
 
 	IsCustomPuppet bool
-	Registered     bool
+	Registered     atomic.Bool
 }
 
 // Deprecated: Intents should not be created manually
@@ -86,16 +86,19 @@ func (intent *IntentAPI) Register(ctx context.Context) error {
 }
 
 func (intent *IntentAPI) EnsureRegistered(ctx context.Context) error {
-	if intent.IsCustomPuppet || intent.Registered {
+	if intent.IsCustomPuppet || intent.Registered.Load() {
 		return nil
 	}
 	intent.registerLock.Lock()
 	defer intent.registerLock.Unlock()
+	if intent.Registered.Load() {
+		return nil
+	}
 	isRegistered, err := intent.as.StateStore.IsRegistered(ctx, intent.UserID)
 	if err != nil {
 		return fmt.Errorf("failed to check if user is registered: %w", err)
 	} else if isRegistered {
-		intent.Registered = true
+		intent.Registered.Store(true)
 		return nil
 	}
 
@@ -107,7 +110,7 @@ func (intent *IntentAPI) EnsureRegistered(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to mark user as registered in state store: %w", err)
 	}
-	intent.Registered = true
+	intent.Registered.Store(true)
 	return nil
 }
 

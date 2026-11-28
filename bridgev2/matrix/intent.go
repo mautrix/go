@@ -17,6 +17,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"weak"
 
@@ -37,7 +38,7 @@ import (
 
 // ASIntent implements the bridge ghost API interface using a real Matrix homeserver as the backend.
 type ASIntent struct {
-	mx        weak.Pointer[appservice.IntentAPI]
+	mx        atomic.Pointer[weak.Pointer[appservice.IntentAPI]]
 	getIntent func(userID id.UserID) *appservice.IntentAPI
 	Connector *Connector
 	UserID    id.UserID
@@ -47,22 +48,25 @@ type ASIntent struct {
 }
 
 func (br *Connector) newASIntent(userID id.UserID, getIntent func(id.UserID) *appservice.IntentAPI) *ASIntent {
-	return &ASIntent{
-		mx:        weak.Make(getIntent(userID)),
+	as := &ASIntent{
 		getIntent: getIntent,
 		Connector: br,
 		UserID:    userID,
 	}
+	mx := weak.Make(getIntent(userID))
+	as.mx.Store(&mx)
+	return as
 }
 
 var _ bridgev2.MatrixAPI = (*ASIntent)(nil)
 var _ bridgev2.MarkAsDMMatrixAPI = (*ASIntent)(nil)
 
 func (as *ASIntent) Matrix() *appservice.IntentAPI {
-	api := as.mx.Value()
+	api := as.mx.Load().Value()
 	if api == nil {
 		api = as.getIntent(as.UserID)
-		as.mx = weak.Make(api)
+		mx := weak.Make(api)
+		as.mx.Store(&mx)
 	}
 	api.Touch()
 	return api
