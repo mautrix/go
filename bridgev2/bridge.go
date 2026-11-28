@@ -57,6 +57,9 @@ type Bridge struct {
 	ExternallyManagedDB bool
 	stopping            atomic.Bool
 
+	stopResendBridgeInfo atomic.Pointer[context.CancelFunc]
+	resendBridgeInfoWait sync.WaitGroup
+
 	wakeupBackfillQueue chan struct{}
 	stopBackfillQueue   *exsync.Event
 	manualBackfills     chan *ManualBackfill
@@ -243,12 +246,15 @@ func (br *Bridge) PostStart(ctx context.Context) {
 		if br.didSplitPortals {
 			br.DB.KV.Set(ctx, database.KeyBridgeInfoVersion, "-1,-1")
 		}
-		go func(ctx context.Context) {
-			br.ResendBridgeInfo(ctx, doResendBridgeInfo, doResendCapabilities)
-			if ctx.Err() == nil {
-				br.DB.KV.Set(ctx, database.KeyBridgeInfoVersion, newBridgeInfoVer)
+		resendCtx, stop := context.WithCancel(br.BackgroundCtx)
+		br.stopResendBridgeInfo.Store(&stop)
+		br.resendBridgeInfoWait.Go(func() {
+			defer stop()
+			br.ResendBridgeInfo(resendCtx, doResendBridgeInfo, doResendCapabilities)
+			if resendCtx.Err() == nil {
+				br.DB.KV.Set(resendCtx, database.KeyBridgeInfoVersion, newBridgeInfoVer)
 			}
-		}(br.BackgroundCtx)
+		})
 	} else {
 		br.DB.KV.Set(ctx, database.KeyBridgeInfoVersion, newBridgeInfoVer)
 	}
@@ -532,6 +538,9 @@ func (br *Bridge) stop(isRunOnce bool, timeout time.Duration) {
 	br.stopping.Store(true)
 	br.DisappearLoop.Stop()
 	br.stopBackfillQueue.Set()
+	if stopResend := br.stopResendBridgeInfo.Swap(nil); stopResend != nil {
+		(*stopResend)()
+	}
 	br.Matrix.PreStop()
 	if !isRunOnce {
 		br.cacheLock.Lock()
@@ -551,6 +560,7 @@ func (br *Bridge) stop(isRunOnce bool, timeout time.Duration) {
 	if br.cancelBackgroundCtx != nil {
 		br.cancelBackgroundCtx()
 	}
+	br.resendBridgeInfoWait.Wait()
 	if stopNet, ok := br.Network.(StoppableNetwork); ok {
 		stopNet.Stop()
 	}
