@@ -241,7 +241,7 @@ func (br *Bridge) PostStart(ctx context.Context) {
 	newBridgeInfoVer := fmt.Sprintf("%d,%d", expectedBridgeInfoVer, expectedCapVer)
 	if doResendBridgeInfo || doResendCapabilities {
 		if br.didSplitPortals {
-			br.DB.KV.Delete(ctx, database.KeyBridgeInfoVersion)
+			br.DB.KV.Set(ctx, database.KeyBridgeInfoVersion, "-1,-1")
 		}
 		go func(ctx context.Context) {
 			br.ResendBridgeInfo(ctx, doResendBridgeInfo, doResendCapabilities)
