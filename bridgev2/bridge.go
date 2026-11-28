@@ -240,6 +240,9 @@ func (br *Bridge) PostStart(ctx context.Context) {
 	doResendCapabilities := capVer != expectedCapVer || br.didSplitPortals
 	newBridgeInfoVer := fmt.Sprintf("%d,%d", expectedBridgeInfoVer, expectedCapVer)
 	if doResendBridgeInfo || doResendCapabilities {
+		if br.didSplitPortals {
+			br.DB.KV.Delete(ctx, database.KeyBridgeInfoVersion)
+		}
 		go func(ctx context.Context) {
 			br.ResendBridgeInfo(ctx, doResendBridgeInfo, doResendCapabilities)
 			if ctx.Err() == nil {
@@ -284,8 +287,10 @@ func (br *Bridge) ResendBridgeInfo(ctx context.Context, resendInfo, resendCaps b
 			log.Warn().Msg("Bridge is stopping, bridge info resend will be retried on next start")
 			return
 		}
+		sent := false
 		if resendInfo {
 			portal.UpdateBridgeInfo(ctx)
+			sent = true
 		}
 		if resendCaps {
 			logins, err := br.GetUserLoginsInPortal(ctx, portal.PortalKey)
@@ -298,13 +303,13 @@ func (br *Bridge) ResendBridgeInfo(ctx context.Context, resendInfo, resendCaps b
 				found := false
 				for _, login := range logins {
 					if portal.CapState.ID == "" || login.ID == portal.CapState.Source {
-						portal.UpdateCapabilities(ctx, login, true)
+						sent = portal.UpdateCapabilities(ctx, login, true) || sent
 						found = true
 					}
 				}
 				if !found && len(logins) > 0 {
 					portal.CapState.Source = ""
-					portal.UpdateCapabilities(ctx, logins[0], true)
+					sent = portal.UpdateCapabilities(ctx, logins[0], true) || sent
 				} else if !found {
 					log.Warn().
 						Stringer("room_id", portal.MXID).
@@ -313,9 +318,11 @@ func (br *Bridge) ResendBridgeInfo(ctx context.Context, resendInfo, resendCaps b
 				}
 			}
 		}
-		select {
-		case <-time.After(ResendBridgeInfoDelay):
-		case <-ctx.Done():
+		if sent {
+			select {
+			case <-time.After(ResendBridgeInfoDelay):
+			case <-ctx.Done():
+			}
 		}
 	}
 	log.Info().
