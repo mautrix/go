@@ -83,9 +83,8 @@ var spoilerTests = map[string]string{
 	"test [||reason|foo||](https://example.com)": `test <a href="https://example.com"><span data-mx-spoiler="reason">foo</span></a>`,
 	"test [||foo||](https://example.com)":        `test <a href="https://example.com"><span data-mx-spoiler>foo</span></a>`,
 	"test [||_foo_||](https://example.com)":      `test <a href="https://example.com"><span data-mx-spoiler><em>foo</em></span></a>`,
-	// FIXME wrapping spoilers in italic/bold/strikethrough doesn't work for some reason
-	//"test **[||foo||](https://example.com)**":    `test <strong><a href="https://example.com"><span data-mx-spoiler>foo</span></a></strong>`,
-	//"test **||foo||**":                           `test <strong><span data-mx-spoiler><em>foo</span></strong>`,
+	"test **[||foo||](https://example.com)**":    `test <strong><a href="https://example.com"><span data-mx-spoiler>foo</span></a></strong>`,
+	"test **||foo||**":                           `test <strong><span data-mx-spoiler>foo</span></strong>`,
 
 	"* ||foo||": `<ul><li><span data-mx-spoiler>foo</span></li></ul>`,
 	"> ||foo||": "<blockquote><p><span data-mx-spoiler>foo</span></p></blockquote>",
@@ -97,6 +96,28 @@ func TestRenderMarkdown_Spoiler(t *testing.T) {
 		assert.Equal(t, markdown, rendered.Body)
 		assert.Equal(t, html, strings.ReplaceAll(rendered.FormattedBody, "\n", ""))
 	}
+}
+
+var spoilerLabelTests = map[string]string{
+	"test ||[foo_bar](https://example.com)||":        `test <span data-mx-spoiler><a href="https://example.com">foo_bar</a></span>`,
+	"test ||![:foo_bar:](mxc://example.com/foo)||":   `test <span data-mx-spoiler><img src="mxc://example.com/foo" alt=":foo_bar:"></span>`,
+	"test ||[foo*bar](https://example.com) baz||":    `test <span data-mx-spoiler><a href="https://example.com">foo*bar</a> baz</span>`,
+	"test ||![:foo\\|bar:](mxc://example.com/foo)||": `test <span data-mx-spoiler><img src="mxc://example.com/foo" alt=":foo|bar:"></span>`,
+	"test ||foo\\|bar|baz||":                         `test <span data-mx-spoiler="foo|bar">baz</span>`,
+	"test [||foo](https://example.com)||":            `test <a href="https://example.com">||foo</a>||`,
+}
+
+func TestRenderMarkdown_SpoilerLabel(t *testing.T) {
+	for markdown, html := range spoilerLabelTests {
+		rendered := format.RenderMarkdown(markdown, true, false)
+		assert.Equal(t, html, strings.ReplaceAll(rendered.FormattedBody, "\n", ""))
+	}
+}
+
+func TestRenderMarkdown_SpoilerUnclosed(t *testing.T) {
+	rendered := format.RenderMarkdown("test ||foo", true, false)
+	assert.Equal(t, "test ||foo", rendered.Body)
+	assert.Empty(t, rendered.FormattedBody)
 }
 
 var simpleSpoilerTests = map[string]string{

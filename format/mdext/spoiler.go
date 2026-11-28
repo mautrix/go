@@ -64,7 +64,7 @@ func (s *spoilerParser) Trigger() []byte {
 	return []byte{'|'}
 }
 
-var spoilerRegex = regexp.MustCompile(`^\|\|(?:([^|]+?)\|[^|])?`)
+var spoilerRegex = regexp.MustCompile(`^\|\|(?:((?:[^|\\]|\\.)+?)\|[^|])?`)
 var spoilerContextKey = parser.NewContextKey()
 
 type spoilerContext struct {
@@ -75,7 +75,7 @@ type spoilerContext struct {
 
 func (s *spoilerParser) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.Node {
 	line, segment := block.PeekLine()
-	if spoiler, ok := pc.Get(spoilerContextKey).(spoilerContext); ok {
+	if spoiler, ok := pc.Get(spoilerContextKey).(spoilerContext); ok && spoiler.bottom.Parent() == parent {
 		if !bytes.HasPrefix(line, []byte("||")) {
 			return nil
 		}
@@ -86,13 +86,15 @@ func (s *spoilerParser) Parse(parent ast.Node, block text.Reader, pc parser.Cont
 			reason:     spoiler.reason,
 		}
 		parser.ProcessDelimiters(spoiler.bottom, pc)
-		var c ast.Node = spoiler.bottom
-		for c != nil {
+		for c := spoiler.bottom.NextSibling(); c != nil; {
 			next := c.NextSibling()
 			parent.RemoveChild(parent, c)
 			n.AppendChild(n, c)
 			c = next
 		}
+		// Zero length makes RemoveDelimiter drop the opener instead of turning it into text
+		spoiler.bottom.Length = 0
+		pc.RemoveDelimiter(spoiler.bottom)
 		return n
 	}
 	match := spoilerRegex.FindSubmatch(line)
@@ -103,9 +105,13 @@ func (s *spoilerParser) Parse(parent ast.Node, block text.Reader, pc parser.Cont
 	reason := string(match[1])
 	if len(reason) > 0 {
 		length += len(match[1]) + 1
+		reason = string(util.UnescapePunctuations(match[1]))
 	}
 	block.Advance(length)
 	delim := parser.NewDelimiter(true, false, length, '|', defaultSpoilerDelimiterProcessor)
+	delim.Segment = segment.WithStop(segment.Start + length)
+	// Other parsers, like the link parser, expect every delimiter in the AST to be in the delimiter list
+	pc.PushDelimiter(delim)
 	pc.Set(spoilerContextKey, spoilerContext{
 		reason:  reason,
 		segment: segment,
